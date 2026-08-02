@@ -1,0 +1,11 @@
+# Normalize line endings on commit; check out with native endings.
+* text=auto eol=lf
+
+# Explicitly treat known binary assets as binary.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
