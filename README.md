@@ -41,6 +41,8 @@ npm run dev
 - `npm run lint:types` – lint including type-aware rules
 - `npm run fmt` – format the codebase with oxfmt
 - `npm run fmt:check` – check formatting without writing changes
+- `npm test` – run the test suite once with Vitest
+- `npm run test:watch` – run Vitest in watch mode
 
 ## Linting
 
@@ -78,6 +80,22 @@ stylistic concerns to oxfmt.
 Run `npm run fmt` to format the codebase, or `npm run fmt:check` to verify
 formatting without writing changes.
 
+## Testing
+
+Tests run on [Vitest](https://vitest.dev/) with
+[React Testing Library](https://testing-library.com/docs/react-testing-library/intro/).
+Vitest reuses [`vite.config.ts`](./vite.config.ts), so tests share the same
+plugins and resolution as the app. The `test` block there enables `globals`, the
+`jsdom` environment for a browser-like DOM, and a setup file
+([`src/test/setup.ts`](./src/test/setup.ts)) that registers
+[`@testing-library/jest-dom`](https://github.com/testing-library/jest-dom)
+matchers and cleans up the DOM after each test.
+
+Tests live next to the code they cover as `*.test.tsx` / `*.test.ts` files.
+
+Run `npm test` for a single run (used in CI) or `npm run test:watch` while
+developing.
+
 ## Project structure
 
 ```
@@ -85,8 +103,10 @@ formatting without writing changes.
 ├── public/           # Static assets served as-is
 ├── src/              # Application source
 │   ├── assets/       # Imported assets
+│   ├── test/         # Test setup (Vitest)
 │   ├── App.tsx       # Root component
+│   ├── App.test.tsx  # Tests for the root component
 │   └── main.tsx      # Application entry point
 ├── index.html        # HTML entry point
-└── vite.config.ts    # Vite configuration
+└── vite.config.ts    # Vite + Vitest configuration
 ```
