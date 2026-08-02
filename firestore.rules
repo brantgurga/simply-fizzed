@@ -1,0 +1,12 @@
+rules_version = "2";
+
+// Default-deny Firestore security rules. Access will be granted explicitly per
+// collection as data models are added. Until then, no client reads or writes are
+// allowed, which is the safe baseline for local emulator development and testing.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
