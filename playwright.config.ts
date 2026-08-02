@@ -5,8 +5,11 @@ import { defineConfig, devices } from "@playwright/test";
 process.env["PLAYWRIGHT_BROWSERS_PATH"] ??= "0";
 
 const isCI = !!process.env["CI"];
-const PORT = 4173;
-const baseURL = `http://localhost:${PORT}`;
+// The Firebase Hosting emulator serves the production build (from `dist`) on this
+// port. E2E tests run against that emulator so they exercise the same hosting
+// behavior (rewrites, headers) as production rather than the raw Vite preview.
+const PORT = 5000;
+const baseURL = `http://127.0.0.1:${PORT}`;
 
 // https://playwright.dev/docs/test-configuration
 export default defineConfig({
@@ -36,7 +39,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run build && npm run preview",
+    command: "npm run build && npm run emulators:hosting",
     url: baseURL,
     reuseExistingServer: !isCI,
     timeout: 120 * 1000,

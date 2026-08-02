@@ -18,6 +18,15 @@ dist-ssr
 /blob-report/
 /playwright/.cache/
 
+# Firebase
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+pubsub-debug.log
+database-debug.log
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
