@@ -39,6 +39,8 @@ npm run dev
 - `npm run lint` – lint the codebase with oxlint
 - `npm run lint:fix` – lint and apply safe automatic fixes
 - `npm run lint:types` – lint including type-aware rules
+- `npm run fmt` – format the codebase with oxfmt
+- `npm run fmt:check` – check formatting without writing changes
 
 ## Linting
 
@@ -50,7 +52,7 @@ Configuration lives in [`.oxlintrc.json`](./.oxlintrc.json):
 
 - Rule **categories** are enabled broadly: `correctness` as errors, with
   `suspicious` and `perf` as warnings. The `style` category is left off because
-  formatting is delegated to Prettier (tracked separately).
+  formatting is delegated to oxfmt (see below).
 - Plugins cover the stack: `eslint`, `typescript`, `unicorn`, `oxc`, `react`,
   `jsx-a11y`, and `import`.
 - **Type-aware linting** is enabled via `options.typeAware` (backed by the
@@ -59,6 +61,22 @@ Configuration lives in [`.oxlintrc.json`](./.oxlintrc.json):
 
 Run `npm run lint` for the standard check or `npm run lint:fix` to apply safe
 automatic fixes.
+
+## Formatting
+
+Formatting is handled by [oxfmt](https://oxc.rs/docs/guide/usage/formatter), the
+Rust-based formatter from the same Oxc toolchain as oxlint. It is used instead of
+a standalone Prettier install: oxfmt is Prettier-compatible (it passes Prettier's
+JS/TS conformance tests) while keeping the toolchain consistent with the linter.
+
+Configuration lives in [`.oxfmtrc.json`](./.oxfmtrc.json). It uses oxfmt's
+Prettier-compatible defaults and reads shared settings (indentation, line
+endings, final newline) from [`.editorconfig`](./.editorconfig). Formatting and
+linting do not overlap: oxlint's `style` category is left off, leaving all
+stylistic concerns to oxfmt.
+
+Run `npm run fmt` to format the codebase, or `npm run fmt:check` to verify
+formatting without writing changes.
 
 ## Project structure
 
