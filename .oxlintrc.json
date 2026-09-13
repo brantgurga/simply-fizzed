@@ -9,7 +9,8 @@
     "style": "off"
   },
   "options": {
-    "typeAware": true
+    "typeAware": true,
+    "maxWarnings": 0
   },
   "rules": {
     "react/rules-of-hooks": "error",
