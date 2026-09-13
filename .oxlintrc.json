@@ -10,7 +10,7 @@
   },
   "options": {
     "typeAware": true,
-    "maxWarnings": 0
+    "denyWarnings": true
   },
   "rules": {
     "react/rules-of-hooks": "error",
