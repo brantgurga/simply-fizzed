@@ -7,9 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix",
-    "lint:types": "oxlint --type-aware",
+    "lint": "oxlint --max-warnings=0",
+    "lint:fix": "oxlint --fix --max-warnings=0",
+    "lint:types": "oxlint --type-aware --max-warnings=0",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "test": "vitest run",
@@ -51,6 +51,6 @@
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,json,css,html}": "oxfmt",
-    "*.{ts,tsx,js,jsx}": "oxlint"
+    "*.{ts,tsx,js,jsx}": "oxlint --max-warnings=0"
   }
 }
