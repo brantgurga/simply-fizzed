@@ -152,6 +152,30 @@ Start the full suite with `npm run emulators`, or just the Hosting emulator with
 `npm run emulators:hosting`. The Firestore and Authentication emulators require a
 Java runtime on your `PATH`; the Hosting emulator does not.
 
+### Caching headers
+
+[`firebase.json`](./firebase.json) sets `Cache-Control` headers so the entry HTML
+is always revalidated while the content-hashed build assets are cached
+aggressively. A broad `**` rule applies `no-cache` to every response, and a
+`/assets/**` rule then overrides those files with
+`public, max-age=31536000, immutable`. Firebase Hosting applies the last matching
+rule, so hashed assets stay immutable while `/`, SPA routes, and `index.html`
+remain uncached. These headers only take effect on a real deploy (served via the
+production CDN); the Hosting emulator does not apply the `headers` block, so use a
+deploy or preview channel to verify them.
+
+### Project aliases and deploy configuration
+
+Project aliases live in [`.firebaserc`](./.firebaserc). Both `default` and
+`local` point at the emulator-only `demo-simply-fizzed` id so local development
+and tests never touch a real project. A real project id and a `prod` alias for
+deployment are added alongside the hosting deploy/CD work tracked in #24.
+
+The app does not yet use the Firebase client SDK. When it is added, the web app
+configuration will be supplied through Vite environment variables
+(`VITE_FIREBASE_*`, read from `import.meta.env`) rather than hardcoded, so values
+can differ per environment without code changes.
+
 ## Project structure
 
 ```
