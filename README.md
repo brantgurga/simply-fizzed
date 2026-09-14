@@ -143,8 +143,9 @@ The suite is configured for:
 - **Hosting** (port 5000) – serves the production build from `dist/` with SPA
   rewrites; this is what the end-to-end tests run against.
 - **Firestore** (port 8080) – with security rules in
-  [`firestore.rules`](./firestore.rules) (default-deny until data models are
-  added) and indexes in [`firestore.indexes.json`](./firestore.indexes.json).
+  [`firestore.rules`](./firestore.rules) and indexes in
+  [`firestore.indexes.json`](./firestore.indexes.json). See
+  [Data model](#firestore-data-model) below.
 - **Authentication** (port 9099).
 - **Emulator UI** (port 4000).
 
@@ -176,6 +177,34 @@ configuration will be supplied through Vite environment variables
 (`VITE_FIREBASE_*`, read from `import.meta.env`) rather than hardcoded, so values
 can differ per environment without code changes.
 
+### Firestore data model
+
+Location-based soda discovery is backed by three collections, whose document
+shapes are defined as TypeScript types in
+[`src/model/firestore.ts`](./src/model/firestore.ts) and shared by the app, the
+emulator seed script, and tests:
+
+- **`locations/{locationId}`** – a place that sells soda: `name`, an `address`
+  (`street`, `city`, `state`, `postalCode`), a `geo` coordinate (`lat`, `lng`),
+  and a `geohash` derived from `geo` with
+  [`geofire-common`](https://www.npmjs.com/package/geofire-common) for radius
+  queries.
+- **`sodas/{sodaId}`** – a soda product: `name`, `brand`, `flavor`.
+- **`availability/{availabilityId}`** – a join record tying a soda to a location
+  in a given `form` (`draft`, `can`, or `bottle`), with the soda's display fields
+  (`sodaName`, `sodaBrand`, `sodaFlavor`) denormalized so search results render
+  without an extra lookup.
+
+Security rules in [`firestore.rules`](./firestore.rules) allow public `read` on
+all three collections and deny all client `write`s (data is populated out of
+band); every other path falls through to the default-deny rule.
+
+[`firestore.indexes.json`](./firestore.indexes.json) is intentionally empty: the
+only non-trivial query is the geohash radius search, which uses a single-field
+`orderBy(geohash)` range and therefore needs no composite index. Firestore
+provides single-field indexes automatically, so no `fieldOverrides` are required
+either.
+
 ## Project structure
 
 ```
@@ -184,6 +213,7 @@ can differ per environment without code changes.
 ├── public/                  # Static assets served as-is
 ├── src/                     # Application source
 │   ├── assets/              # Imported assets
+│   ├── model/               # Shared Firestore data-model types
 │   ├── test/                # Test setup (Vitest)
 │   ├── App.tsx              # Root component
 │   ├── App.test.tsx         # Tests for the root component
