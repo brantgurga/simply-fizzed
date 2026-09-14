@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Local env files: real/production values and secrets (e.g. the real
+# VITE_GOOGLE_MAPS_API_KEY). The committed `.env` holds demo-only config.
+.env.local
+.env.*.local
+
 # Playwright
 /test-results/
 /playwright-report/
