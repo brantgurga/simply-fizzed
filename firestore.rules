@@ -1,10 +1,27 @@
 rules_version = "2";
 
-// Default-deny Firestore security rules. Access will be granted explicitly per
-// collection as data models are added. Until then, no client reads or writes are
-// allowed, which is the safe baseline for local emulator development and testing.
+// Firestore security rules for location-based soda discovery. The three
+// collections that back search (locations, sodas, availability) are publicly
+// readable so the client can query them without authentication. All writes are
+// denied from the client; data is populated out of band (seed scripts / admin
+// SDK). Any other collection falls through to the default-deny rule below.
 service cloud.firestore {
   match /databases/{database}/documents {
+    match /locations/{locationId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /sodas/{sodaId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /availability/{availabilityId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
