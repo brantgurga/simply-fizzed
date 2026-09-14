@@ -171,10 +171,30 @@ Project aliases live in [`.firebaserc`](./.firebaserc). Both `default` and
 and tests never touch a real project. A real project id and a `prod` alias for
 deployment are added alongside the hosting deploy/CD work tracked in #24.
 
-The app does not yet use the Firebase client SDK. When it is added, the web app
-configuration will be supplied through Vite environment variables
-(`VITE_FIREBASE_*`, read from `import.meta.env`) rather than hardcoded, so values
-can differ per environment without code changes.
+The Firebase client SDK is initialized in
+[`src/firebase.ts`](./src/firebase.ts), which reads the web app configuration
+from `VITE_FIREBASE_*` environment variables (via `import.meta.env`) rather than
+hardcoding it, and exports a shared `Firestore` instance (`db`). When the
+configured `projectId` starts with `demo-`, it automatically calls
+`connectFirestoreEmulator(db, "127.0.0.1", 8080)`, so local development and the
+e2e tests talk to the emulator while production builds use real Firebase with no
+manual flag. See [Environment variables](#environment-variables) for how the
+configuration is supplied.
+
+### Environment variables
+
+Configuration is provided through Vite environment variables (only
+`VITE_`-prefixed variables are exposed to the client), and their types are
+declared in [`src/vite-env.d.ts`](./src/vite-env.d.ts):
+
+- [`.env`](./.env) is **committed** and holds **demo-only, non-secret** values
+  (project `demo-simply-fizzed`, a placeholder Maps key). It points the app at
+  the Firebase Emulator Suite, so local development and e2e need no setup.
+- [`.env.example`](./.env.example) documents every required variable.
+- For production, real values (including the real `VITE_GOOGLE_MAPS_API_KEY`) go
+  in a gitignored `.env.*.local` file or are supplied via CI — Vite loads
+  `.env.production.local` ahead of `.env`. `.env.local` and `.env.*.local` are
+  gitignored so secrets are never committed.
 
 ## Project structure
 
@@ -187,7 +207,11 @@ can differ per environment without code changes.
 │   ├── test/                # Test setup (Vitest)
 │   ├── App.tsx              # Root component
 │   ├── App.test.tsx         # Tests for the root component
+│   ├── firebase.ts          # Firebase client init + Firestore emulator wiring
+│   ├── vite-env.d.ts        # Types for VITE_* environment variables
 │   └── main.tsx             # Application entry point
+├── .env                     # Committed demo-only config (no secrets)
+├── .env.example             # Documents all required environment variables
 ├── firebase.json            # Firebase hosting + emulator configuration
 ├── firestore.rules          # Firestore security rules
 ├── firestore.indexes.json   # Firestore indexes
