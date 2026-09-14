@@ -7,6 +7,7 @@ Simply Fizzed is a tracker for places to find soda and to review and discover ne
 This repository is being bootstrapped with the professional stack tracked in issue #6:
 
 - **React** + **TypeScript** for the UI
+- **Material UI** (MUI) for the component library and theming
 - **Vite** for the dev server and production build
 
 Additional tooling (linting, formatting, testing, Firebase, and CI/CD) is tracked as sub-issues of #6.
@@ -225,6 +226,19 @@ only non-trivial query is the geohash radius search, which uses a single-field
 provides single-field indexes automatically, so no `fieldOverrides` are required
 either.
 
+## User interface
+
+Material UI (MUI) provides the component library and theming. The app is wrapped
+in MUI's `ThemeProvider` with a shared theme from
+[`src/theme.ts`](./src/theme.ts) (created via `createTheme` with `cssVariables`
+enabled) and a `CssBaseline` (`enableColorScheme`) that applies MUI's baseline
+styles and native light/dark handling. The Roboto font — MUI's default typeface —
+is self-hosted via
+[`@fontsource/roboto`](https://www.npmjs.com/package/@fontsource/roboto) and
+imported in [`src/main.tsx`](./src/main.tsx), so no external font request is
+made. Components are imported per module (e.g. `@mui/material/AppBar`) to keep
+bundles tree-shakeable.
+
 ## Project structure
 
 ```
@@ -232,12 +246,12 @@ either.
 ├── e2e/                     # Playwright end-to-end tests
 ├── public/                  # Static assets served as-is
 ├── src/                     # Application source
-│   ├── assets/              # Imported assets
 │   ├── model/               # Shared Firestore data-model types
 │   ├── test/                # Test setup (Vitest)
-│   ├── App.tsx              # Root component
+│   ├── App.tsx              # Root component (app shell)
 │   ├── App.test.tsx         # Tests for the root component
 │   ├── firebase.ts          # Firebase client init + Firestore emulator wiring
+│   ├── theme.ts             # Material UI theme
 │   ├── vite-env.d.ts        # Types for VITE_* environment variables
 │   └── main.tsx             # Application entry point
 ├── .env                     # Committed demo-only config (no secrets)
