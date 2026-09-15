@@ -239,6 +239,24 @@ imported in [`src/main.tsx`](./src/main.tsx), so no external font request is
 made. Components are imported per module (e.g. `@mui/material/AppBar`) to keep
 bundles tree-shakeable.
 
+### Location input
+
+The [`LocationInput`](./src/location/LocationInput.tsx) component lets the user
+provide a search location. On mount it requests browser geolocation and, when
+permission is granted, resolves immediately with those coordinates. When
+geolocation is denied or unavailable it falls back to manual city / postal-code
+entry, and denied permission and geocoding failures surface as clear messages.
+
+Manual entries are turned into coordinates through a small `Geocoder` interface
+in [`src/location/geocoder.ts`](./src/location/geocoder.ts), so the
+implementation can be swapped by environment. `GoogleMapsGeocoder` calls the
+Google Maps Geocoding API with the `VITE_GOOGLE_MAPS_API_KEY`, while
+`FakeGeocoder` is an offline stub used for local development and tests (no live
+API calls, no billing). `createGeocoder()` picks between them using the same
+`demo-` key convention as `src/firebase.ts`: a `demo-` prefixed key selects the
+fake, and any other key selects Google. Browser geolocation already returns
+coordinates, so geocoding is only needed for the manual fallback.
+
 ## Project structure
 
 ```
@@ -246,6 +264,7 @@ bundles tree-shakeable.
 ├── e2e/                     # Playwright end-to-end tests
 ├── public/                  # Static assets served as-is
 ├── src/                     # Application source
+│   ├── location/            # Location input component + geocoding
 │   ├── model/               # Shared Firestore data-model types
 │   ├── test/                # Test setup (Vitest)
 │   ├── App.tsx              # Root component (app shell)
