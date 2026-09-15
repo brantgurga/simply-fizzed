@@ -31,9 +31,26 @@ describe("parseLocation", () => {
 
   it("returns undefined when a required field is missing or mistyped", () => {
     expect(parseLocation("loc-1", { ...validLocation, name: 42 })).toBeUndefined();
+    expect(parseLocation("loc-1", { ...validLocation, geohash: 42 })).toBeUndefined();
     expect(parseLocation("loc-1", { ...validLocation, geo: { lat: "x", lng: 1 } })).toBeUndefined();
+    expect(parseLocation("loc-1", { ...validLocation, geo: { lat: 1, lng: "y" } })).toBeUndefined();
+    expect(parseLocation("loc-1", { ...validLocation, geo: undefined })).toBeUndefined();
+  });
+
+  it("returns undefined when the address is missing a field", () => {
     expect(parseLocation("loc-1", { ...validLocation, address: {} })).toBeUndefined();
+    expect(
+      parseLocation("loc-1", {
+        ...validLocation,
+        address: { street: "1 Main St", city: "Kansas City", state: "MO" },
+      }),
+    ).toBeUndefined();
+  });
+
+  it("returns undefined for non-object input", () => {
     expect(parseLocation("loc-1", null)).toBeUndefined();
+    expect(parseLocation("loc-1", "nope")).toBeUndefined();
+    expect(parseLocation("loc-1", 42)).toBeUndefined();
   });
 });
 
@@ -42,10 +59,22 @@ describe("parseAvailability", () => {
     expect(parseAvailability(validAvailability)).toEqual(validAvailability);
   });
 
-  it("returns undefined for an unknown form or missing field", () => {
+  it("returns undefined for an unknown or missing form", () => {
     expect(parseAvailability({ ...validAvailability, form: "keg" })).toBeUndefined();
+    expect(parseAvailability({ ...validAvailability, form: undefined })).toBeUndefined();
+  });
+
+  it("returns undefined when any required string field is missing or mistyped", () => {
+    expect(parseAvailability({ ...validAvailability, locationId: undefined })).toBeUndefined();
+    expect(parseAvailability({ ...validAvailability, sodaId: 7 })).toBeUndefined();
     expect(parseAvailability({ ...validAvailability, sodaName: undefined })).toBeUndefined();
+    expect(parseAvailability({ ...validAvailability, sodaBrand: null })).toBeUndefined();
+    expect(parseAvailability({ ...validAvailability, sodaFlavor: undefined })).toBeUndefined();
+  });
+
+  it("returns undefined for non-object input", () => {
     expect(parseAvailability("nope")).toBeUndefined();
+    expect(parseAvailability(null)).toBeUndefined();
   });
 });
 
@@ -58,6 +87,10 @@ describe("groupAvailabilityByLocation", () => {
 
     expect(grouped.get("loc-1")).toEqual([validAvailability, another]);
     expect(grouped.get("loc-2")).toEqual([other]);
+  });
+
+  it("returns an empty map for empty input", () => {
+    expect(groupAvailabilityByLocation([]).size).toBe(0);
   });
 });
 

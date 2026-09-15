@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { NearbyLocation } from "./results";
-import NearbySearch from "./NearbySearch";
+import NearbySearch, { type NearbySearcher } from "./NearbySearch";
 
 const center = { lat: 39.0997, lng: -94.5786 };
 
@@ -67,5 +67,37 @@ describe("NearbySearch", () => {
 
     await screen.findByRole("heading", { name: "Tim's Brewery" });
     expect(search).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows a placeholder for a location with no sodas listed", async () => {
+    const result = nearby("loc-1", "Empty Store", 3.1);
+    result.availability = [];
+
+    render(<NearbySearch center={center} search={() => Promise.resolve([result])} />);
+
+    expect(await screen.findByRole("heading", { name: "Empty Store" })).toBeInTheDocument();
+    expect(screen.getByText(/no sodas listed yet/i)).toBeInTheDocument();
+  });
+
+  it("ignores a stale search result after the center changes", async () => {
+    let resolveStale: ((value: NearbyLocation[]) => void) | undefined;
+    const stale = new Promise<NearbyLocation[]>((resolve) => {
+      resolveStale = resolve;
+    });
+    const search = vi
+      .fn<NearbySearcher>()
+      .mockReturnValueOnce(stale)
+      .mockReturnValueOnce(Promise.resolve([nearby("loc-2", "Current", 1)]));
+
+    const { rerender } = render(<NearbySearch center={center} search={search} />);
+    rerender(<NearbySearch center={{ lat: 40, lng: -95 }} search={search} />);
+
+    expect(await screen.findByRole("heading", { name: "Current" })).toBeInTheDocument();
+
+    resolveStale?.([nearby("loc-1", "Stale", 1)]);
+    await Promise.resolve();
+
+    expect(screen.queryByRole("heading", { name: "Stale" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Current" })).toBeInTheDocument();
   });
 });

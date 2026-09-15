@@ -23,6 +23,21 @@ describe("distanceMiles", () => {
     expect(miles).toBeGreaterThan(68);
     expect(miles).toBeLessThan(70);
   });
+
+  it("is symmetric between the two coordinates", () => {
+    const a = { lat: 39.1, lng: -94.6 };
+    const b = { lat: 40.2, lng: -93.1 };
+
+    expect(distanceMiles(a, b)).toBeCloseTo(distanceMiles(b, a), 10);
+  });
+
+  it("is about 60 miles at the search-radius offset due north", () => {
+    // A pure-latitude step of ~0.8684 degrees is ~60 miles under the mean-radius
+    // Haversine formula geofire-common uses, confirming the radius boundary.
+    const miles = distanceMiles({ lat: 0, lng: 0 }, { lat: 0.868428, lng: 0 });
+
+    expect(miles).toBeCloseTo(60, 1);
+  });
 });
 
 describe("rankByDistance", () => {
@@ -37,6 +52,27 @@ describe("rankByDistance", () => {
 
     expect(ranked.map((entry) => entry.location.id)).toEqual(["near"]);
     expect(ranked[0]?.distanceMiles).toBeLessThanOrEqual(SEARCH_RADIUS_MILES);
+  });
+
+  it("includes a location just inside the 60-mile boundary", () => {
+    // ~0.868 degrees due north is ~59.97 miles, just within the inclusive radius.
+    const inside = locationAt("inside", center.lat + 0.868, center.lng);
+
+    const ranked = rankByDistance(center, [inside]);
+
+    expect(ranked.map((entry) => entry.location.id)).toEqual(["inside"]);
+    expect(ranked[0]?.distanceMiles).toBeLessThanOrEqual(SEARCH_RADIUS_MILES);
+  });
+
+  it("excludes a location just outside the 60-mile boundary", () => {
+    // ~0.869 degrees due north is ~60.04 miles, just beyond the radius.
+    const outside = locationAt("outside", center.lat + 0.869, center.lng);
+
+    expect(rankByDistance(center, [outside])).toEqual([]);
+  });
+
+  it("returns an empty array when given no locations", () => {
+    expect(rankByDistance(center, [])).toEqual([]);
   });
 
   it("sorts survivors nearest-first", () => {
@@ -65,6 +101,21 @@ describe("chunk", () => {
 
   it("returns an empty array for empty input", () => {
     expect(chunk([], 3)).toEqual([]);
+  });
+
+  it("puts everything in one chunk when the size exceeds the length", () => {
+    expect(chunk([1, 2, 3], 10)).toEqual([[1, 2, 3]]);
+  });
+
+  it("splits an exact multiple into even chunks with no trailing partial", () => {
+    expect(chunk([1, 2, 3, 4], 2)).toEqual([
+      [1, 2],
+      [3, 4],
+    ]);
+  });
+
+  it("splits into singletons for a size of 1", () => {
+    expect(chunk([1, 2, 3], 1)).toEqual([[1], [2], [3]]);
   });
 
   it("throws for a non-positive or non-integer size", () => {
