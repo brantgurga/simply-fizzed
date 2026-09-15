@@ -1,13 +1,14 @@
 // Playwright global setup: seed the Firestore emulator with deterministic
 // fixtures before any test runs. Playwright starts the `webServer` (which boots
 // the hosting + firestore emulators) and waits for it to respond before running
-// this file, so the emulator is expected to be up by now; we still poll its
+// this file, so the emulator is expected to be up by now; we still wait on its
 // readiness endpoint to remove any start-up race. Writes use `firebase-admin`,
 // which bypasses security rules, mirroring how production data is populated out
 // of band. Everything targets the offline `demo-` project, so no credentials or
 // network access are involved.
 import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import waitOn from "wait-on";
 import { AVAILABILITY, geohashFor, LOCATIONS, SODAS } from "./fixtures.ts";
 
 const PROJECT_ID = "demo-simply-fizzed";
@@ -15,33 +16,17 @@ const EMULATOR_HOST = "127.0.0.1:8080";
 const READY_TIMEOUT_MS = 60_000;
 const READY_INTERVAL_MS = 500;
 
-/** Resolve after `ms` milliseconds. */
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** True once the emulator answers its readiness endpoint. */
-async function emulatorReady(): Promise<boolean> {
-  try {
-    const response = await fetch(`http://${EMULATOR_HOST}/`);
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
 /**
- * Resolve once the Firestore emulator answers, or throw after a timeout. Written
- * as recursion rather than an await-in-loop so each attempt is a single awaited
- * step.
+ * Resolve once the Firestore emulator answers, or throw after a timeout. Uses
+ * the `http-get://` scheme so wait-on issues a GET (the emulator root does not
+ * answer HEAD with a 2xx) instead of the default HEAD.
  */
-async function waitForEmulator(deadline: number = Date.now() + READY_TIMEOUT_MS): Promise<void> {
-  if (await emulatorReady()) return;
-  if (Date.now() > deadline) {
-    throw new Error(`Firestore emulator at ${EMULATOR_HOST} did not become ready in time.`);
-  }
-  await delay(READY_INTERVAL_MS);
-  return waitForEmulator(deadline);
+function waitForEmulator(): Promise<void> {
+  return waitOn({
+    resources: [`http-get://${EMULATOR_HOST}/`],
+    timeout: READY_TIMEOUT_MS,
+    interval: READY_INTERVAL_MS,
+  });
 }
 
 /** Remove any documents left from a previous (reused) emulator run. */
