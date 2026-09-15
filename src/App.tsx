@@ -1,16 +1,20 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import AppBar from "@mui/material/AppBar";
 import Container from "@mui/material/Container";
 import Stack from "@mui/material/Stack";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
+import { db } from "./firebase";
 import type { GeoPoint } from "./model/firestore";
 import LocationInput from "./location/LocationInput";
 import { createGeocoder } from "./location/geocoder";
+import NearbySearch from "./nearby/NearbySearch";
+import { searchNearby } from "./nearby/nearby";
 
 function App() {
   const geocoder = useMemo(() => createGeocoder(), []);
   const [location, setLocation] = useState<GeoPoint | undefined>(undefined);
+  const search = useCallback((center: GeoPoint) => searchNearby(db, center), []);
 
   return (
     <>
@@ -31,9 +35,12 @@ function App() {
           <LocationInput geocoder={geocoder} onResolve={setLocation} />
 
           {location !== undefined && (
-            <Typography variant="body2" color="text.secondary">
-              Searching near {location.lat.toFixed(4)}, {location.lng.toFixed(4)}.
-            </Typography>
+            <>
+              <Typography variant="body2" color="text.secondary">
+                Searching near {location.lat.toFixed(4)}, {location.lng.toFixed(4)}.
+              </Typography>
+              <NearbySearch center={location} search={search} />
+            </>
           )}
         </Stack>
       </Container>

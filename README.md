@@ -257,6 +257,26 @@ API calls, no billing). `createGeocoder()` picks between them using the same
 fake, and any other key selects Google. Browser geolocation already returns
 coordinates, so geocoding is only needed for the manual fallback.
 
+### Nearby search
+
+Once a location is set, the [`NearbySearch`](./src/nearby/NearbySearch.tsx)
+container queries for soda within 60 miles and renders the results (name,
+address, distance in miles, and each soda with its form, e.g. "Big K Root Beer
+in cans" or "Tim's Root Beer on draft") via the presentational
+[`SearchResults`](./src/nearby/SearchResults.tsx) component, handling loading,
+empty, and error states.
+
+The query lives in [`src/nearby/nearby.ts`](./src/nearby/nearby.ts): it computes
+`geohashQueryBounds` for the radius with
+[`geofire-common`](https://www.npmjs.com/package/geofire-common), runs the
+overlapping `orderBy(geohash)` range queries against `locations`, then
+batch-loads `availability` for the in-radius locations with chunked
+`where("locationId", "in", ...)` queries. The distance calculation, the 60-mile
+filter, and nearest-first sorting are kept as pure, unit-tested functions in
+[`src/nearby/distance.ts`](./src/nearby/distance.ts), and document
+parsing/formatting in [`src/nearby/results.ts`](./src/nearby/results.ts), both
+free of React and Firestore so they can be tested without a database.
+
 ## Project structure
 
 ```
@@ -265,6 +285,7 @@ coordinates, so geocoding is only needed for the manual fallback.
 ├── public/                  # Static assets served as-is
 ├── src/                     # Application source
 │   ├── location/            # Location input component + geocoding
+│   ├── nearby/              # Nearby search: distance logic, query, results UI
 │   ├── model/               # Shared Firestore data-model types
 │   ├── test/                # Test setup (Vitest)
 │   ├── App.tsx              # Root component (app shell)
