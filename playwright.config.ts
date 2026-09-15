@@ -14,6 +14,10 @@ const baseURL = `http://127.0.0.1:${PORT}`;
 // https://playwright.dev/docs/test-configuration
 export default defineConfig({
   testDir: "./e2e",
+  // Seed the Firestore emulator with deterministic fixtures before any test.
+  // Playwright waits for the webServer (below) to respond before running this,
+  // so the emulator is up by the time it seeds.
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: true,
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
@@ -39,9 +43,14 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run build && npm run emulators:hosting",
+    // Build the app and serve it via the Hosting emulator, alongside the
+    // Firestore emulator the seeded search scenario queries. Firebase boots both
+    // together, so Firestore is ready by the time Hosting answers on `url`.
+    command: "npm run build && npm run emulators:e2e",
     url: baseURL,
     reuseExistingServer: !isCI,
-    timeout: 120 * 1000,
+    // Allow extra time: the build plus a first-run Firestore emulator download
+    // can exceed the previous hosting-only budget.
+    timeout: 180 * 1000,
   },
 });

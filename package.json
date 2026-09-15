@@ -18,6 +18,7 @@
     "e2e:ui": "playwright test --ui",
     "emulators": "firebase emulators:start --project demo-simply-fizzed",
     "emulators:hosting": "firebase emulators:start --only hosting --project demo-simply-fizzed",
+    "emulators:e2e": "firebase emulators:start --only hosting,firestore --project demo-simply-fizzed",
     "preview": "vite preview",
     "prepare": "husky"
   },
@@ -44,6 +45,7 @@
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/wait-on": "^5.3.4",
     "@vitejs/plugin-react": "^6.0.4",
     "firebase-admin": "^14.4.0",
     "firebase-tools": "^15.25.1",
@@ -55,7 +57,8 @@
     "oxlint-tsgolint": "^7.0.2001",
     "typescript": "~6.0.2",
     "vite": "^8.2.0",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "wait-on": "^9.1.0"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,json,css,html}": "oxfmt",
