@@ -16,9 +16,10 @@ Additional tooling (linting, formatting, testing, Firebase, and CI/CD) is tracke
 
 - [Node.js](https://nodejs.org/) 20 or newer (developed against v24)
 - npm 10 or newer
-- A Java runtime (JDK 11 or newer) for the Firebase Emulator Suite. The Hosting
-  emulator used by the end-to-end tests does not require Java, but the Firestore
-  and Authentication emulators do.
+- A Java runtime (JDK 11 or newer) for the Firebase Emulator Suite. The
+  Firestore and Authentication emulators require Java; the Hosting emulator does
+  not. The end-to-end tests run both the Hosting and Firestore emulators, so
+  Java is required to run them.
 
 ## Getting started
 
@@ -51,6 +52,8 @@ npm run dev
 - `npm run e2e:ui` – run Playwright in interactive UI mode
 - `npm run emulators` – start the full Firebase Emulator Suite
 - `npm run emulators:hosting` – start only the Firebase Hosting emulator
+- `npm run emulators:e2e` – start the Hosting and Firestore emulators (used by
+  the end-to-end tests)
 
 ## Linting
 
@@ -108,14 +111,27 @@ developing.
 ## End-to-end testing
 
 End-to-end tests run on [Playwright](https://playwright.dev/) against the
-production build **served by the Firebase Hosting emulator**. The config
+production build **served by the Firebase Hosting emulator**, with a seeded
+**Firestore emulator** backing search. The config
 ([`playwright.config.ts`](./playwright.config.ts)) starts a `webServer` that runs
-`npm run build && npm run emulators:hosting`, then exercises the app in
-**Chromium, Firefox, and WebKit** on `http://127.0.0.1:5000`. Running against the
-Hosting emulator (rather than the raw Vite preview) means the tests exercise the
-same hosting behavior — SPA rewrites and headers — as production. E2E specs live
-in [`e2e/`](./e2e) as `*.spec.ts` files; Vitest is configured to ignore that
-directory so the two runners never overlap.
+`npm run build && npm run emulators:e2e` (Hosting **and** Firestore), then
+exercises the app in **Chromium, Firefox, and WebKit** on
+`http://127.0.0.1:5000`. Running against the Hosting emulator (rather than the
+raw Vite preview) means the tests exercise the same hosting behavior — SPA
+rewrites and headers — as production. E2E specs live in [`e2e/`](./e2e) as
+`*.spec.ts` files; Vitest is configured to ignore that directory so the two
+runners never overlap.
+
+Before any test runs, Playwright's
+[`globalSetup`](./e2e/global-setup.ts) waits for the Firestore emulator, clears
+it, and seeds deterministic fixtures ([`e2e/fixtures.ts`](./e2e/fixtures.ts))
+with [`firebase-admin`](https://www.npmjs.com/package/firebase-admin): a Kroger
+in Indianapolis with canned sodas and a Tim's Brewery with root beer on draft.
+The seeded-search spec grants a fixed Indianapolis geolocation via the Playwright
+browser context (Chromium only, where the override is dependable) and asserts
+that results are sorted nearest-first and each location lists its sodas and
+forms. The fixtures module is shared by the seeder and the specs so the data and
+expectations cannot drift.
 
 Browser binaries are installed hermetically (`PLAYWRIGHT_BROWSERS_PATH=0`), so
 they live under `node_modules/` rather than a global OS cache. This keeps them on
@@ -146,13 +162,15 @@ The suite is configured for:
 - **Firestore** (port 8080) – with security rules in
   [`firestore.rules`](./firestore.rules) and indexes in
   [`firestore.indexes.json`](./firestore.indexes.json). See
-  [Data model](#firestore-data-model) below.
+  [Data model](#firestore-data-model) below. The end-to-end tests seed and query
+  this emulator.
 - **Authentication** (port 9099).
 - **Emulator UI** (port 4000).
 
-Start the full suite with `npm run emulators`, or just the Hosting emulator with
-`npm run emulators:hosting`. The Firestore and Authentication emulators require a
-Java runtime on your `PATH`; the Hosting emulator does not.
+Start the full suite with `npm run emulators`, just the Hosting emulator with
+`npm run emulators:hosting`, or the Hosting + Firestore pair the end-to-end tests
+use with `npm run emulators:e2e`. The Firestore and Authentication emulators
+require a Java runtime on your `PATH`; the Hosting emulator does not.
 
 ### Caching headers
 
@@ -282,6 +300,9 @@ free of React and Firestore so they can be tested without a database.
 ```
 .
 ├── e2e/                     # Playwright end-to-end tests
+│   ├── app.spec.ts          # E2E specs (app shell + seeded search scenario)
+│   ├── fixtures.ts          # Deterministic seed data shared by setup + specs
+│   └── global-setup.ts      # Seeds the Firestore emulator before tests
 ├── public/                  # Static assets served as-is
 ├── src/                     # Application source
 │   ├── location/            # Location input component + geocoding

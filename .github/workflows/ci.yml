@@ -66,6 +66,13 @@ jobs:
           node-version: "24"
           cache: npm
 
+      # The Firestore emulator (seeded before the tests) runs on the JVM.
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
       - name: Install dependencies
         run: npm ci
 
@@ -73,8 +80,9 @@ jobs:
         run: npx playwright install --with-deps
 
       # The Playwright webServer builds the app and serves it via the Firebase
-      # Hosting emulator (demo project, fully offline). Hosting-only e2e needs
-      # no Java and no Firebase credentials.
+      # Hosting emulator while also running the Firestore emulator, which the
+      # globalSetup seeds with fixtures. Everything targets the offline demo
+      # project, so no Firebase credentials are involved.
       - name: Run Playwright tests
         run: npm run e2e
 
