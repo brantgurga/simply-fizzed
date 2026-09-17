@@ -69,6 +69,32 @@ describe("NearbySearch", () => {
     expect(search).toHaveBeenCalledTimes(2);
   });
 
+  it("returns to the loading state while re-searching after the center changes", async () => {
+    let resolveSecond: ((value: NearbyLocation[]) => void) | undefined;
+    const search = vi
+      .fn<NearbySearcher>()
+      .mockReturnValueOnce(Promise.resolve([nearby("loc-1", "First Place", 2.3)]))
+      .mockReturnValueOnce(
+        new Promise<NearbyLocation[]>((resolve) => {
+          resolveSecond = resolve;
+        }),
+      );
+
+    const { rerender } = render(<NearbySearch center={center} search={search} />);
+    await screen.findByRole("heading", { name: "First Place" });
+
+    rerender(<NearbySearch center={{ lat: 40, lng: -95 }} search={search} />);
+
+    // The render-phase reset must show loading again immediately, before the
+    // second search resolves, rather than leaving the stale results visible.
+    expect(screen.getByText(/searching for soda near you/i)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "First Place" })).toBeNull();
+
+    resolveSecond?.([nearby("loc-2", "Second Place", 1.1)]);
+
+    expect(await screen.findByRole("heading", { name: "Second Place" })).toBeInTheDocument();
+  });
+
   it("shows a placeholder for a location with no sodas listed", async () => {
     const result = nearby("loc-1", "Empty Store", 3.1);
     result.availability = [];
