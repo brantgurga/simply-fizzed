@@ -23,6 +23,10 @@ dist-ssr
 /blob-report/
 /playwright/.cache/
 
+# Google Workload Identity Federation credentials generated during Actions runs
+# (google-github-actions/auth removes these after each job).
+gha-creds-*.json
+
 # Firebase
 .firebase/
 firebase-debug.log

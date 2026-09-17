@@ -15,6 +15,7 @@ on:
 permissions:
   actions: read
   contents: read
+  id-token: write
 
 env:
   HUSKY: 0
@@ -77,19 +78,39 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: simply-fizzed-prod
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: github-deployer@simply-fizzed-prod.iam.gserviceaccount.com
+
       - name: Deploy staging channel
         id: deploy
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: simply-fizzed-prod
-          channelId: staging-${{ github.run_id }}
-          expires: 30d
-          firebaseToolsVersion: 15.30.0
+        env:
+          CHANNEL_ID: staging-${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/firebase-hosting-staging.json"
+          npx firebase hosting:channel:deploy "$CHANNEL_ID" \
+            --project simply-fizzed-prod \
+            --expires 30d \
+            --non-interactive \
+            --json > "$output"
+          url="$(
+            node --input-type=module -e '
+              import fs from "node:fs";
+              const { result } = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+              const deployment = Object.values(result)[0];
+              if (!deployment?.url) process.exit(1);
+              process.stdout.write(deployment.url);
+            ' "$output"
+          )"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
 
       - name: Summarize staging deployment
         env:
-          STAGING_URL: ${{ steps.deploy.outputs.details_url }}
+          STAGING_URL: ${{ steps.deploy.outputs.url }}
         run: |
           {
             echo "## Firebase staging deployment"
@@ -137,6 +158,15 @@ jobs:
         with:
           ref: ${{ steps.verify.outputs.result }}
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Download approved artifact
         uses: actions/download-artifact@v7
         with:
@@ -145,18 +175,19 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.staging_run_id }}
 
-      - name: Deploy live channel
-        id: deploy
-        uses: FirebaseExtended/action-hosting-deploy@v0
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
         with:
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: simply-fizzed-prod
-          channelId: live
-          firebaseToolsVersion: 15.30.0
+          project_id: simply-fizzed-prod
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: github-deployer@simply-fizzed-prod.iam.gserviceaccount.com
+
+      - name: Deploy live channel
+        run: npx firebase deploy --only hosting --project simply-fizzed-prod --non-interactive
 
       - name: Summarize production deployment
         env:
-          PRODUCTION_URL: ${{ steps.deploy.outputs.details_url }}
+          PRODUCTION_URL: https://simply-fizzed-prod.web.app
         run: |
           {
             echo "## Firebase production deployment"

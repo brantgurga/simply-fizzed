@@ -246,10 +246,16 @@ Hosting CD** with that staging run's ID to approve and promote the same artifact
 to the live channel. Promotion is a separate manual action so an unreviewed
 staging build cannot publish automatically.
 
-The workflow requires repository variables `VITE_FIREBASE_API_KEY` and
-`VITE_GOOGLE_MAPS_API_KEY`, plus the `FIREBASE_SERVICE_ACCOUNT` Actions secret.
-Both browser keys are client-visible configuration; only the service account is
-a deployment credential.
+The workflow exchanges GitHub OIDC tokens for short-lived Google credentials
+through `google-github-actions/auth`; it stores no service-account key. Configure
+repository variables `VITE_FIREBASE_API_KEY`, `VITE_GOOGLE_MAPS_API_KEY`, and
+`GCP_WORKLOAD_IDENTITY_PROVIDER` (the provider's full resource name).
+
+The dedicated `github-deployer@simply-fizzed-prod.iam.gserviceaccount.com`
+service account needs Firebase Hosting Admin and API Keys Viewer; add Firebase
+Authentication Admin if staging URLs should support sign-in. Restrict the
+provider to repository ID `1320193089`, `refs/heads/main`, and this workflow,
+then grant only that identity `roles/iam.workloadIdentityUser`.
 
 ### Firestore data model
 
