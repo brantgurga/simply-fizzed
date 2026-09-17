@@ -24,10 +24,21 @@ interface NearbySearchProps {
 export default function NearbySearch({ center, search }: NearbySearchProps) {
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
   const [results, setResults] = useState<NearbyLocation[]>([]);
+  const [request, setRequest] = useState<{ center: GeoPoint; search: NearbySearcher }>({
+    center,
+    search,
+  });
+
+  // Reset to the loading state during render (not inside the effect) when the
+  // search request changes, so React discards the stale output in the same pass
+  // instead of the cascading re-render a synchronous setState in an effect causes.
+  if (request.center !== center || request.search !== search) {
+    setRequest({ center, search });
+    setStatus("loading");
+  }
 
   useEffect(() => {
     let active = true;
-    setStatus("loading");
     search(center)
       .then((found) => {
         if (active) {
