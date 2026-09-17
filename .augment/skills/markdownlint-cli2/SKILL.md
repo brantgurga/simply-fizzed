@@ -21,10 +21,16 @@ prerequisite check → run → report workflow below.
 ## 1. Check the prerequisite
 
 `markdownlint-cli2` is a Node.js tool. This repository already uses Node and
-npm, so prefer running it through `npx` without a permanent install:
+npm, so prefer running it through `npx` without a permanent install.
+
+It has no dedicated version flag: any non-flag token is treated as a glob, so
+`--version` would silently run a lint instead. Confirm availability with
+`--help`, which prints usage and exits without linting (the tool also prints a
+version banner such as `markdownlint-cli2 v0.23.2 (markdownlint v0.41.1)` at the
+start of every run):
 
 ```bash
-npx markdownlint-cli2 --version
+npx markdownlint-cli2 --help
 ```
 
 If it is installed as a project dev dependency, an `npm` script or direct
