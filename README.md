@@ -197,8 +197,9 @@ assets.
 
 Project aliases live in [`.firebaserc`](./.firebaserc). Both `default` and
 `local` point at the emulator-only `demo-simply-fizzed` id so local development
-and tests never touch a real project. A real project id and a `prod` alias for
-deployment are added alongside the hosting deploy/CD work tracked in #24.
+and tests never touch a real project. Only the `prod` alias points at the hosted
+`simply-fizzed-prod` project, and deployment jobs also specify that project id
+explicitly.
 
 The Firebase client SDK is initialized in
 [`src/firebase.ts`](./src/firebase.ts), which reads the web app configuration
@@ -232,6 +233,23 @@ declared in [`src/vite-env.d.ts`](./src/vite-env.d.ts):
   in a gitignored `.env.*.local` file or are supplied via CI — Vite loads
   `.env.production.local` ahead of `.env`. `.env.local` and `.env.*.local` are
   gitignored so secrets are never committed.
+
+### Firebase Hosting delivery
+
+After CI passes on `main`, [the delivery workflow](./.github/workflows/firebase-hosting.yml)
+builds with the production Firebase configuration and deploys the exact artifact
+to the long-lived `staging` preview channel. Tests remain on the committed demo
+configuration and explicit `demo-simply-fizzed` emulator project.
+
+Review the staging URL in the workflow summary, then manually run **Firebase
+Hosting CD** with that staging run's ID to approve and promote the same artifact
+to the live channel. Promotion is a separate manual action so an unreviewed
+staging build cannot publish automatically.
+
+The workflow requires repository variable `VITE_FIREBASE_API_KEY` and Actions
+secrets `VITE_GOOGLE_MAPS_API_KEY` and `FIREBASE_SERVICE_ACCOUNT`. The Firebase
+web API key is client-visible configuration; the Maps key and service account
+remain protected credentials.
 
 ### Firestore data model
 

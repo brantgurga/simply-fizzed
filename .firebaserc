@@ -1,6 +1,7 @@
 {
   "projects": {
     "default": "demo-simply-fizzed",
-    "local": "demo-simply-fizzed"
+    "local": "demo-simply-fizzed",
+    "prod": "simply-fizzed-prod"
   }
 }
