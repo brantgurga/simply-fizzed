@@ -238,8 +238,15 @@ declared in [`src/vite-env.d.ts`](./src/vite-env.d.ts):
 
 After CI passes on `main`, [the delivery workflow](./.github/workflows/firebase-hosting.yml)
 builds with the production Firebase configuration and deploys the exact artifact
-to a run-specific `staging-<run ID>` preview channel. Tests remain on the
-committed demo configuration and explicit `demo-simply-fizzed` emulator project.
+to the fixed `staging` preview channel. Redeploying refreshes the channel's 30-day
+expiration while preserving its URL. Tests remain on the committed demo
+configuration and explicit `demo-simply-fizzed` emulator project.
+
+After the first fixed-channel deploy, copy the staging URL from the workflow
+summary and add its origin to the `VITE_GOOGLE_MAPS_API_KEY` HTTP referrer
+allowlist alongside the production origin. The staging and production artifacts
+use the same browser key, and the staging URL remains stable across subsequent
+deploys to this channel.
 
 Review the staging URL in the workflow summary, then manually run **Firebase
 Hosting CD** with that staging run's ID to approve and promote the same artifact

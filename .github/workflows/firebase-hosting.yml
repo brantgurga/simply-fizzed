@@ -107,7 +107,7 @@ jobs:
       - name: Deploy staging channel
         id: deploy
         env:
-          CHANNEL_ID: staging-${{ github.run_id }}
+          CHANNEL_ID: staging
         run: |
           set -euo pipefail
           output="$RUNNER_TEMP/firebase-hosting-staging.json"
