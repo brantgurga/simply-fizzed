@@ -73,7 +73,7 @@ jobs:
             --project simply-fizzed-prod \
             --expires 1d \
             --non-interactive \
-            --json > "$output"
+            --json | tee "$output"
           url="$(
             node --input-type=module -e '
               import fs from "node:fs";
@@ -170,7 +170,7 @@ jobs:
             --project simply-fizzed-prod \
             --expires 30d \
             --non-interactive \
-            --json > "$output"
+            --json | tee "$output"
           url="$(
             node --input-type=module -e '
               import fs from "node:fs";
