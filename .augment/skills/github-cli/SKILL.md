@@ -111,6 +111,6 @@ Summarize what changed for the user: issue/PR numbers and URLs, CI status
 ## Notes
 
 - `gh` respects the repository of the current directory; pass `--repo
-  owner/name` to target another repository explicitly.
+owner/name` to target another repository explicitly.
 - Use `--json <fields>` with `--jq` to get machine-readable output for
   scripting instead of parsing human-formatted text.

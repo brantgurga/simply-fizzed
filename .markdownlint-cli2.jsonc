@@ -16,18 +16,13 @@
     "MD013": {
       "line_length": 120,
       "code_blocks": false,
-      "tables": false
-    }
+      "tables": false,
+    },
   },
 
   // Default globs used when markdownlint-cli2 is invoked without arguments.
   "globs": ["**/*.md"],
 
   // Generated, vendored, or report output that we do not author.
-  "ignores": [
-    "node_modules",
-    "dist",
-    "playwright-report",
-    "test-results"
-  ]
+  "ignores": ["node_modules", "dist", "playwright-report", "test-results"],
 }

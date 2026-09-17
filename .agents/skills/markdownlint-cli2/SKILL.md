@@ -93,9 +93,9 @@ ignores build output:
 {
   "config": {
     "default": true,
-    "MD013": { "line_length": 120 }
+    "MD013": { "line_length": 120 },
   },
-  "ignores": ["node_modules", "dist", "playwright-report"]
+  "ignores": ["node_modules", "dist", "playwright-report"],
 }
 ```
 
