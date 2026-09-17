@@ -1,8 +1,7 @@
-// Playwright global setup: seed the Firestore emulator with deterministic
-// fixtures before any test runs. Playwright starts the `webServer` (which boots
-// the hosting + firestore emulators) and waits for it to respond before running
-// this file, so the emulator is expected to be up by now; we still wait on its
-// readiness endpoint to remove any start-up race. Writes use `firebase-admin`,
+// Playwright global setup: clear the Auth and Firestore emulators, then seed
+// deterministic Firestore fixtures. Playwright starts the `webServer` (which
+// boots all three emulators) first; explicit readiness checks remove startup
+// races. Writes use `firebase-admin`,
 // which bypasses security rules, mirroring how production data is populated out
 // of band. Everything targets the offline `demo-` project, so no credentials or
 // network access are involved.
@@ -12,38 +11,43 @@ import waitOn from "wait-on";
 import { AVAILABILITY, geohashFor, LOCATIONS, SODAS } from "./fixtures.ts";
 
 const PROJECT_ID = "demo-simply-fizzed";
-const EMULATOR_HOST = "127.0.0.1:8080";
+const AUTH_EMULATOR_HOST = "127.0.0.1:9099";
+const FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 const READY_TIMEOUT_MS = 60_000;
 const READY_INTERVAL_MS = 500;
 
 /**
- * Resolve once the Firestore emulator answers, or throw after a timeout. Uses
- * the `http-get://` scheme so wait-on issues a GET (the emulator root does not
- * answer HEAD with a 2xx) instead of the default HEAD.
+ * Resolve once both data emulators answer, or throw after a timeout. Firestore
+ * needs a GET because its root does not answer HEAD with a 2xx; Auth only needs
+ * its TCP listener to be ready.
  */
-function waitForEmulator(): Promise<void> {
+function waitForEmulators(): Promise<void> {
   return waitOn({
-    resources: [`http-get://${EMULATOR_HOST}/`],
+    resources: [`tcp:${AUTH_EMULATOR_HOST}`, `http-get://${FIRESTORE_EMULATOR_HOST}/`],
     timeout: READY_TIMEOUT_MS,
     interval: READY_INTERVAL_MS,
   });
 }
 
-/** Remove any documents left from a previous (reused) emulator run. */
-async function clearEmulator(): Promise<void> {
-  const url = `http://${EMULATOR_HOST}/emulator/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
-  const response = await fetch(url, { method: "DELETE" });
-  if (!response.ok) {
-    throw new Error(`Failed to clear Firestore emulator: ${response.status.toString()}`);
+/** Remove any data left from a previous (reused) emulator run. */
+async function clearEmulators(): Promise<void> {
+  const urls = [
+    `http://${AUTH_EMULATOR_HOST}/emulator/v1/projects/${PROJECT_ID}/accounts`,
+    `http://${FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/${PROJECT_ID}/databases/(default)/documents`,
+  ];
+  const responses = await Promise.all(urls.map((url) => fetch(url, { method: "DELETE" })));
+  const failedResponse = responses.find((response) => !response.ok);
+  if (failedResponse !== undefined) {
+    throw new Error(`Failed to clear Firebase emulator: ${failedResponse.status.toString()}`);
   }
 }
 
 export default async function globalSetup(): Promise<void> {
   // The admin SDK reads this to target the emulator instead of production.
-  process.env["FIRESTORE_EMULATOR_HOST"] = EMULATOR_HOST;
+  process.env["FIRESTORE_EMULATOR_HOST"] = FIRESTORE_EMULATOR_HOST;
 
-  await waitForEmulator();
-  await clearEmulator();
+  await waitForEmulators();
+  await clearEmulators();
 
   const app = initializeApp({ projectId: PROJECT_ID });
   try {

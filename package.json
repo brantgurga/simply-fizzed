@@ -18,13 +18,16 @@
     "e2e:ui": "playwright test --ui",
     "emulators": "firebase emulators:start --project demo-simply-fizzed",
     "emulators:hosting": "firebase emulators:start --only hosting --project demo-simply-fizzed",
-    "emulators:e2e": "firebase emulators:start --only hosting,firestore --project demo-simply-fizzed",
+    "emulators:e2e": "firebase emulators:start --only hosting,firestore,auth --project demo-simply-fizzed",
     "preview": "vite preview",
     "prepare": "husky"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@firebase-oss/ui-core": "^7.1.0",
+    "@firebase-oss/ui-react": "^7.1.0",
+    "@firebase-oss/ui-styles": "^7.1.0",
     "@fontsource/roboto": "^5.3.0",
     "@mui/icons-material": "^9.4.0",
     "@mui/material": "^9.4.0",
