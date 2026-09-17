@@ -1,0 +1,31 @@
+---
+# yamllint configuration.
+# Docs: https://yamllint.readthedocs.io/
+# Extends the built-in "default" preset and relaxes only what is noisy or a
+# known false positive for this project's YAML (mainly GitHub Actions).
+extends: default
+
+rules:
+  # Our YAML files do not use an explicit "---" document-start marker. It is
+  # optional in YAML (required only for multi-document streams), so flagging
+  # every file adds noise without value.
+  document-start: disable
+
+  # GitHub Actions uses the top-level key "on:". YAML 1.1 parses the bare
+  # word "on" as the boolean true, so the truthy rule reports a false
+  # positive on it. Restrict the check to values, not keys, which keeps the
+  # rule active for genuine cases (e.g. yes/no/on/off used as values).
+  truthy:
+    check-keys: false
+
+  # 80 characters is stricter than needed for CI config with long comments
+  # and action references. Allow up to 120 and treat overflow as a warning
+  # so it does not break the build while still nudging toward shorter lines.
+  line-length:
+    max: 120
+    level: warning
+
+# Generated or vendored trees we do not author.
+ignore: |
+  node_modules/
+  dist/
