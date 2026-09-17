@@ -184,6 +184,15 @@ remain uncached. These headers only take effect on a real deploy (served via the
 production CDN); the Hosting emulator does not apply the `headers` block, so use a
 deploy or preview channel to verify them.
 
+### Offline support and installation
+
+The production build is installable as a Progressive Web App. Its service worker
+pre-caches the app shell and loaded same-origin assets, while Firestore stores
+completed queries in IndexedDB across tabs. Cached searches remain available
+offline, and Firestore queues future client writes for synchronization after the
+connection returns. Service-worker registration is disabled during development
+to avoid stale HMR assets.
+
 ### Project aliases and deploy configuration
 
 Project aliases live in [`.firebaserc`](./.firebaserc). Both `default` and
@@ -303,7 +312,7 @@ free of React and Firestore so they can be tested without a database.
 │   ├── app.spec.ts          # E2E specs (app shell + seeded search scenario)
 │   ├── fixtures.ts          # Deterministic seed data shared by setup + specs
 │   └── global-setup.ts      # Seeds the Firestore emulator before tests
-├── public/                  # Static assets served as-is
+├── public/                  # PWA manifest, icons, and static assets
 ├── src/                     # Application source
 │   ├── location/            # Location input component + geocoding
 │   ├── nearby/              # Nearby search: distance logic, query, results UI
@@ -311,7 +320,8 @@ free of React and Firestore so they can be tested without a database.
 │   ├── test/                # Test setup (Vitest)
 │   ├── App.tsx              # Root component (app shell)
 │   ├── App.test.tsx         # Tests for the root component
-│   ├── firebase.ts          # Firebase client init + Firestore emulator wiring
+│   ├── firebase.ts          # Firebase init, persistence, and emulator wiring
+│   ├── pwa.ts               # Production service-worker registration
 │   ├── theme.ts             # Material UI theme
 │   ├── vite-env.d.ts        # Types for VITE_* environment variables
 │   └── main.tsx             # Application entry point
@@ -321,6 +331,7 @@ free of React and Firestore so they can be tested without a database.
 ├── firestore.rules          # Firestore security rules
 ├── firestore.indexes.json   # Firestore indexes
 ├── index.html               # HTML entry point
+├── service-worker.js        # Build-versioned offline cache template
 ├── playwright.config.ts     # Playwright configuration
 └── vite.config.ts           # Vite + Vitest configuration
 ```
