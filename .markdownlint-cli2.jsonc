@@ -1,0 +1,33 @@
+// markdownlint-cli2 configuration.
+// Docs: https://github.com/DavidAnson/markdownlint-cli2
+// Rule reference: https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+{
+  "config": {
+    // Start from the full, recommended rule set and relax only where the
+    // default is stricter than is useful for this project.
+    "default": true,
+
+    // MD013 (line length): the 80-character default is stricter than needed
+    // for prose that contains URLs and for aligned content. 120 keeps lines
+    // reviewable in a side-by-side diff without forcing awkward wrapping.
+    // Code blocks and tables are exempt because their width is driven by
+    // content (shell commands, ASCII diagrams, aligned columns) rather than
+    // prose style, and hard-wrapping them would break meaning.
+    "MD013": {
+      "line_length": 120,
+      "code_blocks": false,
+      "tables": false
+    }
+  },
+
+  // Default globs used when markdownlint-cli2 is invoked without arguments.
+  "globs": ["**/*.md"],
+
+  // Generated, vendored, or report output that we do not author.
+  "ignores": [
+    "node_modules",
+    "dist",
+    "playwright-report",
+    "test-results"
+  ]
+}

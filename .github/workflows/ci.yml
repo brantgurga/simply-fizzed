@@ -49,6 +49,37 @@ jobs:
       - name: Build
         run: npm run build
 
+  lint-docs:
+    name: Lint Markdown & YAML
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      # markdownlint-cli2 is a lint-only tool run via npx (pinned for
+      # reproducibility), so it is not added to package.json dependencies.
+      # It reads globs and rules from .markdownlint-cli2.jsonc.
+      - name: Lint Markdown
+        run: npx --yes markdownlint-cli2@0.23.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      # yamllint is a Python tool; install it directly (pinned) rather than
+      # adding a Node dependency. It reads rules from .yamllint.yml.
+      - name: Install yamllint
+        run: pip install yamllint==1.38.0
+
+      - name: Lint YAML
+        run: yamllint .
+
   e2e:
     name: End-to-end tests
     runs-on: ubuntu-latest

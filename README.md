@@ -297,7 +297,7 @@ free of React and Firestore so they can be tested without a database.
 
 ## Project structure
 
-```
+```text
 .
 ├── e2e/                     # Playwright end-to-end tests
 │   ├── app.spec.ts          # E2E specs (app shell + seeded search scenario)
