@@ -1,6 +1,9 @@
 name: Firebase Hosting CD
 
 on:
+  # Temporary, PR-80-only trigger for validating workload identity federation.
+  # Remove the pull_request trigger and verify-preview-deploy job before merge.
+  pull_request:
   workflow_run:
     workflows: [CI]
     types: [completed]
@@ -21,6 +24,77 @@ env:
   HUSKY: 0
 
 jobs:
+  # Temporary validation for PR #80. It builds with committed emulator values;
+  # only Google authentication and Firebase Hosting deployment are under test.
+  verify-preview-deploy:
+    name: Verify WIF preview deployment
+    if: >-
+      ${{
+        github.event_name == 'pull_request' &&
+        github.event.pull_request.number == 80 &&
+        github.event.pull_request.user.login == 'brantgurga' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.head.ref == 'brantgurga/firebase-staged-deploy'
+      }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build preview artifact
+        run: npm run build
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: simply-fizzed-prod
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: github-deployer@simply-fizzed-prod.iam.gserviceaccount.com
+
+      - name: Deploy WIF test preview
+        id: deploy
+        env:
+          CHANNEL_ID: wif-test-${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/firebase-hosting-wif-test.json"
+          npx firebase hosting:channel:deploy "$CHANNEL_ID" \
+            --project simply-fizzed-prod \
+            --expires 1d \
+            --non-interactive \
+            --json > "$output"
+          url="$(
+            node --input-type=module -e '
+              import fs from "node:fs";
+              const { result } = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+              const deployment = Object.values(result)[0];
+              if (!deployment?.url) process.exit(1);
+              process.stdout.write(deployment.url);
+            ' "$output"
+          )"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Summarize WIF test
+        env:
+          PREVIEW_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          {
+            echo "## Workload identity deployment test"
+            echo "- Preview URL: $PREVIEW_URL"
+            echo "- Authentication: short-lived GitHub OIDC credentials"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   deploy-staging:
     name: Deploy staging channel
     if: >-
