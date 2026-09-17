@@ -16,10 +16,8 @@ Additional tooling (linting, formatting, testing, Firebase, and CI/CD) is tracke
 
 - [Node.js](https://nodejs.org/) 20 or newer (developed against v24)
 - npm 10 or newer
-- A Java runtime (JDK 11 or newer) for the Firebase Emulator Suite. The
-  Firestore and Authentication emulators require Java; the Hosting emulator does
-  not. The end-to-end tests run both the Hosting and Firestore emulators, so
-  Java is required to run them.
+- A Java 21 runtime for the Firestore emulator. Authentication and Hosting do
+  not require Java, but the end-to-end suite starts Firestore too.
 
 ## Getting started
 
@@ -52,8 +50,8 @@ npm run dev
 - `npm run e2e:ui` – run Playwright in interactive UI mode
 - `npm run emulators` – start the full Firebase Emulator Suite
 - `npm run emulators:hosting` – start only the Firebase Hosting emulator
-- `npm run emulators:e2e` – start the Hosting and Firestore emulators (used by
-  the end-to-end tests)
+- `npm run emulators:e2e` – start the Hosting, Firestore, and Authentication
+  emulators (used by the end-to-end tests)
 
 ## Linting
 
@@ -111,10 +109,10 @@ developing.
 ## End-to-end testing
 
 End-to-end tests run on [Playwright](https://playwright.dev/) against the
-production build **served by the Firebase Hosting emulator**, with a seeded
-**Firestore emulator** backing search. The config
+production build **served by the Firebase Hosting emulator**, with seeded
+**Firestore** and isolated **Authentication** emulators backing the app. The config
 ([`playwright.config.ts`](./playwright.config.ts)) starts a `webServer` that runs
-`npm run build && npm run emulators:e2e` (Hosting **and** Firestore), then
+`npm run build && npm run emulators:e2e` (Hosting, Firestore, and Authentication), then
 exercises the app in **Chromium, Firefox, and WebKit** on
 `http://127.0.0.1:5000`. Running against the Hosting emulator (rather than the
 raw Vite preview) means the tests exercise the same hosting behavior — SPA
@@ -168,9 +166,9 @@ The suite is configured for:
 - **Emulator UI** (port 4000).
 
 Start the full suite with `npm run emulators`, just the Hosting emulator with
-`npm run emulators:hosting`, or the Hosting + Firestore pair the end-to-end tests
-use with `npm run emulators:e2e`. The Firestore and Authentication emulators
-require a Java runtime on your `PATH`; the Hosting emulator does not.
+`npm run emulators:hosting`, or the Hosting + Firestore + Authentication group
+the end-to-end tests use with `npm run emulators:e2e`. Firestore requires Java
+21 on your `PATH`; Authentication and Hosting do not.
 
 ### Caching headers
 
@@ -204,13 +202,21 @@ deployment are added alongside the hosting deploy/CD work tracked in #24.
 
 The Firebase client SDK is initialized in
 [`src/firebase.ts`](./src/firebase.ts), which reads the web app configuration
-from `VITE_FIREBASE_*` environment variables (via `import.meta.env`) rather than
-hardcoding it, and exports a shared `Firestore` instance (`db`). When the
-configured `projectId` starts with `demo-`, it automatically calls
-`connectFirestoreEmulator(db, "127.0.0.1", 8080)`, so local development and the
-e2e tests talk to the emulator while production builds use real Firebase with no
-manual flag. See [Environment variables](#environment-variables) for how the
-configuration is supplied.
+from `VITE_FIREBASE_*` environment variables and exports shared Auth and
+Firestore instances. A `demo-` project automatically connects both services to
+the local emulators; other project ids use real Firebase with no manual flag.
+See [Environment variables](#environment-variables) for configuration details.
+
+### Optional authentication
+
+Every current feature remains public. The app bar offers an optional FirebaseUI
+email/password sign-in and account-creation screen, shows the active user, and
+allows sign-out. Auth uses browser-local persistence so an established session
+is restored when the installed app starts offline.
+
+Authentication in local development and e2e uses only the local emulator. Social
+identity providers are intentionally deferred because they require provider credentials
+and authorized domains from a live Firebase project.
 
 ### Environment variables
 

@@ -8,6 +8,34 @@ test.describe("App", () => {
     await expect(page.getByRole("heading", { name: "Simply Fizzed" })).toBeVisible();
   });
 
+  test("signs in with the Auth emulator and restores the session offline", async ({
+    page,
+    context,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "Auth persistence is exercised once in Chromium.");
+
+    await page.route(/https:\/\/.*(?:firebaseapp|firebaseio|googleapis)\.com/, (route) =>
+      route.abort(),
+    );
+    await page.goto("/");
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.getByRole("button", { name: /sign up/i }).click();
+    await page.getByLabel(/email address/i).fill("offline-fan@example.test");
+    await page.getByLabel(/password/i).fill("emulator-password");
+    await page.getByRole("button", { name: /create account/i }).click();
+
+    await expect(page.getByText("offline-fan@example.test")).toBeVisible();
+    await page.evaluate("navigator.serviceWorker.ready");
+    await page.reload();
+    await expect(page.getByText("offline-fan@example.test")).toBeVisible();
+
+    await context.setOffline(true);
+    await page.reload();
+    await expect(page.getByText("offline-fan@example.test")).toBeVisible();
+    await context.setOffline(false);
+  });
+
   test("is installable and keeps loaded search results available offline", async ({
     page,
     context,

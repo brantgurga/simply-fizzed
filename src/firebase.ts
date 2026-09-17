@@ -3,6 +3,12 @@
 // than hardcoded, so values differ per environment without code changes.
 import { getApp, getApps, initializeApp } from "firebase/app";
 import {
+  browserLocalPersistence,
+  connectAuthEmulator,
+  getAuth,
+  initializeAuth,
+} from "firebase/auth";
+import {
   connectFirestoreEmulator,
   getFirestore,
   initializeFirestore,
@@ -24,6 +30,12 @@ const firebaseConfig = {
 const existingApp = getApps().length > 0;
 export const app = existingApp ? getApp() : initializeApp(firebaseConfig);
 
+// Keep authenticated sessions in IndexedDB/localStorage so they remain
+// available when the installed app starts offline.
+export const auth = existingApp
+  ? getAuth(app)
+  : initializeAuth(app, { persistence: browserLocalPersistence });
+
 export const db = existingApp
   ? getFirestore(app)
   : initializeFirestore(app, {
@@ -31,8 +43,12 @@ export const db = existingApp
     });
 
 // A `demo-` project id marks an emulator-only configuration (local dev and e2e
-// both use `demo-simply-fizzed`). In that case connect Firestore to the local
-// emulator; production configs use real Firebase with no manual flag.
+// both use `demo-simply-fizzed`). Production configs use real Firebase with no
+// manual flag. Guard Auth for HMR, where the shared instance may already be
+// connected.
 if (firebaseConfig.projectId.startsWith("demo-")) {
+  if (auth.emulatorConfig === null) {
+    connectAuthEmulator(auth, "http://127.0.0.1:9099");
+  }
   connectFirestoreEmulator(db, "127.0.0.1", 8080);
 }
