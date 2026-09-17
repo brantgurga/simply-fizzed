@@ -5,10 +5,10 @@
 Only the latest `main` branch is currently supported. Fixes are applied to
 `main`, and older commits or releases do not receive security updates.
 
-| Version        | Supported          |
-| -------------- | ------------------ |
-| Latest `main`  | :white_check_mark: |
-| Anything else  | :x:                |
+| Version       | Supported          |
+| ------------- | ------------------ |
+| Latest `main` | :white_check_mark: |
+| Anything else | :x:                |
 
 ## Reporting a Vulnerability
 
