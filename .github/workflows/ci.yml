@@ -50,7 +50,7 @@ jobs:
         run: npm run build
 
   lint-docs:
-    name: Lint Markdown & YAML
+    name: Lint Markdown, YAML & JSON
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -66,6 +66,17 @@ jobs:
       # It reads globs and rules from .markdownlint-cli2.jsonc.
       - name: Lint Markdown
         run: npx --yes markdownlint-cli2@0.23.2
+
+      # Biome lints JSON/JSONC (duplicate keys, syntax) via npx (pinned). Its
+      # formatter is disabled in biome.json so it never conflicts with oxfmt;
+      # scope and rules come from biome.json. oxlint does not lint JSON yet.
+      - name: Lint JSON/JSONC
+        run: npx --yes @biomejs/biome@2.5.14 lint
+
+      # v8r validates config files against their JSON Schema (via SchemaStore).
+      # Run via npx (pinned); the file list comes from .v8rrc.yml.
+      - name: Validate JSON Schemas
+        run: npx --yes v8r@6.1.0
 
       - name: Set up Python
         uses: actions/setup-python@v7
