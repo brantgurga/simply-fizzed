@@ -252,10 +252,10 @@ repository variables `VITE_FIREBASE_API_KEY`, `VITE_GOOGLE_MAPS_API_KEY`, and
 `GCP_WORKLOAD_IDENTITY_PROVIDER` (the provider's full resource name).
 
 The dedicated `github-deployer@simply-fizzed-prod.iam.gserviceaccount.com`
-service account needs Firebase Hosting Admin and API Keys Viewer; add Firebase
-Authentication Admin if staging URLs should support sign-in. Restrict the
-provider to repository ID `1320193089`, `refs/heads/main`, and this workflow,
-then grant only that identity `roles/iam.workloadIdentityUser`.
+service account needs Firebase Hosting Admin; add Firebase Authentication Admin
+if staging URLs should support sign-in. Restrict the provider to repository ID
+`1320193089`, `refs/heads/main`, and this workflow, then grant only that identity
+`roles/iam.workloadIdentityUser`.
 
 ### Firestore data model
 
