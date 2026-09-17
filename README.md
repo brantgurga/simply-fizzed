@@ -247,8 +247,9 @@ to the live channel. Promotion is a separate manual action so an unreviewed
 staging build cannot publish automatically.
 
 The workflow exchanges GitHub OIDC tokens for short-lived Google credentials
-through `google-github-actions/auth`; it stores no service-account key. Configure
-repository variables `VITE_FIREBASE_API_KEY`, `VITE_GOOGLE_MAPS_API_KEY`, and
+through `google-github-actions/auth`; it stores no service-account key. Build
+scripts run in a separate job without OIDC access. Configure repository variables
+`VITE_FIREBASE_API_KEY`, `VITE_GOOGLE_MAPS_API_KEY`, and
 `GCP_WORKLOAD_IDENTITY_PROVIDER` (the provider's full resource name).
 
 The dedicated `github-deployer@simply-fizzed-prod.iam.gserviceaccount.com`
