@@ -1,0 +1,48 @@
+# Dependabot version updates.
+# Docs: https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference
+#
+# Two ecosystems cover this repo: npm (package.json + package-lock.json) and the
+# GitHub Actions used by the CI workflow. Updates are grouped to keep PR volume
+# low, and commit prefixes follow the repo's Conventional Commits style.
+version: 2
+updates:
+  # npm dependencies (package.json / package-lock.json) in the repo root.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    # "build" is the Conventional Commits type for dependency/build changes.
+    commit-message:
+      prefix: build
+      include: scope
+    labels:
+      - dependencies
+      - javascript
+    # Bundle minor + patch bumps into one PR; majors open individually so a
+    # potentially breaking change is reviewed on its own.
+    groups:
+      npm-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # GitHub Actions used in .github/workflows. "directory: /" is correct here;
+  # Dependabot always scans .github/workflows regardless of this value.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    # "ci" is the Conventional Commits type for CI configuration changes.
+    commit-message:
+      prefix: ci
+    labels:
+      - dependencies
+    # One PR for all GitHub Actions updates.
+    groups:
+      github-actions:
+        patterns:
+          - "*"
