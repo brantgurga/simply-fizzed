@@ -39,7 +39,7 @@ jobs:
       VITE_FIREBASE_MESSAGING_SENDER_ID: "562151439154"
       VITE_FIREBASE_APP_ID: "1:562151439154:web:9216391ad8dd574951352b"
       VITE_FIREBASE_MEASUREMENT_ID: G-TYWXP7PBJG
-      VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+      VITE_GOOGLE_MAPS_API_KEY: ${{ vars.VITE_GOOGLE_MAPS_API_KEY }}
     steps:
       - name: Checkout tested commit
         uses: actions/checkout@v7
@@ -62,7 +62,7 @@ jobs:
             exit 1
           }
           test -n "$VITE_GOOGLE_MAPS_API_KEY" || {
-            echo "::error::Set the VITE_GOOGLE_MAPS_API_KEY Actions secret"
+            echo "::error::Set the VITE_GOOGLE_MAPS_API_KEY repository variable"
             exit 1
           }
 
@@ -83,7 +83,7 @@ jobs:
         with:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: simply-fizzed-prod
-          channelId: staging
+          channelId: staging-${{ github.run_id }}
           expires: 30d
           firebaseToolsVersion: 15.30.0
 

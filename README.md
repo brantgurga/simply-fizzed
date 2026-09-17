@@ -229,27 +229,27 @@ declared in [`src/vite-env.d.ts`](./src/vite-env.d.ts):
   (project `demo-simply-fizzed`, a placeholder Maps key). It points the app at
   the Firebase Emulator Suite, so local development and e2e need no setup.
 - [`.env.example`](./.env.example) documents every required variable.
-- For production, real values (including the real `VITE_GOOGLE_MAPS_API_KEY`) go
-  in a gitignored `.env.*.local` file or are supplied via CI — Vite loads
-  `.env.production.local` ahead of `.env`. `.env.local` and `.env.*.local` are
-  gitignored so secrets are never committed.
+- For production, real values go in a gitignored `.env.*.local` file or are
+  supplied via CI — Vite loads `.env.production.local` ahead of `.env`.
+  Firebase and Maps browser keys are visible in the delivered JavaScript and
+  should use provider-side API/application restrictions.
 
 ### Firebase Hosting delivery
 
 After CI passes on `main`, [the delivery workflow](./.github/workflows/firebase-hosting.yml)
 builds with the production Firebase configuration and deploys the exact artifact
-to the long-lived `staging` preview channel. Tests remain on the committed demo
-configuration and explicit `demo-simply-fizzed` emulator project.
+to a run-specific `staging-<run ID>` preview channel. Tests remain on the
+committed demo configuration and explicit `demo-simply-fizzed` emulator project.
 
 Review the staging URL in the workflow summary, then manually run **Firebase
 Hosting CD** with that staging run's ID to approve and promote the same artifact
 to the live channel. Promotion is a separate manual action so an unreviewed
 staging build cannot publish automatically.
 
-The workflow requires repository variable `VITE_FIREBASE_API_KEY` and Actions
-secrets `VITE_GOOGLE_MAPS_API_KEY` and `FIREBASE_SERVICE_ACCOUNT`. The Firebase
-web API key is client-visible configuration; the Maps key and service account
-remain protected credentials.
+The workflow requires repository variables `VITE_FIREBASE_API_KEY` and
+`VITE_GOOGLE_MAPS_API_KEY`, plus the `FIREBASE_SERVICE_ACCOUNT` Actions secret.
+Both browser keys are client-visible configuration; only the service account is
+a deployment credential.
 
 ### Firestore data model
 
