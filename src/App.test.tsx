@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import theme from "./theme";
 
 const auth = vi.hoisted(() => ({
   currentUser: null as { displayName: string | null; email: string | null } | null,
@@ -22,11 +23,13 @@ vi.mock("@firebase-oss/ui-react", () => ({
   FirebaseUIProvider: ({ children }: { children: ReactNode }) => children,
   SignInAuthScreen: ({ onSignUpClick }: { onSignUpClick: () => void }) => (
     <section aria-label="FirebaseUI sign in">
+      <h2>Sign in</h2>
       <button onClick={onSignUpClick}>Create an account</button>
     </section>
   ),
   SignUpAuthScreen: ({ onSignInClick }: { onSignInClick: () => void }) => (
     <section aria-label="FirebaseUI sign up">
+      <h2>Create an account</h2>
       <button onClick={onSignInClick}>Use an existing account</button>
     </section>
   ),
@@ -36,6 +39,12 @@ describe("App", () => {
   beforeEach(() => {
     auth.currentUser = null;
     auth.signOut.mockReset();
+  });
+
+  it("follows the device light or dark color scheme", () => {
+    expect(theme).toHaveProperty("colorSchemes.light.palette.mode", "light");
+    expect(theme).toHaveProperty("colorSchemes.dark.palette.mode", "dark");
+    expect(theme).toHaveProperty("colorSchemeSelector", "media");
   });
 
   it("keeps browsing available without signing in", () => {
@@ -54,9 +63,11 @@ describe("App", () => {
 
     await user.click(screen.getByRole("button", { name: "Sign in" }));
     expect(await screen.findByLabelText("FirebaseUI sign in")).toBeVisible();
+    expect(screen.getAllByRole("heading", { name: "Sign in" })).toHaveLength(1);
 
     await user.click(screen.getByRole("button", { name: "Create an account" }));
     expect(screen.getByLabelText("FirebaseUI sign up")).toBeVisible();
+    expect(screen.getAllByRole("heading", { name: "Create an account" })).toHaveLength(1);
   });
 
   it("shows the authenticated user and allows sign-out", async () => {
