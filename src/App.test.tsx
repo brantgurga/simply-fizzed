@@ -19,6 +19,11 @@ vi.mock("firebase/auth", () => ({
   signOut: auth.signOut,
 }));
 vi.mock("@firebase-oss/ui-core", () => ({ initializeUI: vi.fn(() => ({})) }));
+vi.mock("./location/LocationInput", () => ({
+  default: ({ onResolveError }: { onResolveError: () => void }) => (
+    <button onClick={onResolveError}>Fail location search</button>
+  ),
+}));
 vi.mock("@firebase-oss/ui-react", () => ({
   FirebaseUIProvider: ({ children }: { children: ReactNode }) => children,
   SignInAuthScreen: ({ onSignUpClick }: { onSignUpClick: () => void }) => (
@@ -39,6 +44,7 @@ describe("App", () => {
   beforeEach(() => {
     auth.currentUser = null;
     auth.signOut.mockReset();
+    window.localStorage.clear();
   });
 
   it("follows the device light or dark color scheme", () => {
@@ -55,6 +61,20 @@ describe("App", () => {
       screen.getByText("Find soda near you. Set your location to start searching."),
     ).toBeVisible();
     expect(screen.getByRole("button", { name: "Sign in" })).toBeVisible();
+  });
+
+  it("hides a stale search center when location resolution fails", async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem(
+      "simply-fizzed:last-search-center",
+      JSON.stringify({ lat: 39.7684, lng: -86.1581 }),
+    );
+    render(<App />);
+
+    expect(screen.getByText("Searching near 39.7684, -86.1581.")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Fail location search" }));
+    expect(screen.queryByText(/searching near/i)).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("simply-fizzed:last-search-center")).toBeNull();
   });
 
   it("opens FirebaseUI and switches between sign-in and sign-up", async () => {

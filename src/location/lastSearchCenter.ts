@@ -1,9 +1,8 @@
 import type { GeoPoint } from "../model/firestore";
 
 const STORAGE_KEY = "simply-fizzed:last-search-center";
-type SearchStorage = Pick<Storage, "getItem" | "setItem">;
 
-function getStorage(storage?: SearchStorage): SearchStorage | undefined {
+function getStorage<T>(storage?: T): T | Storage | undefined {
   if (storage !== undefined) return storage;
   if (typeof window === "undefined") return undefined;
   return window.localStorage;
@@ -26,7 +25,7 @@ function isGeoPoint(value: unknown): value is GeoPoint {
   );
 }
 
-export function loadLastSearchCenter(storage?: SearchStorage): GeoPoint | undefined {
+export function loadLastSearchCenter(storage?: Pick<Storage, "getItem">): GeoPoint | undefined {
   try {
     const saved = getStorage(storage)?.getItem(STORAGE_KEY);
     if (saved === null || saved === undefined) return undefined;
@@ -38,12 +37,20 @@ export function loadLastSearchCenter(storage?: SearchStorage): GeoPoint | undefi
   }
 }
 
-export function saveLastSearchCenter(center: GeoPoint, storage?: SearchStorage): void {
+export function saveLastSearchCenter(center: GeoPoint, storage?: Pick<Storage, "setItem">): void {
   if (!isGeoPoint(center)) return;
 
   try {
     getStorage(storage)?.setItem(STORAGE_KEY, JSON.stringify(center));
   } catch {
     // Search still works when storage is unavailable or full.
+  }
+}
+
+export function clearLastSearchCenter(storage?: Pick<Storage, "removeItem">): void {
+  try {
+    getStorage(storage)?.removeItem(STORAGE_KEY);
+  } catch {
+    // Search still works when storage is unavailable.
   }
 }
