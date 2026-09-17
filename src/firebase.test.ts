@@ -47,6 +47,7 @@ describe("Firebase initialization", () => {
     vi.resetModules();
     vi.clearAllMocks();
     vi.stubEnv("VITE_FIREBASE_PROJECT_ID", "demo-simply-fizzed");
+    vi.stubEnv("VITE_FIREBASE_MEASUREMENT_ID", "test-measurement-id");
     firebase.getApps.mockReturnValue([]);
     firebase.initializeApp.mockReturnValue(firebase.app);
     firebase.initializeAuth.mockReturnValue(firebase.auth);
@@ -62,6 +63,12 @@ describe("Firebase initialization", () => {
   it("enables local persistence and connects demo projects to the emulators", async () => {
     await import("./firebase");
 
+    expect(firebase.initializeApp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: "demo-simply-fizzed",
+        measurementId: "test-measurement-id",
+      }),
+    );
     expect(firebase.initializeAuth).toHaveBeenCalledWith(firebase.app, {
       persistence: firebase.localPersistence,
     });

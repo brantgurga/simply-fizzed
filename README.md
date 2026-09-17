@@ -197,8 +197,9 @@ assets.
 
 Project aliases live in [`.firebaserc`](./.firebaserc). Both `default` and
 `local` point at the emulator-only `demo-simply-fizzed` id so local development
-and tests never touch a real project. A real project id and a `prod` alias for
-deployment are added alongside the hosting deploy/CD work tracked in #24.
+and tests never touch a real project. Only the `prod` alias points at the hosted
+`simply-fizzed-prod` project, and deployment jobs also specify that project id
+explicitly.
 
 The Firebase client SDK is initialized in
 [`src/firebase.ts`](./src/firebase.ts), which reads the web app configuration
@@ -228,10 +229,34 @@ declared in [`src/vite-env.d.ts`](./src/vite-env.d.ts):
   (project `demo-simply-fizzed`, a placeholder Maps key). It points the app at
   the Firebase Emulator Suite, so local development and e2e need no setup.
 - [`.env.example`](./.env.example) documents every required variable.
-- For production, real values (including the real `VITE_GOOGLE_MAPS_API_KEY`) go
-  in a gitignored `.env.*.local` file or are supplied via CI — Vite loads
-  `.env.production.local` ahead of `.env`. `.env.local` and `.env.*.local` are
-  gitignored so secrets are never committed.
+- For production, real values go in a gitignored `.env.*.local` file or are
+  supplied via CI — Vite loads `.env.production.local` ahead of `.env`.
+  Firebase and Maps browser keys are visible in the delivered JavaScript and
+  should use provider-side API/application restrictions.
+
+### Firebase Hosting delivery
+
+After CI passes on `main`, [the delivery workflow](./.github/workflows/firebase-hosting.yml)
+builds with the production Firebase configuration and deploys the exact artifact
+to a run-specific `staging-<run ID>` preview channel. Tests remain on the
+committed demo configuration and explicit `demo-simply-fizzed` emulator project.
+
+Review the staging URL in the workflow summary, then manually run **Firebase
+Hosting CD** with that staging run's ID to approve and promote the same artifact
+to the live channel. Promotion is a separate manual action so an unreviewed
+staging build cannot publish automatically.
+
+The workflow exchanges GitHub OIDC tokens for short-lived Google credentials
+through `google-github-actions/auth`; it stores no service-account key. Build
+scripts run in a separate job without OIDC access. Configure repository variables
+`VITE_FIREBASE_API_KEY`, `VITE_GOOGLE_MAPS_API_KEY`, and
+`GCP_WORKLOAD_IDENTITY_PROVIDER` (the provider's full resource name).
+
+The dedicated `github-deployer@simply-fizzed-prod.iam.gserviceaccount.com`
+service account needs Firebase Hosting Admin; add Firebase Authentication Admin
+if staging URLs should support sign-in. Restrict the provider to repository ID
+`1320193089`, `refs/heads/main`, and this workflow, then grant only that identity
+`roles/iam.workloadIdentityUser`.
 
 ### Firestore data model
 

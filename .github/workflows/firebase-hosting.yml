@@ -1,0 +1,210 @@
+name: Firebase Hosting CD
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      staging_run_id:
+        description: Successful staging workflow run ID to promote
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+env:
+  HUSKY: 0
+
+jobs:
+  build-staging:
+    name: Build staging artifact
+    if: >-
+      ${{
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository &&
+        github.event.workflow_run.conclusion == 'success'
+      }}
+    runs-on: ubuntu-latest
+    env:
+      VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_AUTH_DOMAIN: simply-fizzed-prod.firebaseapp.com
+      VITE_FIREBASE_PROJECT_ID: simply-fizzed-prod
+      VITE_FIREBASE_STORAGE_BUCKET: simply-fizzed-prod.firebasestorage.app
+      VITE_FIREBASE_MESSAGING_SENDER_ID: "562151439154"
+      VITE_FIREBASE_APP_ID: "1:562151439154:web:9216391ad8dd574951352b"
+      VITE_FIREBASE_MEASUREMENT_ID: G-TYWXP7PBJG
+      VITE_GOOGLE_MAPS_API_KEY: ${{ vars.VITE_GOOGLE_MAPS_API_KEY }}
+    steps:
+      - name: Checkout tested commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate production client configuration
+        run: |
+          test -n "$VITE_FIREBASE_API_KEY" || {
+            echo "::error::Set the VITE_FIREBASE_API_KEY repository variable"
+            exit 1
+          }
+          test -n "$VITE_GOOGLE_MAPS_API_KEY" || {
+            echo "::error::Set the VITE_GOOGLE_MAPS_API_KEY repository variable"
+            exit 1
+          }
+
+      - name: Build production artifact
+        run: npm run build
+
+      - name: Save production artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: firebase-hosting
+          path: |
+            dist/
+            firebase.json
+          if-no-files-found: error
+          retention-days: 30
+
+  deploy-staging:
+    name: Deploy staging channel
+    needs: build-staging
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      id-token: write
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: Download production artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: firebase-hosting
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: simply-fizzed-prod
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: github-deployer@simply-fizzed-prod.iam.gserviceaccount.com
+
+      - name: Deploy staging channel
+        id: deploy
+        env:
+          CHANNEL_ID: staging-${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/firebase-hosting-staging.json"
+          npx --yes firebase-tools@15.30.0 hosting:channel:deploy "$CHANNEL_ID" \
+            --project simply-fizzed-prod \
+            --expires 30d \
+            --non-interactive \
+            --json | tee "$output"
+          url="$(
+            node --input-type=module -e '
+              import fs from "node:fs";
+              const { result } = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+              const deployment = Object.values(result)[0];
+              if (!deployment?.url) process.exit(1);
+              process.stdout.write(deployment.url);
+            ' "$output"
+          )"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Summarize staging deployment
+        env:
+          STAGING_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          {
+            echo "## Firebase staging deployment"
+            echo "- URL: $STAGING_URL"
+            echo "- Run ID to approve for production: $GITHUB_RUN_ID"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  promote-production:
+    name: Promote approved staging artifact
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      actions: read
+      id-token: write
+    steps:
+      - name: Verify staging run
+        id: verify
+        uses: actions/github-script@v8
+        env:
+          STAGING_RUN_ID: ${{ inputs.staging_run_id }}
+        with:
+          result-encoding: string
+          script: |
+            const runId = Number(process.env.STAGING_RUN_ID);
+            if (!Number.isSafeInteger(runId) || runId <= 0) {
+              core.setFailed("The staging run ID must be a positive integer.");
+              return;
+            }
+            const { data: run } = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: runId,
+            });
+            const approved =
+              run.name === "Firebase Hosting CD" &&
+              run.event === "workflow_run" &&
+              run.head_branch === "main" &&
+              run.conclusion === "success";
+            if (!approved) {
+              core.setFailed("Choose a successful main-branch Firebase Hosting CD staging run.");
+              return;
+            }
+            return run.head_sha;
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: Download approved artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: firebase-hosting
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.staging_run_id }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: simply-fizzed-prod
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: github-deployer@simply-fizzed-prod.iam.gserviceaccount.com
+
+      - name: Deploy live channel
+        run: >-
+          npx --yes firebase-tools@15.30.0 deploy --only hosting
+          --project simply-fizzed-prod --non-interactive
+
+      - name: Summarize production deployment
+        env:
+          PRODUCTION_URL: https://simply-fizzed-prod.web.app
+        run: |
+          {
+            echo "## Firebase production deployment"
+            echo "- URL: $PRODUCTION_URL"
+            echo "- Promoted staging run: ${{ inputs.staging_run_id }}"
+          } >> "$GITHUB_STEP_SUMMARY"
