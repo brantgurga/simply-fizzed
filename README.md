@@ -249,9 +249,11 @@ use the same browser key, and the staging URL remains stable across subsequent
 deploys to this channel.
 
 Review the staging URL in the workflow summary, then manually run **Firebase
-Hosting CD** with that staging run's ID to approve and promote the same artifact
-to the live channel. Promotion is a separate manual action so an unreviewed
-staging build cannot publish automatically.
+Hosting CD** with the latest successful staging run's ID to approve and promote
+the same artifact to the live channel. The workflow rejects superseded runs and
+serializes staging deploys with promotions so the reviewed URL cannot change
+while approval is underway. Promotion remains a separate manual action so an
+unreviewed staging build cannot publish automatically.
 
 The workflow exchanges GitHub OIDC tokens for short-lived Google credentials
 through `google-github-actions/auth`; it stores no service-account key. Build

@@ -16,6 +16,12 @@ permissions:
   actions: read
   contents: read
 
+# The fixed staging channel is mutable, so staging deploys and promotions must
+# not overlap.
+concurrency:
+  group: firebase-hosting-delivery
+  cancel-in-progress: false
+
 env:
   HUSKY: 0
 
@@ -171,6 +177,19 @@ jobs:
               run.conclusion === "success";
             if (!approved) {
               core.setFailed("Choose a successful main-branch Firebase Hosting CD staging run.");
+              return;
+            }
+            const { data: latest } = await github.rest.actions.listWorkflowRunsForWorkflow({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: run.workflow_id,
+              branch: "main",
+              event: "workflow_run",
+              status: "success",
+              per_page: 1,
+            });
+            if (latest.workflow_runs[0]?.id !== runId) {
+              core.setFailed("Only the latest successful staging run can be promoted.");
               return;
             }
             return run.head_sha;
