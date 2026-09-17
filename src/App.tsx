@@ -35,15 +35,6 @@ const LoginScreen = lazy(async () => {
       <FirebaseUIProvider ui={firebaseUi}>
         <Container component="main" maxWidth="sm" sx={{ py: 4 }}>
           <Stack spacing={3}>
-            <div>
-              <Typography variant="h4" component="h2" gutterBottom>
-                {creatingAccount ? "Create an account" : "Sign in"}
-              </Typography>
-              <Typography color="text.secondary">
-                Signing in is optional. You can keep browsing Simply Fizzed without an account.
-              </Typography>
-            </div>
-
             {creatingAccount ? (
               <SignUpAuthScreen
                 onSignUp={onComplete}
