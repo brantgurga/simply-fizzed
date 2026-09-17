@@ -6,7 +6,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import type { GeoPoint } from "../model/firestore";
-import type { Geocoder } from "./geocoder";
+import { GeocodingError, type Geocoder } from "./geocoder";
 
 /** The `navigator.geolocation` surface this component depends on. */
 type GeolocationProvider = Pick<Geolocation, "getCurrentPosition">;
@@ -85,9 +85,14 @@ export default function LocationInput({
       const geo = await geocoder.geocode(trimmed);
       setInfo(`Using the location for "${trimmed}".`);
       onResolve(geo);
-    } catch {
+    } catch (caught) {
+      console.error("Location geocoding failed", caught);
       setInfo(undefined);
-      setError("We couldn't find that location. Check the spelling and try again.");
+      setError(
+        caught instanceof GeocodingError && caught.status === "ZERO_RESULTS"
+          ? "We couldn't find that location. Check the spelling and try again."
+          : "Location search is unavailable right now. Please try again later.",
+      );
     } finally {
       setSearching(false);
     }

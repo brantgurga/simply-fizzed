@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
-import { FakeGeocoder } from "./geocoder";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { FakeGeocoder, GeocodingError, type Geocoder } from "./geocoder";
 import LocationInput from "./LocationInput";
 
 type GeolocationProvider = Pick<Geolocation, "getCurrentPosition">;
@@ -21,6 +21,10 @@ function positionAt(latitude: number, longitude: number): GeolocationPosition {
 }
 
 describe("LocationInput", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("shows the manual form when geolocation is unavailable", () => {
     render(
       <LocationInput geocoder={new FakeGeocoder()} onResolve={vi.fn()} geolocation={undefined} />,
@@ -86,9 +90,10 @@ describe("LocationInput", () => {
     await waitFor(() => expect(onResolve).toHaveBeenCalledWith({ lat: 39.1, lng: -94.6 }));
   });
 
-  it("shows an error when geocoding fails", async () => {
+  it("shows a no-results error and logs the underlying failure", async () => {
     const user = userEvent.setup();
     const onResolve = vi.fn();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     render(
       <LocationInput geocoder={new FakeGeocoder()} onResolve={onResolve} geolocation={undefined} />,
@@ -98,6 +103,26 @@ describe("LocationInput", () => {
     await user.click(screen.getByRole("button", { name: "Search" }));
 
     expect(await screen.findByText(/couldn't find that location/i)).toBeInTheDocument();
+    expect(consoleError).toHaveBeenCalledWith("Location geocoding failed", expect.any(Error));
     expect(onResolve).not.toHaveBeenCalled();
+  });
+
+  it("distinguishes a geocoder service failure from no results", async () => {
+    const user = userEvent.setup();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const geocoder: Geocoder = {
+      geocode: () => Promise.reject(new GeocodingError("REQUEST_DENIED")),
+    };
+
+    render(<LocationInput geocoder={geocoder} onResolve={vi.fn()} geolocation={undefined} />);
+
+    await user.type(screen.getByLabelText("City or postal code"), "Indianapolis, IN");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(await screen.findByText(/location search is unavailable/i)).toBeInTheDocument();
+    expect(consoleError).toHaveBeenCalledWith(
+      "Location geocoding failed",
+      expect.objectContaining({ status: "REQUEST_DENIED" }),
+    );
   });
 });
