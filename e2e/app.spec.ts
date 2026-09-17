@@ -8,6 +8,58 @@ test.describe("App", () => {
     await expect(page.getByRole("heading", { name: "Simply Fizzed" })).toBeVisible();
   });
 
+  test("is installable and keeps loaded search results available offline", async ({
+    page,
+    context,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "Offline persistence is exercised once in Chromium.");
+
+    await context.grantPermissions(["geolocation"]);
+    await context.setGeolocation(INDIANAPOLIS);
+    await page.goto("/");
+
+    const manifestResponse = await page.request.get("/manifest.webmanifest");
+    expect(manifestResponse.ok()).toBe(true);
+    expect(await manifestResponse.json()).toMatchObject({
+      display: "standalone",
+      name: "Simply Fizzed",
+      start_url: "/",
+    });
+
+    await expect(page.getByRole("heading", { name: KROGER.name })).toBeVisible();
+    await page.evaluate("navigator.serviceWorker.ready");
+    await page.reload();
+    await expect(page.getByRole("heading", { name: KROGER.name })).toBeVisible();
+
+    await context.setOffline(true);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Simply Fizzed" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: KROGER.name })).toBeVisible();
+    await context.setOffline(false);
+  });
+
+  test("restores a manual search center while offline", async ({ page, context, browserName }) => {
+    test.skip(browserName !== "chromium", "Offline persistence is exercised once in Chromium.");
+
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "geolocation", { configurable: true, value: undefined });
+    });
+    await page.goto("/");
+    await page.getByLabel("City or postal code").fill("Indianapolis");
+    await page.getByRole("button", { name: "Search" }).click();
+    await expect(page.getByText("Searching near 39.0997, -94.5786.")).toBeVisible();
+    await expect(page.getByText(/No soda found within/)).toBeVisible();
+    await page.evaluate("navigator.serviceWorker.ready");
+    await page.reload();
+
+    await context.setOffline(true);
+    await page.reload();
+    await expect(page.getByText("Searching near 39.0997, -94.5786.")).toBeVisible();
+    await expect(page.getByText(/No soda found within/)).toBeVisible();
+    await context.setOffline(false);
+  });
+
   test("lists seeded soda locations nearest-first with their sodas", async ({
     page,
     context,
