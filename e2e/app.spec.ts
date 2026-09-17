@@ -39,6 +39,27 @@ test.describe("App", () => {
     await context.setOffline(false);
   });
 
+  test("restores a manual search center while offline", async ({ page, context, browserName }) => {
+    test.skip(browserName !== "chromium", "Offline persistence is exercised once in Chromium.");
+
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "geolocation", { configurable: true, value: undefined });
+    });
+    await page.goto("/");
+    await page.getByLabel("City or postal code").fill("Indianapolis");
+    await page.getByRole("button", { name: "Search" }).click();
+    await expect(page.getByText("Searching near 39.0997, -94.5786.")).toBeVisible();
+    await expect(page.getByText(/No soda found within/)).toBeVisible();
+    await page.evaluate("navigator.serviceWorker.ready");
+    await page.reload();
+
+    await context.setOffline(true);
+    await page.reload();
+    await expect(page.getByText("Searching near 39.0997, -94.5786.")).toBeVisible();
+    await expect(page.getByText(/No soda found within/)).toBeVisible();
+    await context.setOffline(false);
+  });
+
   test("lists seeded soda locations nearest-first with their sodas", async ({
     page,
     context,

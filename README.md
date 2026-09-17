@@ -187,11 +187,12 @@ deploy or preview channel to verify them.
 ### Offline support and installation
 
 The production build is installable as a Progressive Web App. Its service worker
-pre-caches the app shell and loaded same-origin assets, while Firestore stores
-completed queries in IndexedDB across tabs. Cached searches remain available
-offline, and Firestore queues future client writes for synchronization after the
-connection returns. Service-worker registration is disabled during development
-to avoid stale HMR assets.
+pre-caches a versioned app shell and assets, while Firestore stores completed
+queries in IndexedDB across tabs. The last resolved search center is retained
+locally, so cached manual searches can reload without network geocoding. Firestore
+queues future client writes for synchronization after the connection returns.
+Service-worker registration is disabled during development to avoid stale HMR
+assets.
 
 ### Project aliases and deploy configuration
 
@@ -314,7 +315,7 @@ free of React and Firestore so they can be tested without a database.
 │   └── global-setup.ts      # Seeds the Firestore emulator before tests
 ├── public/                  # PWA manifest, icons, and static assets
 ├── src/                     # Application source
-│   ├── location/            # Location input component + geocoding
+│   ├── location/            # Location input, geocoding, and saved search center
 │   ├── nearby/              # Nearby search: distance logic, query, results UI
 │   ├── model/               # Shared Firestore data-model types
 │   ├── test/                # Test setup (Vitest)

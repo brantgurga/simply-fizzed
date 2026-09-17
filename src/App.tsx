@@ -8,13 +8,18 @@ import { db } from "./firebase";
 import type { GeoPoint } from "./model/firestore";
 import LocationInput from "./location/LocationInput";
 import { createGeocoder } from "./location/geocoder";
+import { loadLastSearchCenter, saveLastSearchCenter } from "./location/lastSearchCenter";
 import NearbySearch from "./nearby/NearbySearch";
 import { searchNearby } from "./nearby/nearby";
 
 function App() {
   const geocoder = useMemo(() => createGeocoder(), []);
-  const [location, setLocation] = useState<GeoPoint | undefined>(undefined);
+  const [location, setLocation] = useState<GeoPoint | undefined>(loadLastSearchCenter);
   const search = useCallback((center: GeoPoint) => searchNearby(db, center), []);
+  const resolveLocation = useCallback((center: GeoPoint) => {
+    saveLastSearchCenter(center);
+    setLocation(center);
+  }, []);
 
   return (
     <>
@@ -32,7 +37,7 @@ function App() {
             Find soda near you. Set your location to start searching.
           </Typography>
 
-          <LocationInput geocoder={geocoder} onResolve={setLocation} />
+          <LocationInput geocoder={geocoder} onResolve={resolveLocation} />
 
           {location !== undefined && (
             <>
