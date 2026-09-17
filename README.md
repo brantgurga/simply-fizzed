@@ -309,9 +309,9 @@ entry, and denied permission and geocoding failures surface as clear messages.
 
 Manual entries are turned into coordinates through a small `Geocoder` interface
 in [`src/location/geocoder.ts`](./src/location/geocoder.ts), so the
-implementation can be swapped by environment. `GoogleMapsGeocoder` calls the
-Google Maps Geocoding API with the `VITE_GOOGLE_MAPS_API_KEY`, while
-`FakeGeocoder` is an offline stub used for local development and tests (no live
+implementation can be swapped by environment. `GoogleMapsGeocoder` loads the
+browser-supported Maps JavaScript API geocoder with `VITE_GOOGLE_MAPS_API_KEY`,
+while `FakeGeocoder` is an offline stub used for local development and tests (no live
 API calls, no billing). `createGeocoder()` picks between them using the same
 `demo-` key convention as `src/firebase.ts`: a `demo-` prefixed key selects the
 fake, and any other key selects Google. Browser geolocation already returns

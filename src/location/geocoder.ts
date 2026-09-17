@@ -1,10 +1,113 @@
 // Geocoding is placed behind a small `Geocoder` interface so the app can swap
-// implementations by environment: production builds use the real Google Maps
-// Geocoding API, while local development, e2e, and unit tests use a fake that
+// implementations by environment: production builds use the Google Maps
+// JavaScript API geocoder, while local development, e2e, and unit tests use a fake that
 // makes no network calls and therefore incurs no billing. Only the manual
 // (city / postal-code) fallback needs geocoding; browser geolocation already
 // returns coordinates directly.
 import type { GeoPoint } from "../model/firestore";
+
+interface GoogleMapsGeocoderResult {
+  geometry?: {
+    location?: {
+      lat?: unknown;
+      lng?: unknown;
+    };
+  };
+}
+
+interface GoogleMapsGeocoderClient {
+  geocode(
+    request: { address: string },
+    callback: (results: GoogleMapsGeocoderResult[] | null, status: string) => void,
+  ): void;
+}
+
+type GoogleMapsGeocoderConstructor = new () => GoogleMapsGeocoderClient;
+
+export type GoogleMapsGeocoderLoader = (apiKey: string) => Promise<GoogleMapsGeocoderConstructor>;
+
+interface GoogleMapsApi {
+  maps: {
+    importLibrary(name: "geocoding"): Promise<unknown>;
+  };
+}
+
+declare global {
+  interface Window {
+    google?: unknown;
+    simplyFizzedGoogleMapsLoaded?: () => void;
+  }
+}
+
+let googleMapsApiPromise: Promise<GoogleMapsApi> | undefined;
+
+function isGoogleMapsApi(value: unknown): value is GoogleMapsApi {
+  if (typeof value !== "object" || value === null || !("maps" in value)) return false;
+  const { maps } = value;
+  if (typeof maps !== "object" || maps === null || !("importLibrary" in maps)) return false;
+  return typeof maps.importLibrary === "function";
+}
+
+function isGeocoderConstructor(value: unknown): value is GoogleMapsGeocoderConstructor {
+  return typeof value === "function";
+}
+
+function currentGoogleMapsApi(): GoogleMapsApi | undefined {
+  if (typeof window === "undefined") return undefined;
+  return isGoogleMapsApi(window.google) ? window.google : undefined;
+}
+
+async function loadGoogleMapsGeocoder(apiKey: string): Promise<GoogleMapsGeocoderConstructor> {
+  let api = currentGoogleMapsApi();
+  if (!api) {
+    if (typeof document === "undefined") {
+      throw new Error("Google Maps cannot be loaded outside a browser");
+    }
+
+    googleMapsApiPromise ??= new Promise<GoogleMapsApi>((resolve, reject) => {
+      const url = new URL("https://maps.googleapis.com/maps/api/js");
+      url.searchParams.set("key", apiKey);
+      url.searchParams.set("loading", "async");
+      url.searchParams.set("callback", "simplyFizzedGoogleMapsLoaded");
+
+      const script = document.createElement("script");
+      script.async = true;
+      script.src = url.toString();
+      window.simplyFizzedGoogleMapsLoaded = () => {
+        delete window.simplyFizzedGoogleMapsLoaded;
+        const loadedApi = currentGoogleMapsApi();
+        if (loadedApi) resolve(loadedApi);
+        else {
+          script.remove();
+          reject(new Error("Google Maps loaded without the expected API"));
+        }
+      };
+      script.addEventListener("error", () => {
+        delete window.simplyFizzedGoogleMapsLoaded;
+        script.remove();
+        reject(new Error("Google Maps failed to load"));
+      });
+      document.head.append(script);
+    });
+
+    try {
+      api = await googleMapsApiPromise;
+    } catch (error) {
+      googleMapsApiPromise = undefined;
+      throw error;
+    }
+  }
+
+  const library = await api.maps.importLibrary("geocoding");
+  if (typeof library !== "object" || library === null || !("Geocoder" in library)) {
+    throw new Error("Google Maps loaded without the geocoding library");
+  }
+  const { Geocoder } = library;
+  if (!isGeocoderConstructor(Geocoder)) {
+    throw new Error("Google Maps loaded an invalid geocoding library");
+  }
+  return Geocoder;
+}
 
 /** Turns a free-form place query (city or postal code) into coordinates. */
 export interface Geocoder {
@@ -15,59 +118,61 @@ export interface Geocoder {
   geocode(query: string): Promise<GeoPoint>;
 }
 
-/**
- * Extract a coordinate from a Google Geocoding API response, validating the
- * untyped JSON at runtime so a malformed or error response yields `undefined`
- * rather than an unsafe cast.
- */
-function coordinateFromResponse(data: unknown): GeoPoint | undefined {
-  if (typeof data !== "object" || data === null) return undefined;
-  if (!("status" in data) || data.status !== "OK") return undefined;
-  if (!("results" in data) || !Array.isArray(data.results)) return undefined;
+/** A typed failure from the Google Maps geocoding service. */
+export class GeocodingError extends Error {
+  readonly status: string;
 
-  const first: unknown = data.results[0];
-  if (typeof first !== "object" || first === null || !("geometry" in first)) return undefined;
-  const { geometry } = first;
-  if (typeof geometry !== "object" || geometry === null || !("location" in geometry)) {
-    return undefined;
+  constructor(status: string, message = `Google Maps geocoding failed with status ${status}`) {
+    super(message);
+    this.name = "GeocodingError";
+    this.status = status;
   }
-  const { location } = geometry;
-  if (typeof location !== "object" || location === null) return undefined;
-  if (!("lat" in location) || !("lng" in location)) return undefined;
-
-  const { lat, lng } = location;
-  if (typeof lat !== "number" || typeof lng !== "number") return undefined;
-  return { lat, lng };
 }
 
 /**
- * `Geocoder` backed by the Google Maps Geocoding web service. The API key is
- * supplied via `VITE_GOOGLE_MAPS_API_KEY` (see `.env.example`) and passed in by
- * the caller rather than read here, keeping this class free of environment
- * coupling and easy to test.
+ * `Geocoder` backed by the browser-supported Google Maps JavaScript API. The
+ * API key is supplied via `VITE_GOOGLE_MAPS_API_KEY` (see `.env.example`) and
+ * passed in by the caller rather than read here.
  */
 export class GoogleMapsGeocoder implements Geocoder {
   readonly #apiKey: string;
+  readonly #loadGeocoder: GoogleMapsGeocoderLoader;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, loadGeocoder: GoogleMapsGeocoderLoader = loadGoogleMapsGeocoder) {
     this.#apiKey = apiKey;
+    this.#loadGeocoder = loadGeocoder;
   }
 
   async geocode(query: string): Promise<GeoPoint> {
-    const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
-    url.searchParams.set("address", query);
-    url.searchParams.set("key", this.#apiKey);
+    const Geocoder = await this.#loadGeocoder(this.#apiKey);
+    const geocoder = new Geocoder();
 
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Geocoding request failed with status ${response.status}`);
-    }
+    return new Promise((resolve, reject) => {
+      geocoder.geocode({ address: query }, (results, status) => {
+        if (status !== "OK") {
+          reject(new GeocodingError(status));
+          return;
+        }
 
-    const point = coordinateFromResponse(await response.json());
-    if (!point) {
-      throw new Error(`No geocoding result for "${query}"`);
-    }
-    return point;
+        const location = results?.[0]?.geometry?.location;
+        if (typeof location?.lat !== "function" || typeof location.lng !== "function") {
+          reject(new GeocodingError("INVALID_RESPONSE"));
+          return;
+        }
+
+        try {
+          const lat: unknown = location.lat();
+          const lng: unknown = location.lng();
+          if (typeof lat !== "number" || typeof lng !== "number") {
+            reject(new GeocodingError("INVALID_RESPONSE"));
+            return;
+          }
+          resolve({ lat, lng });
+        } catch {
+          reject(new GeocodingError("INVALID_RESPONSE"));
+        }
+      });
+    });
   }
 }
 
@@ -94,7 +199,7 @@ export class FakeGeocoder implements Geocoder {
     if (this.#fallback) {
       return Promise.resolve(this.#fallback);
     }
-    return Promise.reject(new Error(`No geocoding result for "${query}"`));
+    return Promise.reject(new GeocodingError("ZERO_RESULTS", `No geocoding result for "${query}"`));
   }
 }
 

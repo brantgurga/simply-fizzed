@@ -1,5 +1,20 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { createGeocoder, FakeGeocoder, GoogleMapsGeocoder } from "./geocoder";
+import { describe, expect, it, vi } from "vitest";
+import {
+  createGeocoder,
+  FakeGeocoder,
+  GeocodingError,
+  GoogleMapsGeocoder,
+  type GoogleMapsGeocoderLoader,
+} from "./geocoder";
+
+type GeocodeCallback = (
+  results: Array<{
+    geometry?: { location?: { lat?: unknown; lng?: unknown } };
+  }> | null,
+  status: string,
+) => void;
+
+const itInBrowser = typeof document === "undefined" ? it.skip : it;
 
 describe("FakeGeocoder", () => {
   it("resolves known queries case-insensitively and trimmed", async () => {
@@ -22,57 +37,113 @@ describe("FakeGeocoder", () => {
 });
 
 describe("GoogleMapsGeocoder", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   it("returns coordinates and sends the address and key", async () => {
-    let requested: URL | undefined;
-    const fetchMock = vi.fn((input: URL) => {
-      requested = input;
-      return Promise.resolve({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            status: "OK",
-            results: [{ geometry: { location: { lat: 39.1, lng: -94.6 } } }],
-          }),
-      });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const geocoder = new GoogleMapsGeocoder("secret-key");
+    let requestedAddress: string | undefined;
+    const loader = vi.fn<GoogleMapsGeocoderLoader>(
+      async () =>
+        class {
+          geocode(request: { address: string }, callback: GeocodeCallback) {
+            requestedAddress = request.address;
+            callback([{ geometry: { location: { lat: () => 39.1, lng: () => -94.6 } } }], "OK");
+          }
+        },
+    );
+    const geocoder = new GoogleMapsGeocoder("browser-key", loader);
 
     await expect(geocoder.geocode("Kansas City")).resolves.toEqual({ lat: 39.1, lng: -94.6 });
-    expect(requested?.searchParams.get("address")).toBe("Kansas City");
-    expect(requested?.searchParams.get("key")).toBe("secret-key");
+    expect(loader).toHaveBeenCalledWith("browser-key");
+    expect(requestedAddress).toBe("Kansas City");
   });
 
-  it("throws when the request is not ok", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) })),
+  it.each(["ZERO_RESULTS", "REQUEST_DENIED", "OVER_QUERY_LIMIT"])(
+    "preserves the %s status when geocoding fails",
+    async (status) => {
+      const loader: GoogleMapsGeocoderLoader = async () =>
+        class {
+          geocode(_request: { address: string }, callback: GeocodeCallback) {
+            callback([], status);
+          }
+        };
+      const geocoder = new GoogleMapsGeocoder("browser-key", loader);
+
+      await expect(geocoder.geocode("Indianapolis, IN")).rejects.toEqual(
+        new GeocodingError(status),
+      );
+    },
+  );
+
+  it("rejects a malformed successful response", async () => {
+    const loader: GoogleMapsGeocoderLoader = async () =>
+      class {
+        geocode(_request: { address: string }, callback: GeocodeCallback) {
+          callback([], "OK");
+        }
+      };
+    const geocoder = new GoogleMapsGeocoder("browser-key", loader);
+
+    await expect(geocoder.geocode("Indianapolis, IN")).rejects.toEqual(
+      new GeocodingError("INVALID_RESPONSE"),
     );
-
-    const geocoder = new GoogleMapsGeocoder("secret-key");
-
-    await expect(geocoder.geocode("Kansas City")).rejects.toThrow();
   });
 
-  it("throws when the response has no results", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() =>
-        Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ status: "ZERO_RESULTS", results: [] }),
-        }),
-      ),
+  it("rejects when a malformed coordinate accessor throws", async () => {
+    const loader: GoogleMapsGeocoderLoader = async () =>
+      class {
+        geocode(_request: { address: string }, callback: GeocodeCallback) {
+          callback(
+            [
+              {
+                geometry: {
+                  location: {
+                    lat: () => {
+                      throw new Error("malformed coordinate");
+                    },
+                    lng: () => -86.1581,
+                  },
+                },
+              },
+            ],
+            "OK",
+          );
+        }
+      };
+    const geocoder = new GoogleMapsGeocoder("browser-key", loader);
+
+    await expect(geocoder.geocode("Indianapolis, IN")).rejects.toEqual(
+      new GeocodingError("INVALID_RESPONSE"),
     );
+  });
 
-    const geocoder = new GoogleMapsGeocoder("secret-key");
+  itInBrowser("loads the Maps JavaScript geocoding library", async () => {
+    const importLibrary = vi.fn(async () => ({
+      Geocoder: class {
+        geocode(_request: { address: string }, callback: GeocodeCallback) {
+          callback([{ geometry: { location: { lat: () => 39.7684, lng: () => -86.1581 } } }], "OK");
+        }
+      },
+    }));
+    const append = vi.spyOn(document.head, "append").mockImplementation((node) => {
+      if (!(node instanceof HTMLScriptElement)) throw new Error("Expected a script element");
+      const url = new URL(node.src);
+      expect(url.origin + url.pathname).toBe("https://maps.googleapis.com/maps/api/js");
+      expect(url.searchParams.get("key")).toBe("browser-key");
+      expect(url.searchParams.get("callback")).toBe("simplyFizzedGoogleMapsLoaded");
+      window.google = { maps: { importLibrary } };
+      queueMicrotask(() => window.simplyFizzedGoogleMapsLoaded?.());
+    });
 
-    await expect(geocoder.geocode("nowhere")).rejects.toThrow();
+    try {
+      const geocoder = new GoogleMapsGeocoder("browser-key");
+      await expect(geocoder.geocode("Indianapolis, IN")).resolves.toEqual({
+        lat: 39.7684,
+        lng: -86.1581,
+      });
+      expect(importLibrary).toHaveBeenCalledWith("geocoding");
+    } finally {
+      append.mockRestore();
+      delete window.google;
+      delete window.simplyFizzedGoogleMapsLoaded;
+    }
   });
 });
 
