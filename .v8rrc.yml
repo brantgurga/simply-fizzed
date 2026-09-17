@@ -1,0 +1,32 @@
+# v8r configuration: validate config files against their JSON Schemas.
+# Docs: https://chris48s.github.io/v8r/configuration/
+#
+# v8r resolves a schema for each file by filename via SchemaStore.org. Only
+# files that have a resolvable, clean public schema are matched here so that a
+# missing schema is never treated as a failure. The whole tsconfig* family is
+# matched by glob (not enumerated) so a newly added tsconfig is validated
+# automatically; every tsconfig maps to the TSConfig schema via the custom
+# catalog below, so the glob can never select a schema-less file.
+# Structural/duplicate-key linting of every JSON/JSONC file is handled
+# separately by Biome; the oxc tool configs (.oxlintrc.json, .oxfmtrc.json)
+# additionally carry a bundled "$schema" that their own tooling and editors
+# validate against, and firestore.indexes.json has no published schema, so
+# those are out of scope here.
+patterns:
+  - package.json
+  - firebase.json
+  - tsconfig*.json
+
+# A custom catalog is searched ahead of SchemaStore. TypeScript config files
+# permit JSONC comments, so match the whole tsconfig* family to the public
+# TSConfig schema and parse them with json5 (which allows comments) instead of
+# the strict JSON parser v8r would otherwise infer from the .json extension.
+customCatalog:
+  schemas:
+    - name: TSConfig
+      description: TypeScript compiler configuration (JSONC, allows comments)
+      fileMatch:
+        - tsconfig.json
+        - tsconfig.*.json
+      location: https://www.schemastore.org/tsconfig.json
+      parser: json5
