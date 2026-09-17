@@ -1,15 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  clearLastSearchCenter,
-  loadLastSearchCenter,
-  saveLastSearchCenter,
-} from "./lastSearchCenter";
+import { loadLastSearchCenter, saveLastSearchCenter } from "./lastSearchCenter";
 
 function storageWith(value: string | null) {
   return {
     getItem: vi.fn().mockReturnValue(value),
     setItem: vi.fn(),
-    removeItem: vi.fn(),
   };
 }
 
@@ -40,14 +35,6 @@ describe("last search center", () => {
     );
   });
 
-  it("clears the saved coordinate", () => {
-    const storage = storageWith(null);
-
-    clearLastSearchCenter(storage);
-
-    expect(storage.removeItem).toHaveBeenCalledWith("simply-fizzed:last-search-center");
-  });
-
   it("continues when browser storage is unavailable", () => {
     const storage = {
       getItem: vi.fn(() => {
@@ -56,13 +43,9 @@ describe("last search center", () => {
       setItem: vi.fn(() => {
         throw new Error("full");
       }),
-      removeItem: vi.fn(() => {
-        throw new Error("blocked");
-      }),
     };
 
     expect(loadLastSearchCenter(storage)).toBeUndefined();
     expect(() => saveLastSearchCenter({ lat: 39.1, lng: -94.6 }, storage)).not.toThrow();
-    expect(() => clearLastSearchCenter(storage)).not.toThrow();
   });
 });

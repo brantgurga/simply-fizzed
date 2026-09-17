@@ -74,7 +74,9 @@ describe("App", () => {
     expect(screen.getByText("Searching near 39.7684, -86.1581.")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Fail location search" }));
     expect(screen.queryByText(/searching near/i)).not.toBeInTheDocument();
-    expect(window.localStorage.getItem("simply-fizzed:last-search-center")).toBeNull();
+    expect(window.localStorage.getItem("simply-fizzed:last-search-center")).toBe(
+      JSON.stringify({ lat: 39.7684, lng: -86.1581 }),
+    );
   });
 
   it("opens FirebaseUI and switches between sign-in and sign-up", async () => {

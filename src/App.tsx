@@ -10,11 +10,7 @@ import { app, auth, db } from "./firebase";
 import type { GeoPoint } from "./model/firestore";
 import LocationInput from "./location/LocationInput";
 import { createGeocoder } from "./location/geocoder";
-import {
-  clearLastSearchCenter,
-  loadLastSearchCenter,
-  saveLastSearchCenter,
-} from "./location/lastSearchCenter";
+import { loadLastSearchCenter, saveLastSearchCenter } from "./location/lastSearchCenter";
 import NearbySearch from "./nearby/NearbySearch";
 import { searchNearby } from "./nearby/nearby";
 
@@ -71,10 +67,7 @@ function App() {
     saveLastSearchCenter(center);
     setLocation(center);
   }, []);
-  const clearLocation = useCallback(() => {
-    clearLastSearchCenter();
-    setLocation(undefined);
-  }, []);
+  const clearLocation = useCallback(() => setLocation(undefined), []);
   const closeLogin = useCallback(() => setShowLogin(false), []);
   const handleSignOut = useCallback(() => {
     void signOut(auth);
