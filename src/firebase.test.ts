@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const firebase = vi.hoisted(() => ({
   app: { name: "test-app" },
   auth: { emulatorConfig: null },
+  connectedAuth: { emulatorConfig: { host: "127.0.0.1", port: 9099 } },
   cache: { kind: "persistent" },
+  existingFirestore: { name: "existing-firestore" },
   localPersistence: { kind: "local" },
   tabManager: { kind: "multi-tab" },
   connectAuthEmulator: vi.fn(),
@@ -76,6 +78,22 @@ describe("Firebase initialization", () => {
       "127.0.0.1",
       8080,
     );
+  });
+
+  it("reuses HMR instances without reconnecting configured Auth", async () => {
+    firebase.getApps.mockReturnValue([firebase.app]);
+    firebase.getApp.mockReturnValue(firebase.app);
+    firebase.getAuth.mockReturnValue(firebase.connectedAuth);
+    firebase.getFirestore.mockReturnValue(firebase.existingFirestore);
+
+    await import("./firebase");
+
+    expect(firebase.getAuth).toHaveBeenCalledWith(firebase.app);
+    expect(firebase.getFirestore).toHaveBeenCalledWith(firebase.app);
+    expect(firebase.initializeApp).not.toHaveBeenCalled();
+    expect(firebase.initializeAuth).not.toHaveBeenCalled();
+    expect(firebase.initializeFirestore).not.toHaveBeenCalled();
+    expect(firebase.connectAuthEmulator).not.toHaveBeenCalled();
   });
 
   it("does not connect non-demo projects to any emulator", async () => {
