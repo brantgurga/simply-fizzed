@@ -1,4 +1,14 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import AppBar from "@mui/material/AppBar";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -20,6 +30,31 @@ type LoginScreenProps = {
   onComplete: () => void;
 };
 
+type AuthFormProps = {
+  children: ReactNode;
+  emailAutocomplete: "email" | "username";
+  passwordAutocomplete: "current-password" | "new-password";
+};
+
+function AuthForm({ children, emailAutocomplete, passwordAutocomplete }: AuthFormProps) {
+  const container = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    container.current
+      ?.querySelector<HTMLInputElement>('input[type="email"]')
+      ?.setAttribute("autocomplete", emailAutocomplete);
+    container.current
+      ?.querySelector<HTMLInputElement>('input[type="password"]')
+      ?.setAttribute("autocomplete", passwordAutocomplete);
+  }, [emailAutocomplete, passwordAutocomplete]);
+
+  return (
+    <Box ref={container} sx={{ display: "flex", justifyContent: "center", width: "100%" }}>
+      {children}
+    </Box>
+  );
+}
+
 const LoginScreen = lazy(async () => {
   const [firebaseUiCore, firebaseUiReact] = await Promise.all([
     import("@firebase-oss/ui-core"),
@@ -36,19 +71,21 @@ const LoginScreen = lazy(async () => {
       <FirebaseUIProvider ui={firebaseUi}>
         <Container component="main" maxWidth="sm" sx={{ py: 4 }}>
           <Stack spacing={3}>
-            <Box sx={{ display: "flex", justifyContent: "center", width: "100%" }}>
-              {creatingAccount ? (
+            {creatingAccount ? (
+              <AuthForm emailAutocomplete="email" passwordAutocomplete="new-password">
                 <SignUpAuthScreen
                   onSignUp={onComplete}
                   onSignInClick={() => setCreatingAccount(false)}
                 />
-              ) : (
+              </AuthForm>
+            ) : (
+              <AuthForm emailAutocomplete="username" passwordAutocomplete="current-password">
                 <SignInAuthScreen
                   onSignIn={onComplete}
                   onSignUpClick={() => setCreatingAccount(true)}
                 />
-              )}
-            </Box>
+              </AuthForm>
+            )}
 
             <Button onClick={onCancel}>Back to browsing</Button>
           </Stack>

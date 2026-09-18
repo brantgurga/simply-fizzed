@@ -29,12 +29,28 @@ vi.mock("@firebase-oss/ui-react", () => ({
   SignInAuthScreen: ({ onSignUpClick }: { onSignUpClick: () => void }) => (
     <section aria-label="FirebaseUI sign in">
       <h2>Sign in</h2>
+      <label>
+        Email
+        <input type="email" />
+      </label>
+      <label>
+        Password
+        <input type="password" />
+      </label>
       <button onClick={onSignUpClick}>Create an account</button>
     </section>
   ),
   SignUpAuthScreen: ({ onSignInClick }: { onSignInClick: () => void }) => (
     <section aria-label="FirebaseUI sign up">
       <h2>Create an account</h2>
+      <label>
+        Email
+        <input type="email" />
+      </label>
+      <label>
+        Password
+        <input type="password" />
+      </label>
       <button onClick={onSignInClick}>Use an existing account</button>
     </section>
   ),
@@ -92,10 +108,14 @@ describe("App", () => {
       width: "100%",
     });
     expect(screen.getAllByRole("heading", { name: "Sign in" })).toHaveLength(1);
+    expect(screen.getByLabelText("Email")).toHaveAttribute("autocomplete", "username");
+    expect(screen.getByLabelText("Password")).toHaveAttribute("autocomplete", "current-password");
 
     await user.click(screen.getByRole("button", { name: "Create an account" }));
     expect(screen.getByLabelText("FirebaseUI sign up")).toBeVisible();
     expect(screen.getAllByRole("heading", { name: "Create an account" })).toHaveLength(1);
+    expect(screen.getByLabelText("Email")).toHaveAttribute("autocomplete", "email");
+    expect(screen.getByLabelText("Password")).toHaveAttribute("autocomplete", "new-password");
   });
 
   it("shows the authenticated user and allows sign-out", async () => {
