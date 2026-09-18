@@ -79,12 +79,18 @@ describe("App", () => {
     );
   });
 
-  it("opens FirebaseUI and switches between sign-in and sign-up", async () => {
+  it("opens centered FirebaseUI and switches between sign-in and sign-up", async () => {
     const user = userEvent.setup();
     render(<App />);
 
     await user.click(screen.getByRole("button", { name: "Sign in" }));
-    expect(await screen.findByLabelText("FirebaseUI sign in")).toBeVisible();
+    const signInScreen = await screen.findByLabelText("FirebaseUI sign in");
+    expect(signInScreen).toBeVisible();
+    expect(signInScreen.parentElement).toHaveStyle({
+      display: "flex",
+      justifyContent: "center",
+      width: "100%",
+    });
     expect(screen.getAllByRole("heading", { name: "Sign in" })).toHaveLength(1);
 
     await user.click(screen.getByRole("button", { name: "Create an account" }));

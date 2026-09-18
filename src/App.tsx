@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import AppBar from "@mui/material/AppBar";
+import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Container from "@mui/material/Container";
 import Stack from "@mui/material/Stack";
@@ -35,17 +36,19 @@ const LoginScreen = lazy(async () => {
       <FirebaseUIProvider ui={firebaseUi}>
         <Container component="main" maxWidth="sm" sx={{ py: 4 }}>
           <Stack spacing={3}>
-            {creatingAccount ? (
-              <SignUpAuthScreen
-                onSignUp={onComplete}
-                onSignInClick={() => setCreatingAccount(false)}
-              />
-            ) : (
-              <SignInAuthScreen
-                onSignIn={onComplete}
-                onSignUpClick={() => setCreatingAccount(true)}
-              />
-            )}
+            <Box sx={{ display: "flex", justifyContent: "center", width: "100%" }}>
+              {creatingAccount ? (
+                <SignUpAuthScreen
+                  onSignUp={onComplete}
+                  onSignInClick={() => setCreatingAccount(false)}
+                />
+              ) : (
+                <SignInAuthScreen
+                  onSignIn={onComplete}
+                  onSignUpClick={() => setCreatingAccount(true)}
+                />
+              )}
+            </Box>
 
             <Button onClick={onCancel}>Back to browsing</Button>
           </Stack>
