@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -13,12 +13,31 @@ type GeolocationProvider = Pick<Geolocation, "getCurrentPosition">;
 
 const defaultGeolocation: GeolocationProvider | undefined =
   typeof navigator === "undefined" ? undefined : navigator.geolocation;
+const GEOCODING_TIMEOUT_MS = 10_000;
+
+async function geocodeWithTimeout(geocoder: Geocoder, query: string): Promise<GeoPoint> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new GeocodingError("TIMEOUT", "Geocoding request timed out")),
+      GEOCODING_TIMEOUT_MS,
+    );
+  });
+
+  try {
+    return await Promise.race([geocoder.geocode(query), timeout]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+}
 
 export interface LocationInputProps {
   /** Geocoder used for the manual city / postal-code fallback. */
   geocoder: Geocoder;
   /** Called with the resolved coordinate from geolocation or geocoding. */
   onResolve: (geo: GeoPoint) => void;
+  /** Called when a manual geocoding attempt fails. */
+  onResolveError: () => void;
   /**
    * Geolocation source; defaults to the browser's `navigator.geolocation`.
    * Injectable so tests can supply a fake without touching the real API.
@@ -36,6 +55,7 @@ export interface LocationInputProps {
 export default function LocationInput({
   geocoder,
   onResolve,
+  onResolveError,
   geolocation = defaultGeolocation,
 }: LocationInputProps) {
   const [locating, setLocating] = useState(geolocation !== undefined);
@@ -47,6 +67,14 @@ export default function LocationInput({
   const [error, setError] = useState<string | undefined>(undefined);
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
+  const requestIdRef = useRef(0);
+
+  useEffect(
+    () => () => {
+      requestIdRef.current += 1;
+    },
+    [],
+  );
 
   useEffect(() => {
     let active = true;
@@ -79,22 +107,22 @@ export default function LocationInput({
     if (trimmed.length === 0) {
       return;
     }
+    const requestId = ++requestIdRef.current;
     setSearching(true);
     setError(undefined);
     try {
-      const geo = await geocoder.geocode(trimmed);
+      const geo = await geocodeWithTimeout(geocoder, trimmed);
+      if (requestId !== requestIdRef.current) return;
       setInfo(`Using the location for "${trimmed}".`);
       onResolve(geo);
     } catch (caught) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Location geocoding failed", caught);
       setInfo(undefined);
-      setError(
-        caught instanceof GeocodingError && caught.status === "ZERO_RESULTS"
-          ? "We couldn't find that location. Check the spelling and try again."
-          : "Location search is unavailable right now. Please try again later.",
-      );
+      setError("Could not geolocate right now.");
+      onResolveError();
     } finally {
-      setSearching(false);
+      if (requestId === requestIdRef.current) setSearching(false);
     }
   }
 

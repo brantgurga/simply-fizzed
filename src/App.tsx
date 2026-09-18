@@ -67,6 +67,7 @@ function App() {
     saveLastSearchCenter(center);
     setLocation(center);
   }, []);
+  const clearLocation = useCallback(() => setLocation(undefined), []);
   const closeLogin = useCallback(() => setShowLogin(false), []);
   const handleSignOut = useCallback(() => {
     void signOut(auth);
@@ -115,7 +116,11 @@ function App() {
               Find soda near you. Set your location to start searching.
             </Typography>
 
-            <LocationInput geocoder={geocoder} onResolve={resolveLocation} />
+            <LocationInput
+              geocoder={geocoder}
+              onResolve={resolveLocation}
+              onResolveError={clearLocation}
+            />
 
             {location !== undefined && (
               <>
