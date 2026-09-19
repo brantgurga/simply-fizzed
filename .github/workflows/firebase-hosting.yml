@@ -117,6 +117,11 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: github-deployer@simply-fizzed-prod.iam.gserviceaccount.com
 
+      - name: Deploy Firestore rules
+        run: >-
+          npx --yes firebase-tools@15.30.0 deploy --only firestore:rules
+          --project simply-fizzed-prod --non-interactive
+
       - name: Deploy staging channel
         id: deploy
         env:
@@ -220,9 +225,9 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: github-deployer@simply-fizzed-prod.iam.gserviceaccount.com
 
-      - name: Deploy live channel and Firestore rules
+      - name: Deploy live channel
         run: >-
-          npx --yes firebase-tools@15.30.0 deploy --only hosting,firestore:rules
+          npx --yes firebase-tools@15.30.0 deploy --only hosting
           --project simply-fizzed-prod --non-interactive
 
       - name: Summarize production deployment

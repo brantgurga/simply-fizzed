@@ -279,12 +279,18 @@ deploys to this channel.
 
 Review the staging URL in the workflow summary, then manually run **Firebase
 Hosting CD** with the latest successful staging run's ID to approve and promote
-the same artifact to the live channel. Promotion also deploys the artifact's
-`firestore.rules`, keeping production access controls in sync with the reviewed
-commit. The workflow rejects superseded runs and serializes staging deploys with
-promotions so the reviewed URL cannot change while approval is underway.
-Promotion remains a separate manual action so an unreviewed staging build cannot
-publish automatically.
+the same artifact to the live channel. The workflow deploys the artifact's
+`firestore.rules` before staging so the preview uses the rules under review. It
+rejects superseded runs and serializes staging deploys with promotions so the
+reviewed URL cannot change while approval is underway. Promotion remains a
+separate manual action so an unreviewed staging build cannot publish hosting
+automatically.
+
+Staging and production share one Firestore database, so a staging rules deploy
+also changes production access immediately. Broadening access is safe before
+hosting promotion because existing clients remain compatible. Tightening access
+requires two releases: first promote hosting that works with both the current
+and stricter rules, then publish the stricter rules in a subsequent staging run.
 
 The workflow exchanges GitHub OIDC tokens for short-lived Google credentials
 through `google-github-actions/auth`; it stores no service-account key. Build
