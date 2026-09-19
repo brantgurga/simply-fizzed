@@ -8,6 +8,28 @@ test.describe("App", () => {
     await expect(page.getByRole("heading", { name: "Simply Fizzed" })).toBeVisible();
   });
 
+  test("prompts guests to sign up before contributing a location", async ({
+    page,
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== "chromium", "The authentication flow is exercised once in Chromium.");
+    await page.goto("/");
+
+    await page.getByRole("button", { name: "Add a location" }).click();
+
+    await expect(page.getByRole("heading", { name: "Create an account" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Back to browsing" })).toBeVisible();
+
+    await page
+      .getByLabel(/email address/i)
+      .fill(`contributor-${testInfo.retry.toString()}@example.test`);
+    await page.getByLabel(/password/i).fill("emulator-password");
+    await page.getByRole("button", { name: /create account/i }).click();
+
+    await expect(page.getByRole("heading", { name: "Add a soda location" })).toBeVisible();
+    await expect(page.getByLabel("Location name")).toBeVisible();
+  });
+
   test("signs in with the Auth emulator and restores the session offline", async ({
     page,
     context,

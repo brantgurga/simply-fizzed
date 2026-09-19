@@ -193,6 +193,17 @@ queues future client writes for synchronization after the connection returns.
 Service-worker registration is disabled during development to avoid stale HMR
 assets.
 
+### Firestore edition
+
+Create the production database in **Firestore Native mode, Standard edition**.
+The current roadmap needs client SDK access, offline and real-time support,
+security rules, indexed document queries, and modest geospatial lookups—all Core
+operations supported by Standard. Enterprise's Pipeline operations, optional
+indexes, MongoDB compatibility, and unit-based billing add complexity without a
+current requirement; reconsider it only if those capabilities become necessary.
+After creating the database, deploy this repository's rules and indexes with
+`npx firebase deploy --only firestore --project prod`.
+
 ### Project aliases and deploy configuration
 
 Project aliases live in [`.firebaserc`](./.firebaserc). Both `default` and
@@ -208,11 +219,13 @@ Firestore instances. A `demo-` project automatically connects both services to
 the local emulators; other project ids use real Firebase with no manual flag.
 See [Environment variables](#environment-variables) for configuration details.
 
-### Optional authentication
+### Authentication and contributions
 
-Every current feature remains public. The app bar offers an optional FirebaseUI
-email/password sign-in and account-creation screen, shows the active user, and
-allows sign-out. Auth uses browser-local persistence so an established session
+Browsing remains public. The app bar offers FirebaseUI email/password sign-in and
+account creation, shows the active user, and allows sign-out. Choosing **Add a
+location** sends a guest directly to account creation; a signed-in fan gets a
+location form, and successful contributions are geocoded and attributed to their
+Firebase user ID. Auth uses browser-local persistence so an established session
 is restored when the installed app starts offline.
 
 Authentication in local development and e2e uses only the local emulator. Social
@@ -286,8 +299,9 @@ emulator seed script, and tests:
   without an extra lookup.
 
 Security rules in [`firestore.rules`](./firestore.rules) allow public `read` on
-all three collections and deny all client `write`s (data is populated out of
-band); every other path falls through to the default-deny rule.
+all three collections. Signed-in users may create validated `locations` documents
+attributed with `createdBy` and `createdAt`; updates, deletes, other writes, and
+all unmatched paths remain denied.
 
 [`firestore.indexes.json`](./firestore.indexes.json) is intentionally empty: the
 only non-trivial query is the geohash radius search, which uses a single-field

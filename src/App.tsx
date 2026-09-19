@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import Alert from "@mui/material/Alert";
 import AppBar from "@mui/material/AppBar";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -19,6 +20,8 @@ import Typography from "@mui/material/Typography";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { app, auth, db } from "./firebase";
 import type { GeoPoint } from "./model/firestore";
+import AddLocationForm from "./location/AddLocationForm";
+import { addLocation, type NewLocationInput } from "./location/addLocation";
 import LocationInput from "./location/LocationInput";
 import { createGeocoder } from "./location/geocoder";
 import { loadLastSearchCenter, saveLastSearchCenter } from "./location/lastSearchCenter";
@@ -26,6 +29,7 @@ import NearbySearch from "./nearby/NearbySearch";
 import { searchNearby } from "./nearby/nearby";
 
 type LoginScreenProps = {
+  initialMode: "signIn" | "signUp";
   onCancel: () => void;
   onComplete: () => void;
 };
@@ -63,8 +67,8 @@ const LoginScreen = lazy(async () => {
   ]);
   const firebaseUi = firebaseUiCore.initializeUI({ app, auth });
 
-  function FirebaseLoginScreen({ onCancel, onComplete }: LoginScreenProps) {
-    const [creatingAccount, setCreatingAccount] = useState(false);
+  function FirebaseLoginScreen({ initialMode, onCancel, onComplete }: LoginScreenProps) {
+    const [creatingAccount, setCreatingAccount] = useState(initialMode === "signUp");
     const { FirebaseUIProvider, SignInAuthScreen, SignUpAuthScreen } = firebaseUiReact;
 
     return (
@@ -102,6 +106,10 @@ function App() {
   const [location, setLocation] = useState<GeoPoint | undefined>(loadLastSearchCenter);
   const [user, setUser] = useState<User | null>(null);
   const [showLogin, setShowLogin] = useState(false);
+  const [loginMode, setLoginMode] = useState<"signIn" | "signUp">("signIn");
+  const pendingLocation = useRef(false);
+  const [addingLocation, setAddingLocation] = useState(false);
+  const [contributionMessage, setContributionMessage] = useState<string>();
   const search = useCallback((center: GeoPoint) => searchNearby(db, center), []);
   const resolveLocation = useCallback((center: GeoPoint) => {
     saveLastSearchCenter(center);
@@ -109,11 +117,48 @@ function App() {
   }, []);
   const clearLocation = useCallback(() => setLocation(undefined), []);
   const closeLogin = useCallback(() => setShowLogin(false), []);
+  const cancelLogin = useCallback(() => {
+    setShowLogin(false);
+    pendingLocation.current = false;
+  }, []);
   const handleSignOut = useCallback(() => {
+    setAddingLocation(false);
     void signOut(auth);
   }, []);
+  const requestLocationContribution = useCallback(() => {
+    setContributionMessage(undefined);
+    if (user === null) {
+      setLoginMode("signUp");
+      pendingLocation.current = true;
+      setShowLogin(true);
+    } else {
+      setAddingLocation(true);
+    }
+  }, [user]);
+  const saveLocation = useCallback(
+    async (input: NewLocationInput) => {
+      if (user === null) throw new Error("Authentication is required to add a location");
+      await addLocation(db, geocoder, user.uid, input);
+    },
+    [geocoder, user],
+  );
+  const handleLocationAdded = useCallback((name: string) => {
+    setAddingLocation(false);
+    setContributionMessage(`Thanks — ${name} was added.`);
+  }, []);
 
-  useEffect(() => onAuthStateChanged(auth, setUser), []);
+  useEffect(
+    () =>
+      onAuthStateChanged(auth, (nextUser) => {
+        setUser(nextUser);
+        if (nextUser !== null && pendingLocation.current) {
+          pendingLocation.current = false;
+          setShowLogin(false);
+          setAddingLocation(true);
+        }
+      }),
+    [],
+  );
 
   return (
     <>
@@ -123,7 +168,13 @@ function App() {
             Simply Fizzed
           </Typography>
           {user === null ? (
-            <Button color="inherit" onClick={() => setShowLogin(true)}>
+            <Button
+              color="inherit"
+              onClick={() => {
+                setLoginMode("signIn");
+                setShowLogin(true);
+              }}
+            >
               Sign in
             </Button>
           ) : (
@@ -147,27 +198,58 @@ function App() {
             </Container>
           }
         >
-          <LoginScreen onCancel={closeLogin} onComplete={closeLogin} />
+          <LoginScreen initialMode={loginMode} onCancel={cancelLogin} onComplete={closeLogin} />
         </Suspense>
       ) : (
         <Container component="main" maxWidth="md" sx={{ py: 4 }}>
           <Stack spacing={2}>
-            <Typography variant="body1" color="text.secondary">
-              Find soda near you. Set your location to start searching.
-            </Typography>
+            {contributionMessage !== undefined && (
+              <Alert severity="success">{contributionMessage}</Alert>
+            )}
 
-            <LocationInput
-              geocoder={geocoder}
-              onResolve={resolveLocation}
-              onResolveError={clearLocation}
-            />
-
-            {location !== undefined && (
+            {addingLocation && user !== null ? (
               <>
-                <Typography variant="body2" color="text.secondary">
-                  Searching near {location.lat.toFixed(4)}, {location.lng.toFixed(4)}.
+                <Typography variant="h4" component="h2">
+                  Add a soda location
                 </Typography>
-                <NearbySearch center={location} search={search} />
+                <Typography variant="body1" color="text.secondary">
+                  Share a place where other fans can find soda.
+                </Typography>
+                <AddLocationForm
+                  onSave={saveLocation}
+                  onAdded={handleLocationAdded}
+                  onCancel={() => setAddingLocation(false)}
+                />
+              </>
+            ) : (
+              <>
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={2}
+                  sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}
+                >
+                  <Typography variant="body1" color="text.secondary">
+                    Find soda near you. Set your location to start searching.
+                  </Typography>
+                  <Button variant="outlined" onClick={requestLocationContribution}>
+                    Add a location
+                  </Button>
+                </Stack>
+
+                <LocationInput
+                  geocoder={geocoder}
+                  onResolve={resolveLocation}
+                  onResolveError={clearLocation}
+                />
+
+                {location !== undefined && (
+                  <>
+                    <Typography variant="body2" color="text.secondary">
+                      Searching near {location.lat.toFixed(4)}, {location.lng.toFixed(4)}.
+                    </Typography>
+                    <NearbySearch center={location} search={search} />
+                  </>
+                )}
               </>
             )}
           </Stack>
