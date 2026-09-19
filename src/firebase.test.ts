@@ -15,16 +15,25 @@ const firebase = vi.hoisted(() => ({
   getAuth: vi.fn(),
   getFirestore: vi.fn(),
   initializeApp: vi.fn(),
+  initializeAppCheck: vi.fn(),
   initializeAuth: vi.fn(),
   initializeFirestore: vi.fn(),
   persistentLocalCache: vi.fn(),
   persistentMultipleTabManager: vi.fn(),
+  ReCaptchaEnterpriseProvider: class {
+    constructor(readonly siteKey: string) {}
+  },
 }));
 
 vi.mock("firebase/app", () => ({
   getApp: firebase.getApp,
   getApps: firebase.getApps,
   initializeApp: firebase.initializeApp,
+}));
+
+vi.mock("firebase/app-check", () => ({
+  initializeAppCheck: firebase.initializeAppCheck,
+  ReCaptchaEnterpriseProvider: firebase.ReCaptchaEnterpriseProvider,
 }));
 
 vi.mock("firebase/auth", () => ({
@@ -48,6 +57,7 @@ describe("Firebase initialization", () => {
     vi.clearAllMocks();
     vi.stubEnv("VITE_FIREBASE_PROJECT_ID", "demo-simply-fizzed");
     vi.stubEnv("VITE_FIREBASE_MEASUREMENT_ID", "test-measurement-id");
+    vi.stubEnv("VITE_FIREBASE_APPCHECK_SITE_KEY", "test-app-check-site-key");
     firebase.getApps.mockReturnValue([]);
     firebase.initializeApp.mockReturnValue(firebase.app);
     firebase.initializeAuth.mockReturnValue(firebase.auth);
@@ -85,6 +95,7 @@ describe("Firebase initialization", () => {
       "127.0.0.1",
       8080,
     );
+    expect(firebase.initializeAppCheck).not.toHaveBeenCalled();
   });
 
   it("reuses HMR instances without reconnecting configured Auth", async () => {
@@ -100,15 +111,20 @@ describe("Firebase initialization", () => {
     expect(firebase.initializeApp).not.toHaveBeenCalled();
     expect(firebase.initializeAuth).not.toHaveBeenCalled();
     expect(firebase.initializeFirestore).not.toHaveBeenCalled();
+    expect(firebase.initializeAppCheck).not.toHaveBeenCalled();
     expect(firebase.connectAuthEmulator).not.toHaveBeenCalled();
   });
 
-  it("does not connect non-demo projects to any emulator", async () => {
+  it("initializes App Check and skips emulators for non-demo projects", async () => {
     vi.stubEnv("VITE_FIREBASE_PROJECT_ID", "live-project");
 
     await import("./firebase");
 
     expect(firebase.connectAuthEmulator).not.toHaveBeenCalled();
     expect(firebase.connectFirestoreEmulator).not.toHaveBeenCalled();
+    expect(firebase.initializeAppCheck).toHaveBeenCalledWith(firebase.app, {
+      provider: expect.objectContaining({ siteKey: "test-app-check-site-key" }),
+      isTokenAutoRefreshEnabled: true,
+    });
   });
 });
