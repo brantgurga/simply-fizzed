@@ -21,7 +21,11 @@ const firebase = vi.hoisted(() => ({
   persistentLocalCache: vi.fn(),
   persistentMultipleTabManager: vi.fn(),
   ReCaptchaEnterpriseProvider: class {
-    constructor(readonly siteKey: string) {}
+    readonly siteKey: string;
+
+    constructor(siteKey: string) {
+      this.siteKey = siteKey;
+    }
   },
 }));
 
