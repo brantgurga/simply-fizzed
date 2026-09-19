@@ -6,6 +6,7 @@ import "@fontsource/roboto/300.css";
 import "@fontsource/roboto/400.css";
 import "@fontsource/roboto/500.css";
 import "@fontsource/roboto/700.css";
+import PwaUpdatePrompt from "./PwaUpdatePrompt.tsx";
 import { getStartupContent } from "./startup.ts";
 import theme from "./theme.ts";
 
@@ -17,6 +18,7 @@ async function render() {
       <ThemeProvider theme={theme}>
         <CssBaseline enableColorScheme />
         <Content />
+        <PwaUpdatePrompt />
       </ThemeProvider>
     </StrictMode>,
   );
