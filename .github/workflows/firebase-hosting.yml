@@ -72,34 +72,6 @@ jobs:
             exit 1
           }
 
-      - name: Validate Firebase Authentication API key
-        run: |
-          node --input-type=module <<'EOF'
-          const url = new URL("https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri");
-          url.searchParams.set("key", process.env.VITE_FIREBASE_API_KEY);
-          const response = await fetch(url, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Referer: "https://simply-fizzed-prod.web.app/",
-            },
-            body: JSON.stringify({
-              identifier: "firebase-auth-preflight@example.invalid",
-              continueUri: "https://simply-fizzed-prod.web.app/",
-            }),
-          });
-          if (!response.ok) {
-            const body = await response.json().catch(() => ({}));
-            const reason = body.error?.details?.find(
-              (detail) => detail["@type"] === "type.googleapis.com/google.rpc.ErrorInfo",
-            )?.reason;
-            console.error(
-              `::error::Firebase Authentication rejected the configured API key (${reason ?? `HTTP ${response.status}`}).`,
-            );
-            process.exit(1);
-          }
-          EOF
-
       - name: Build production artifact
         run: npm run build
 
@@ -117,6 +89,8 @@ jobs:
     name: Deploy staging channel
     needs: build-staging
     runs-on: ubuntu-latest
+    env:
+      FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
     permissions:
       actions: read
       id-token: write
@@ -160,6 +134,37 @@ jobs:
             ' "$output"
           )"
           echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Validate Firebase Authentication API key
+        env:
+          STAGING_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          node --input-type=module <<'EOF'
+          const origins = [process.env.STAGING_URL, "https://simply-fizzed-prod.web.app"];
+          for (const origin of origins) {
+            const continueUri = new URL("/", origin).href;
+            const url = new URL("https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri");
+            url.searchParams.set("key", process.env.FIREBASE_API_KEY);
+            const response = await fetch(url, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Referer: continueUri },
+              body: JSON.stringify({
+                identifier: "firebase-auth-preflight@example.invalid",
+                continueUri,
+              }),
+            });
+            if (!response.ok) {
+              const body = await response.json().catch(() => ({}));
+              const reason = body.error?.details?.find(
+                (detail) => detail["@type"] === "type.googleapis.com/google.rpc.ErrorInfo",
+              )?.reason;
+              console.error(
+                `::error::Firebase Authentication rejected the configured API key for ${new URL(origin).hostname} (${reason ?? `HTTP ${response.status}`}).`,
+              );
+              process.exit(1);
+            }
+          }
+          EOF
 
       - name: Summarize staging deployment
         env:

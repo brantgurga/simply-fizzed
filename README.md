@@ -263,8 +263,9 @@ The workflow exchanges GitHub OIDC tokens for short-lived Google credentials
 through `google-github-actions/auth`; it stores no service-account key. Build
 scripts run in a separate job without OIDC access. Configure repository variables
 `VITE_FIREBASE_API_KEY`, `VITE_GOOGLE_MAPS_API_KEY`, and
-`GCP_WORKLOAD_IDENTITY_PROVIDER` (the provider's full resource name). Before
-building, the workflow verifies that Identity Toolkit accepts the Firebase key.
+`GCP_WORKLOAD_IDENTITY_PROVIDER` (the provider's full resource name). After the
+staging deploy, the workflow verifies that Identity Toolkit accepts the Firebase
+key from both the fixed staging and production origins before promotion.
 
 If Auth reports `API_KEY_INVALID`, inspect the key under **Google Cloud > APIs &
 Services > Credentials**. Confirm it is active, belongs to `simply-fizzed-prod`, and
