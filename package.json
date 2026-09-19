@@ -7,9 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix",
-    "lint:types": "oxlint --type-aware",
+    "lint": "oxlint . .github/scripts",
+    "lint:fix": "oxlint --fix . .github/scripts",
+    "lint:types": "oxlint --type-aware . .github/scripts",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "test": "vitest run",
@@ -37,6 +37,7 @@
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
+    "@actions/github": "^9.1.1",
     "@playwright/test": "^1.63.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",

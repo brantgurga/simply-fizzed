@@ -91,6 +91,12 @@ jobs:
       - name: Lint YAML
         run: yamllint .
 
+      # actionlint checks GitHub Actions semantics and embedded shell scripts.
+      - name: Lint GitHub Actions workflows
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color
+
   e2e:
     name: End-to-end tests
     runs-on: ubuntu-latest
