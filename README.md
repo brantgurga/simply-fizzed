@@ -279,10 +279,12 @@ deploys to this channel.
 
 Review the staging URL in the workflow summary, then manually run **Firebase
 Hosting CD** with the latest successful staging run's ID to approve and promote
-the same artifact to the live channel. The workflow rejects superseded runs and
-serializes staging deploys with promotions so the reviewed URL cannot change
-while approval is underway. Promotion remains a separate manual action so an
-unreviewed staging build cannot publish automatically.
+the same artifact to the live channel. Promotion also deploys the artifact's
+`firestore.rules`, keeping production access controls in sync with the reviewed
+commit. The workflow rejects superseded runs and serializes staging deploys with
+promotions so the reviewed URL cannot change while approval is underway.
+Promotion remains a separate manual action so an unreviewed staging build cannot
+publish automatically.
 
 The workflow exchanges GitHub OIDC tokens for short-lived Google credentials
 through `google-github-actions/auth`; it stores no service-account key. Build
@@ -291,8 +293,9 @@ scripts run in a separate job without OIDC access. Configure repository variable
 `GCP_WORKLOAD_IDENTITY_PROVIDER` (the provider's full resource name).
 
 The dedicated `github-deployer@simply-fizzed-prod.iam.gserviceaccount.com`
-service account needs Firebase Hosting Admin; add Firebase Authentication Admin
-if staging URLs should support sign-in. Restrict the provider to repository ID
+service account needs Firebase Hosting Admin and Firebase Rules Admin; add
+Firebase Authentication Admin if staging URLs should support sign-in. Restrict
+the provider to repository ID
 `1320193089`, `refs/heads/main`, and this workflow, then grant only that identity
 `roles/iam.workloadIdentityUser`.
 

@@ -87,6 +87,8 @@ jobs:
           path: |
             dist/
             firebase.json
+            firestore.indexes.json
+            firestore.rules
           if-no-files-found: error
           retention-days: 30
 
@@ -218,9 +220,9 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: github-deployer@simply-fizzed-prod.iam.gserviceaccount.com
 
-      - name: Deploy live channel
+      - name: Deploy live channel and Firestore rules
         run: >-
-          npx --yes firebase-tools@15.30.0 deploy --only hosting
+          npx --yes firebase-tools@15.30.0 deploy --only hosting,firestore:rules
           --project simply-fizzed-prod --non-interactive
 
       - name: Summarize production deployment
