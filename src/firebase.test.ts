@@ -8,14 +8,24 @@ const firebase = vi.hoisted(() => ({
   cache: { kind: "persistent" },
   existingFirestore: { name: "existing-firestore" },
   localPersistence: { kind: "local" },
+  remoteConfig: {
+    defaultConfig: {},
+    settings: { fetchTimeoutMillis: 0, minimumFetchIntervalMillis: 0 },
+  },
+  remoteValue: { asString: vi.fn() },
   tabManager: { kind: "multi-tab" },
   connectAuthEmulator: vi.fn(),
   connectFirestoreEmulator: vi.fn(),
+  ensureInitialized: vi.fn(),
+  fetchAndActivate: vi.fn(),
   getApp: vi.fn(),
   getApps: vi.fn(),
   getAuth: vi.fn(),
   getFirestore: vi.fn(),
+  getRemoteConfig: vi.fn(),
+  getValue: vi.fn(),
   initializeApp: vi.fn(),
+  isSupported: vi.fn(),
   initializeAppCheck: vi.fn(),
   initializeAuth: vi.fn(),
   initializeFirestore: vi.fn(),
@@ -39,6 +49,14 @@ vi.mock("firebase/app", () => ({
 vi.mock("firebase/app-check", () => ({
   initializeAppCheck: firebase.initializeAppCheck,
   ReCaptchaEnterpriseProvider: firebase.ReCaptchaEnterpriseProvider,
+}));
+
+vi.mock("firebase/remote-config", () => ({
+  ensureInitialized: firebase.ensureInitialized,
+  fetchAndActivate: firebase.fetchAndActivate,
+  getRemoteConfig: firebase.getRemoteConfig,
+  getValue: firebase.getValue,
+  isSupported: firebase.isSupported,
 }));
 
 vi.mock("firebase/auth", () => ({
@@ -67,6 +85,14 @@ describe("Firebase initialization", () => {
     firebase.initializeApp.mockReturnValue(firebase.app);
     firebase.initializeAppCheck.mockReturnValue(firebase.appCheck);
     firebase.initializeAuth.mockReturnValue(firebase.auth);
+    firebase.getRemoteConfig.mockReturnValue(firebase.remoteConfig);
+    firebase.isSupported.mockResolvedValue(true);
+    firebase.ensureInitialized.mockResolvedValue(undefined);
+    firebase.fetchAndActivate.mockResolvedValue(true);
+    firebase.remoteValue.asString.mockReturnValue("");
+    firebase.getValue.mockReturnValue(firebase.remoteValue);
+    firebase.remoteConfig.defaultConfig = {};
+    firebase.remoteConfig.settings = { fetchTimeoutMillis: 0, minimumFetchIntervalMillis: 0 };
     firebase.persistentMultipleTabManager.mockReturnValue(firebase.tabManager);
     firebase.persistentLocalCache.mockReturnValue(firebase.cache);
     firebase.initializeFirestore.mockReturnValue({ name: "test-firestore" });
@@ -77,9 +103,10 @@ describe("Firebase initialization", () => {
   });
 
   it("enables local persistence and connects demo projects to the emulators", async () => {
-    const { appCheck } = await import("./firebase");
+    const { appCheck, isFullAppEnabled } = await import("./firebase");
 
     expect(appCheck).toBeUndefined();
+    await expect(isFullAppEnabled("any.example.com")).resolves.toBe(true);
     expect(firebase.initializeApp).toHaveBeenCalledWith(
       expect.objectContaining({
         projectId: "demo-simply-fizzed",
@@ -103,6 +130,10 @@ describe("Firebase initialization", () => {
       8080,
     );
     expect(firebase.initializeAppCheck).not.toHaveBeenCalled();
+    expect(firebase.isSupported).not.toHaveBeenCalled();
+    expect(firebase.getRemoteConfig).not.toHaveBeenCalled();
+    expect(firebase.ensureInitialized).not.toHaveBeenCalled();
+    expect(firebase.fetchAndActivate).not.toHaveBeenCalled();
   });
 
   it("reuses HMR instances without reconnecting configured Auth", async () => {
@@ -122,10 +153,11 @@ describe("Firebase initialization", () => {
     expect(firebase.connectAuthEmulator).not.toHaveBeenCalled();
   });
 
-  it("exports App Check and skips emulators for non-demo projects", async () => {
+  it("exports App Check and configures Remote Config for non-demo projects", async () => {
     vi.stubEnv("VITE_FIREBASE_PROJECT_ID", "live-project");
 
-    const { appCheck } = await import("./firebase");
+    const { appCheck, isFullAppEnabled } = await import("./firebase");
+    await isFullAppEnabled("www.example.com");
 
     expect(appCheck).toBe(firebase.appCheck);
     expect(firebase.connectAuthEmulator).not.toHaveBeenCalled();
@@ -134,5 +166,61 @@ describe("Firebase initialization", () => {
       provider: expect.objectContaining({ siteKey: "test-app-check-site-key" }),
       isTokenAutoRefreshEnabled: true,
     });
+    expect(firebase.isSupported).toHaveBeenCalledOnce();
+    expect(firebase.getRemoteConfig).toHaveBeenCalledWith(firebase.app);
+    expect(firebase.remoteConfig.settings).toEqual({
+      fetchTimeoutMillis: 5_000,
+      minimumFetchIntervalMillis: 300_000,
+    });
+    expect(firebase.remoteConfig.defaultConfig).toEqual({ enabled_hostnames: "" });
+  });
+
+  it("fetches the allowlist before checking the current hostname", async () => {
+    vi.stubEnv("VITE_FIREBASE_PROJECT_ID", "live-project");
+    firebase.remoteValue.asString.mockReturnValue("staging.example.com, preview.example.com");
+    const { isFullAppEnabled } = await import("./firebase");
+
+    await expect(isFullAppEnabled("STAGING.EXAMPLE.COM")).resolves.toBe(true);
+    expect(firebase.ensureInitialized).toHaveBeenCalledWith(firebase.remoteConfig);
+    expect(firebase.fetchAndActivate).toHaveBeenCalledWith(firebase.remoteConfig);
+    expect(firebase.getValue).toHaveBeenCalledWith(firebase.remoteConfig, "enabled_hostnames");
+  });
+
+  it("uses an initialized cached allowlist when a refresh fails", async () => {
+    vi.stubEnv("VITE_FIREBASE_PROJECT_ID", "live-project");
+    firebase.remoteValue.asString.mockReturnValue("staging.example.com");
+    firebase.fetchAndActivate.mockRejectedValue(new Error("offline"));
+    const { isFullAppEnabled } = await import("./firebase");
+
+    await expect(isFullAppEnabled("staging.example.com")).resolves.toBe(true);
+    expect(firebase.ensureInitialized.mock.invocationCallOrder[0]).toBeLessThan(
+      firebase.getValue.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("fails closed without initializing Remote Config when browser storage is unsupported", async () => {
+    vi.stubEnv("VITE_FIREBASE_PROJECT_ID", "live-project");
+    firebase.isSupported.mockResolvedValue(false);
+    const { isFullAppEnabled } = await import("./firebase");
+
+    await expect(isFullAppEnabled("staging.example.com")).resolves.toBe(false);
+    expect(firebase.getRemoteConfig).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when Remote Config storage initialization fails", async () => {
+    vi.stubEnv("VITE_FIREBASE_PROJECT_ID", "live-project");
+    firebase.ensureInitialized.mockRejectedValue(new Error("storage-open"));
+    const { isFullAppEnabled } = await import("./firebase");
+
+    await expect(isFullAppEnabled("staging.example.com")).resolves.toBe(false);
+    expect(firebase.getValue).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when Remote Config is unavailable without a cached value", async () => {
+    vi.stubEnv("VITE_FIREBASE_PROJECT_ID", "live-project");
+    firebase.fetchAndActivate.mockRejectedValue(new Error("offline"));
+    const { isFullAppEnabled } = await import("./firebase");
+
+    await expect(isFullAppEnabled("staging.example.com")).resolves.toBe(false);
   });
 });

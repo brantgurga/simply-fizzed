@@ -16,6 +16,18 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from "firebase/firestore";
+import {
+  ensureInitialized,
+  fetchAndActivate,
+  getRemoteConfig,
+  getValue,
+  isSupported,
+} from "firebase/remote-config";
+import { isHostnameEnabled } from "./availability";
+
+const ENABLED_HOSTNAMES_PARAMETER = "enabled_hostnames";
+const REMOTE_CONFIG_FETCH_INTERVAL_MILLIS = 5 * 60 * 1000;
+const REMOTE_CONFIG_FETCH_TIMEOUT_MILLIS = 5 * 1000;
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -42,6 +54,34 @@ export const appCheck = isDemoProject
       provider: new ReCaptchaEnterpriseProvider(import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY),
       isTokenAutoRefreshEnabled: true,
     });
+
+export async function isFullAppEnabled(hostname: string): Promise<boolean> {
+  if (isDemoProject) return true;
+
+  try {
+    if (!(await isSupported())) return false;
+
+    const remoteConfig = getRemoteConfig(app);
+    remoteConfig.settings.minimumFetchIntervalMillis = REMOTE_CONFIG_FETCH_INTERVAL_MILLIS;
+    remoteConfig.settings.fetchTimeoutMillis = REMOTE_CONFIG_FETCH_TIMEOUT_MILLIS;
+    remoteConfig.defaultConfig = { [ENABLED_HOSTNAMES_PARAMETER]: "" };
+    await ensureInitialized(remoteConfig);
+
+    try {
+      await fetchAndActivate(remoteConfig);
+    } catch {
+      // Use the last activated value, or the fail-closed default, when offline.
+    }
+
+    return isHostnameEnabled(
+      hostname,
+      getValue(remoteConfig, ENABLED_HOSTNAMES_PARAMETER).asString(),
+    );
+  } catch {
+    // Browser storage and Remote Config initialization failures fail closed.
+    return false;
+  }
+}
 
 // Keep authenticated sessions in IndexedDB/localStorage so they remain
 // available when the installed app starts offline.
