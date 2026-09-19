@@ -162,6 +162,7 @@ jobs:
     environment: production
     permissions:
       actions: read
+      contents: read
       id-token: write
     steps:
       - name: Checkout
