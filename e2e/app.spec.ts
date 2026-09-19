@@ -1,11 +1,146 @@
 import { expect, test } from "@playwright/test";
+import {
+  deleteApp as deleteAdminApp,
+  initializeApp as initializeAdminApp,
+} from "firebase-admin/app";
+import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
+import { deleteApp, initializeApp } from "firebase/app";
+import { connectAuthEmulator, createUserWithEmailAndPassword, getAuth } from "firebase/auth";
+import {
+  connectFirestoreEmulator,
+  doc,
+  getFirestore,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
 import { INDIANAPOLIS, KROGER, TIMS_BREWERY } from "./fixtures.ts";
 
+const PROJECT_ID = "demo-simply-fizzed";
+let cleanupAppNumber = 0;
+
+async function deleteLocationsNamed(...names: string[]): Promise<void> {
+  process.env["FIRESTORE_EMULATOR_HOST"] = "127.0.0.1:8080";
+  const app = initializeAdminApp(
+    { projectId: PROJECT_ID },
+    `location-cleanup-${cleanupAppNumber.toString()}`,
+  );
+  cleanupAppNumber += 1;
+
+  try {
+    const db = getAdminFirestore(app);
+    const snapshots = await Promise.all(
+      names.map((name) => db.collection("locations").where("name", "==", name).get()),
+    );
+    await Promise.all(
+      snapshots.flatMap((snapshot) => snapshot.docs.map((item) => item.ref.delete())),
+    );
+  } finally {
+    await deleteAdminApp(app);
+  }
+}
+
 test.describe("App", () => {
+  test.describe.configure({ mode: "serial" });
+
   test("renders the app title", async ({ page }) => {
     await page.goto("/");
 
     await expect(page.getByRole("heading", { name: "Simply Fizzed" })).toBeVisible();
+  });
+
+  test("prompts guests to sign up before contributing a location", async ({
+    page,
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== "chromium", "The authentication flow is exercised once in Chromium.");
+    await page.goto("/");
+
+    await page.getByRole("button", { name: "Add a location" }).click();
+
+    await expect(page.getByRole("button", { name: /create account/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Back to browsing" })).toBeVisible();
+
+    await page
+      .getByLabel(/email address/i)
+      .fill(`contributor-${testInfo.retry.toString()}@example.test`);
+    await page.getByLabel(/password/i).fill("emulator-password");
+    await page.getByRole("button", { name: /create account/i }).click();
+
+    const locationName = `Test Soda Shop ${testInfo.retry.toString()}`;
+    try {
+      await expect(page.getByRole("heading", { name: "Add a soda location" })).toBeVisible();
+      await page.getByLabel("Location name").fill(locationName);
+      await page.getByLabel("Street address").fill("123 Test Street");
+      await page.getByLabel("City").fill("Indianapolis");
+      await page.getByLabel("State").fill("IN");
+      await page.getByLabel("Postal code").fill("46204");
+      await page.getByRole("button", { name: "Add location" }).click();
+
+      await expect(page.getByText(`Thanks — ${locationName} was added.`)).toBeVisible();
+    } finally {
+      await deleteLocationsNamed(locationName);
+    }
+  });
+
+  test("enforces location creation rules for authenticated fans", async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== "chromium", "Firestore rules are exercised once in Chromium.");
+    const app = initializeApp(
+      { apiKey: "demo-api-key", projectId: PROJECT_ID },
+      `rules-${testInfo.retry.toString()}`,
+    );
+    const validName = "Rules Test Shop";
+    const invalidNames = [" \t", "\u00a0"];
+
+    try {
+      const auth = getAuth(app);
+      connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+      const credential = await createUserWithEmailAndPassword(
+        auth,
+        `rules-fan-${testInfo.retry.toString()}@example.test`,
+        "emulator-password",
+      );
+      const db = getFirestore(app);
+      connectFirestoreEmulator(db, "127.0.0.1", 8080);
+      const validLocation = {
+        name: validName,
+        address: {
+          street: "123 Test Street",
+          city: "Indianapolis",
+          state: "IN",
+          postalCode: "46204",
+        },
+        geo: { lat: 39.7684, lng: -86.1581 },
+        geohash: "dp4dpr",
+        createdBy: credential.user.uid,
+        createdAt: serverTimestamp(),
+      };
+
+      await setDoc(doc(db, "locations", `valid-${testInfo.retry.toString()}`), validLocation);
+
+      const invalidWriteErrors = await Promise.all(
+        invalidNames.map(async (invalidName, index): Promise<unknown> => {
+          try {
+            await setDoc(
+              doc(db, "locations", `blank-${testInfo.retry.toString()}-${index.toString()}`),
+              {
+                ...validLocation,
+                name: invalidName,
+              },
+            );
+            return undefined;
+          } catch (error) {
+            return error;
+          }
+        }),
+      );
+      for (const invalidWriteError of invalidWriteErrors) {
+        expect(invalidWriteError).toMatchObject({ code: "permission-denied" });
+      }
+    } finally {
+      await Promise.all([deleteLocationsNamed(validName, ...invalidNames), deleteApp(app)]);
+    }
   });
 
   test("signs in with the Auth emulator and restores the session offline", async ({

@@ -1,15 +1,50 @@
 rules_version = "2";
 
-// Firestore security rules for location-based soda discovery. The three
-// collections that back search (locations, sodas, availability) are publicly
-// readable so the client can query them without authentication. All writes are
-// denied from the client; data is populated out of band (seed scripts / admin
-// SDK). Any other collection falls through to the default-deny rule below.
+// Firestore security rules for location-based soda discovery. Search data is
+// public, while signed-in fans may create strictly validated, attributed
+// locations. Existing contributions cannot be changed or deleted from the
+// client; moderation is handled separately.
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isNonEmptyString(value, maxLength) {
+      return value is string
+        && value.matches(".*[\\p{L}\\p{M}\\p{N}\\p{P}\\p{S}].*")
+        && value.size() <= maxLength;
+    }
+
+    function isValidAddress(address) {
+      return address is map
+        && address.keys().hasOnly(["street", "city", "state", "postalCode"])
+        && isNonEmptyString(address.street, 200)
+        && isNonEmptyString(address.city, 100)
+        && isNonEmptyString(address.state, 100)
+        && isNonEmptyString(address.postalCode, 20);
+    }
+
+    function isValidGeo(geo) {
+      return geo is map
+        && geo.keys().hasOnly(["lat", "lng"])
+        && geo.lat is number
+        && geo.lat >= -90
+        && geo.lat <= 90
+        && geo.lng is number
+        && geo.lng >= -180
+        && geo.lng <= 180;
+    }
+
     match /locations/{locationId} {
       allow read: if true;
-      allow write: if false;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly([
+          "name", "address", "geo", "geohash", "createdBy", "createdAt"
+        ])
+        && isNonEmptyString(request.resource.data.name, 200)
+        && isValidAddress(request.resource.data.address)
+        && isValidGeo(request.resource.data.geo)
+        && isNonEmptyString(request.resource.data.geohash, 20)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
     }
 
     match /sodas/{sodaId} {

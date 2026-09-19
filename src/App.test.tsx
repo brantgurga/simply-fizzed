@@ -6,8 +6,13 @@ import App from "./App";
 import theme from "./theme";
 
 const auth = vi.hoisted(() => ({
-  currentUser: null as { displayName: string | null; email: string | null } | null,
+  currentUser: null as {
+    uid: string;
+    displayName: string | null;
+    email: string | null;
+  } | null,
   signOut: vi.fn(),
+  addLocation: vi.fn(),
 }));
 
 vi.mock("./firebase", () => ({ app: {}, auth: {}, db: {} }));
@@ -22,6 +27,38 @@ vi.mock("@firebase-oss/ui-core", () => ({ initializeUI: vi.fn(() => ({})) }));
 vi.mock("./location/LocationInput", () => ({
   default: ({ onResolveError }: { onResolveError: () => void }) => (
     <button onClick={onResolveError}>Fail location search</button>
+  ),
+}));
+vi.mock("./location/addLocation", () => ({ addLocation: auth.addLocation }));
+vi.mock("./location/AddLocationForm", () => ({
+  default: ({
+    onSave,
+    onAdded,
+  }: {
+    onSave: (input: {
+      name: string;
+      street: string;
+      city: string;
+      state: string;
+      postalCode: string;
+    }) => Promise<void>;
+    onAdded: (name: string) => void;
+  }) => (
+    <section aria-label="Add location form">
+      <button
+        onClick={() => {
+          void onSave({
+            name: "Corner Shop",
+            street: "1 Main St",
+            city: "Kansas City",
+            state: "MO",
+            postalCode: "64106",
+          }).then(() => onAdded("Corner Shop"));
+        }}
+      >
+        Save location
+      </button>
+    </section>
   ),
 }));
 vi.mock("@firebase-oss/ui-react", () => ({
@@ -60,6 +97,8 @@ describe("App", () => {
   beforeEach(() => {
     auth.currentUser = null;
     auth.signOut.mockReset();
+    auth.addLocation.mockReset();
+    auth.addLocation.mockResolvedValue(undefined);
     window.localStorage.clear();
   });
 
@@ -95,6 +134,16 @@ describe("App", () => {
     );
   });
 
+  it("takes a guest directly to sign-up before adding a location", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Add a location" }));
+
+    expect(await screen.findByLabelText("FirebaseUI sign up")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Back to browsing" })).toBeVisible();
+  });
+
   it("opens centered FirebaseUI and switches between sign-in and sign-up", async () => {
     const user = userEvent.setup();
     render(<App />);
@@ -118,8 +167,26 @@ describe("App", () => {
     expect(screen.getByLabelText("Password")).toHaveAttribute("autocomplete", "new-password");
   });
 
+  it("allows an authenticated fan to add an attributed location", async () => {
+    auth.currentUser = { uid: "fan-123", displayName: null, email: "fan@example.test" };
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Add a location" }));
+    expect(screen.getByLabelText("Add location form")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Save location" }));
+    expect(auth.addLocation).toHaveBeenCalledWith(
+      {},
+      expect.anything(),
+      "fan-123",
+      expect.objectContaining({ name: "Corner Shop" }),
+    );
+    expect(await screen.findByText("Thanks — Corner Shop was added.")).toBeVisible();
+  });
+
   it("shows the authenticated user and allows sign-out", async () => {
-    auth.currentUser = { displayName: null, email: "fan@example.test" };
+    auth.currentUser = { uid: "fan-123", displayName: null, email: "fan@example.test" };
     const user = userEvent.setup();
     render(<App />);
 
