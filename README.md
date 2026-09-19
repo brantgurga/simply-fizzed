@@ -226,9 +226,9 @@ provider and automatic token refresh. Demo projects skip App Check, keeping loca
 development, unit tests, and end-to-end tests fully offline.
 
 Register the web app and its score-based key in Firebase App Check, then set
-`VITE_FIREBASE_APPCHECK_SITE_KEY`. Allow the fixed staging and production domains
-on the key; add `localhost` only when testing a live Firebase configuration
-locally.
+`VITE_FIREBASE_APPCHECK_SITE_KEY`. Allow only the fixed staging and production
+domains on that key. Use a separate non-production key if live Firebase must be
+tested from `localhost`; never allow `localhost` on the production key.
 
 Deploy with enforcement disabled first. In **Firebase console > App Check >
 APIs**, review request metrics until legitimate staging and production traffic
