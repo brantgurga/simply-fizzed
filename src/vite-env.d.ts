@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference types="vite-plugin-pwa/react" />
 
 // Typed definitions for the app's environment variables. All client-exposed
 // variables must be prefixed with `VITE_`; see `.env.example` for documentation.
