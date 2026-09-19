@@ -191,7 +191,7 @@ jobs:
               core.setFailed("Choose a successful main-branch Firebase Hosting CD staging run.");
               return;
             }
-            const { data: latest } = await github.rest.actions.listWorkflowRunsForWorkflow({
+            const { data: latest } = await github.rest.actions.listWorkflowRuns({
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: run.workflow_id,
