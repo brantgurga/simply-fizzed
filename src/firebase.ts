@@ -16,6 +16,17 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from "firebase/firestore";
+import {
+  ensureInitialized,
+  fetchAndActivate,
+  getRemoteConfig,
+  getValue,
+} from "firebase/remote-config";
+import { isHostnameEnabled } from "./availability";
+
+const ENABLED_HOSTNAMES_PARAMETER = "enabled_hostnames";
+const REMOTE_CONFIG_FETCH_INTERVAL_MILLIS = 5 * 60 * 1000;
+const REMOTE_CONFIG_FETCH_TIMEOUT_MILLIS = 5 * 1000;
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -42,6 +53,31 @@ export const appCheck = isDemoProject
       provider: new ReCaptchaEnterpriseProvider(import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY),
       isTokenAutoRefreshEnabled: true,
     });
+
+// Remote Config is production-only. An empty default fails closed until an
+// allowlist has been fetched, while demo projects remain fully offline.
+export const remoteConfig = isDemoProject ? undefined : getRemoteConfig(app);
+if (remoteConfig !== undefined) {
+  remoteConfig.settings.minimumFetchIntervalMillis = REMOTE_CONFIG_FETCH_INTERVAL_MILLIS;
+  remoteConfig.settings.fetchTimeoutMillis = REMOTE_CONFIG_FETCH_TIMEOUT_MILLIS;
+  remoteConfig.defaultConfig = { [ENABLED_HOSTNAMES_PARAMETER]: "" };
+}
+
+export async function isFullAppEnabled(hostname: string): Promise<boolean> {
+  if (remoteConfig === undefined) return true;
+
+  try {
+    await ensureInitialized(remoteConfig);
+    await fetchAndActivate(remoteConfig);
+  } catch {
+    // Use the last activated value, or the fail-closed default, when offline.
+  }
+
+  return isHostnameEnabled(
+    hostname,
+    getValue(remoteConfig, ENABLED_HOSTNAMES_PARAMETER).asString(),
+  );
+}
 
 // Keep authenticated sessions in IndexedDB/localStorage so they remain
 // available when the installed app starts offline.

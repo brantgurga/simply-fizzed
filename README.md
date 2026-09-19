@@ -240,6 +240,22 @@ shows valid tokens, then enable enforcement separately for **Authentication**,
 if valid clients are rejected; App Check supplements rather than replaces browser
 key restrictions.
 
+### Coming-soon gate
+
+Production builds fetch the `enabled_hostnames` Firebase Remote Config parameter
+before the first render. Its value is a comma-separated list of exact hostnames;
+entries are trimmed and compared case-insensitively. Add the fixed staging
+hostname to show the full app there, and omit the live hostname to show the
+static **Coming soon** screen from the same deployed artifact. Wildcards and URL
+schemes are not supported.
+
+Create and publish the parameter in **Firebase console > Remote Config**. Changes
+require no rebuild or deployment; after the five-minute client cache expires,
+reload the page to fetch the new value. Production fails closed when no fetched
+or cached value exists, or a fetch fails before any value has been activated.
+Demo projects bypass Remote Config entirely and always show the app, keeping
+local development and automated tests offline.
+
 ### Authentication and contributions
 
 Browsing remains public. The app bar offers FirebaseUI email/password sign-in and
