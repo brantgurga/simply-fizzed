@@ -1,4 +1,9 @@
 import { expect, test } from "@playwright/test";
+import {
+  deleteApp as deleteAdminApp,
+  initializeApp as initializeAdminApp,
+} from "firebase-admin/app";
+import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
 import { deleteApp, initializeApp } from "firebase/app";
 import { connectAuthEmulator, createUserWithEmailAndPassword, getAuth } from "firebase/auth";
 import {
@@ -10,7 +15,33 @@ import {
 } from "firebase/firestore";
 import { INDIANAPOLIS, KROGER, TIMS_BREWERY } from "./fixtures.ts";
 
+const PROJECT_ID = "demo-simply-fizzed";
+let cleanupAppNumber = 0;
+
+async function deleteLocationsNamed(...names: string[]): Promise<void> {
+  process.env["FIRESTORE_EMULATOR_HOST"] = "127.0.0.1:8080";
+  const app = initializeAdminApp(
+    { projectId: PROJECT_ID },
+    `location-cleanup-${cleanupAppNumber.toString()}`,
+  );
+  cleanupAppNumber += 1;
+
+  try {
+    const db = getAdminFirestore(app);
+    const snapshots = await Promise.all(
+      names.map((name) => db.collection("locations").where("name", "==", name).get()),
+    );
+    await Promise.all(
+      snapshots.flatMap((snapshot) => snapshot.docs.map((item) => item.ref.delete())),
+    );
+  } finally {
+    await deleteAdminApp(app);
+  }
+}
+
 test.describe("App", () => {
+  test.describe.configure({ mode: "serial" });
+
   test("renders the app title", async ({ page }) => {
     await page.goto("/");
 
@@ -35,15 +66,20 @@ test.describe("App", () => {
     await page.getByLabel(/password/i).fill("emulator-password");
     await page.getByRole("button", { name: /create account/i }).click();
 
-    await expect(page.getByRole("heading", { name: "Add a soda location" })).toBeVisible();
-    await page.getByLabel("Location name").fill("Test Soda Shop");
-    await page.getByLabel("Street address").fill("123 Test Street");
-    await page.getByLabel("City").fill("Indianapolis");
-    await page.getByLabel("State").fill("IN");
-    await page.getByLabel("Postal code").fill("46204");
-    await page.getByRole("button", { name: "Add location" }).click();
+    const locationName = `Test Soda Shop ${testInfo.retry.toString()}`;
+    try {
+      await expect(page.getByRole("heading", { name: "Add a soda location" })).toBeVisible();
+      await page.getByLabel("Location name").fill(locationName);
+      await page.getByLabel("Street address").fill("123 Test Street");
+      await page.getByLabel("City").fill("Indianapolis");
+      await page.getByLabel("State").fill("IN");
+      await page.getByLabel("Postal code").fill("46204");
+      await page.getByRole("button", { name: "Add location" }).click();
 
-    await expect(page.getByText("Thanks — Test Soda Shop was added.")).toBeVisible();
+      await expect(page.getByText(`Thanks — ${locationName} was added.`)).toBeVisible();
+    } finally {
+      await deleteLocationsNamed(locationName);
+    }
   });
 
   test("enforces location creation rules for authenticated fans", async ({
@@ -51,9 +87,11 @@ test.describe("App", () => {
   }, testInfo) => {
     test.skip(browserName !== "chromium", "Firestore rules are exercised once in Chromium.");
     const app = initializeApp(
-      { apiKey: "demo-api-key", projectId: "demo-simply-fizzed" },
+      { apiKey: "demo-api-key", projectId: PROJECT_ID },
       `rules-${testInfo.retry.toString()}`,
     );
+    const validName = "Rules Test Shop";
+    const invalidName = " \t";
 
     try {
       const auth = getAuth(app);
@@ -66,7 +104,7 @@ test.describe("App", () => {
       const db = getFirestore(app);
       connectFirestoreEmulator(db, "127.0.0.1", 8080);
       const validLocation = {
-        name: "Rules Test Shop",
+        name: validName,
         address: {
           street: "123 Test Street",
           city: "Indianapolis",
@@ -85,14 +123,14 @@ test.describe("App", () => {
       try {
         await setDoc(doc(db, "locations", `blank-${testInfo.retry.toString()}`), {
           ...validLocation,
-          name: " \t",
+          name: invalidName,
         });
       } catch (error) {
         invalidWriteError = error;
       }
       expect(invalidWriteError).toMatchObject({ code: "permission-denied" });
     } finally {
-      await deleteApp(app);
+      await Promise.all([deleteLocationsNamed(validName, invalidName), deleteApp(app)]);
     }
   });
 
