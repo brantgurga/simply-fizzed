@@ -87,6 +87,7 @@ jobs:
           path: |
             dist/
             firebase.json
+            firestore.indexes.json
             firestore.rules
           if-no-files-found: error
           retention-days: 30
