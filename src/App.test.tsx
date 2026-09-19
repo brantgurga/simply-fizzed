@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { getContrastRatio } from "@mui/material/styles";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import theme from "./theme";
+import theme, { rootBeerPalettes } from "./theme";
 
 const auth = vi.hoisted(() => ({
   currentUser: null as {
@@ -102,10 +103,40 @@ describe("App", () => {
     window.localStorage.clear();
   });
 
-  it("follows the device light or dark color scheme", () => {
+  it("provides accessible root beer palettes selected by the device color scheme", () => {
     expect(theme).toHaveProperty("colorSchemes.light.palette.mode", "light");
     expect(theme).toHaveProperty("colorSchemes.dark.palette.mode", "dark");
     expect(theme).toHaveProperty("colorSchemeSelector", "media");
+
+    for (const mode of ["light", "dark"] as const) {
+      const palette = rootBeerPalettes[mode].palette;
+      expect(
+        getContrastRatio(palette.text.primary, palette.background.default),
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        getContrastRatio(palette.text.secondary, palette.background.default),
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(getContrastRatio(palette.divider, palette.background.paper)).toBeGreaterThanOrEqual(3);
+
+      for (const role of ["primary", "secondary", "success", "warning", "error", "info"] as const) {
+        expect(
+          getContrastRatio(palette[role].main, palette[role].contrastText),
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it("maps FirebaseUI onto the active MUI color scheme", () => {
+    expect(theme.components?.MuiCssBaseline?.styleOverrides).toMatchObject({
+      ":root": {
+        "--fui-primary": "var(--mui-palette-primary-main)",
+        "--fui-primary-surface": "var(--mui-palette-primary-contrastText)",
+        "--fui-text": "var(--mui-palette-text-primary)",
+        "--fui-background": "var(--mui-palette-background-paper)",
+        "--fui-input": "var(--mui-palette-divider)",
+        "--fui-error": "var(--mui-palette-error-main)",
+      },
+    });
   });
 
   it("keeps browsing available without signing in", () => {

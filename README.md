@@ -371,16 +371,19 @@ either.
 
 ## User interface
 
-Material UI (MUI) provides the component library and theming. The app is wrapped
-in MUI's `ThemeProvider` with a shared theme from
-[`src/theme.ts`](./src/theme.ts) (created via `createTheme` with `cssVariables`
-enabled) and a `CssBaseline` (`enableColorScheme`) that applies MUI's baseline
-styles and native light/dark handling. The Roboto font — MUI's default typeface —
-is self-hosted via
-[`@fontsource/roboto`](https://www.npmjs.com/package/@fontsource/roboto) and
-imported in [`src/main.tsx`](./src/main.tsx), so no external font request is
-made. Components are imported per module (e.g. `@mui/material/AppBar`) to keep
-bundles tree-shakeable.
+Material UI (MUI) provides the component library and a retro root beer theme of
+brown, caramel, cream, and frothy off-white. Distinct light and dark palettes in
+[`src/theme.ts`](./src/theme.ts) use strong value contrast for WCAG AA text and
+controls; semantic states retain MUI's icons and differ by lightness as well as
+hue so color is not their only cue.
+
+The app uses MUI CSS variables and `CssBaseline enableColorScheme`, so the device's
+`prefers-color-scheme` selects the palette without an app-specific toggle.
+FirebaseUI's custom properties reference those same active MUI variables, keeping
+its card, text, fields, errors, and buttons mode-matched with the surrounding app.
+Roboto remains self-hosted via
+[`@fontsource/roboto`](https://www.npmjs.com/package/@fontsource/roboto), and MUI
+components are imported per module to keep bundles tree-shakeable.
 
 ### Location input
 
