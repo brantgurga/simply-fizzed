@@ -7,7 +7,9 @@ rules_version = "2";
 service cloud.firestore {
   match /databases/{database}/documents {
     function isNonEmptyString(value, maxLength) {
-      return value is string && value.size() > 0 && value.size() <= maxLength;
+      return value is string
+        && value.matches(".*\\S.*")
+        && value.size() <= maxLength;
     }
 
     function isValidAddress(address) {
