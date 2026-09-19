@@ -46,6 +46,7 @@ describe("Firebase initialization", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    vi.stubEnv("VITE_FIREBASE_API_KEY", "test-api-key");
     vi.stubEnv("VITE_FIREBASE_PROJECT_ID", "demo-simply-fizzed");
     vi.stubEnv("VITE_FIREBASE_MEASUREMENT_ID", "test-measurement-id");
     firebase.getApps.mockReturnValue([]);
@@ -65,6 +66,7 @@ describe("Firebase initialization", () => {
 
     expect(firebase.initializeApp).toHaveBeenCalledWith(
       expect.objectContaining({
+        apiKey: "test-api-key",
         projectId: "demo-simply-fizzed",
         measurementId: "test-measurement-id",
       }),

@@ -219,6 +219,10 @@ Authentication in local development and e2e uses only the local emulator. Social
 identity providers are intentionally deferred because they require provider credentials
 and authorized domains from a live Firebase project.
 
+FirebaseUI receives the shared Firebase App and Auth instances from
+[`src/firebase.ts`](./src/firebase.ts). It has no separate API-key setting; Auth reads
+`VITE_FIREBASE_API_KEY` from the App configuration.
+
 ### Environment variables
 
 Configuration is provided through Vite environment variables (only
@@ -259,7 +263,15 @@ The workflow exchanges GitHub OIDC tokens for short-lived Google credentials
 through `google-github-actions/auth`; it stores no service-account key. Build
 scripts run in a separate job without OIDC access. Configure repository variables
 `VITE_FIREBASE_API_KEY`, `VITE_GOOGLE_MAPS_API_KEY`, and
-`GCP_WORKLOAD_IDENTITY_PROVIDER` (the provider's full resource name).
+`GCP_WORKLOAD_IDENTITY_PROVIDER` (the provider's full resource name). Before
+building, the workflow verifies that Identity Toolkit accepts the Firebase key.
+
+If Auth reports `API_KEY_INVALID`, inspect the key under **Google Cloud > APIs &
+Services > Credentials**. Confirm it is active, belongs to `simply-fizzed-prod`, and
+matches the current Firebase web-app config; rotate it and update the repository
+variable if necessary. API or HTTP-referrer restrictions produce distinct
+`API_KEY_SERVICE_BLOCKED` or `API_KEY_HTTP_REFERRER_BLOCKED` reasons; allow the
+Identity Toolkit and Secure Token APIs plus the staging and production origins.
 
 The dedicated `github-deployer@simply-fizzed-prod.iam.gserviceaccount.com`
 service account needs Firebase Hosting Admin; add Firebase Authentication Admin

@@ -9,8 +9,18 @@ const auth = vi.hoisted(() => ({
   currentUser: null as { displayName: string | null; email: string | null } | null,
   signOut: vi.fn(),
 }));
+const firebaseClient = vi.hoisted(() => ({
+  app: { name: "test-app" },
+  auth: { name: "test-auth" },
+  db: { name: "test-db" },
+  initializeUI: vi.fn(() => ({})),
+}));
 
-vi.mock("./firebase", () => ({ app: {}, auth: {}, db: {} }));
+vi.mock("./firebase", () => ({
+  app: firebaseClient.app,
+  auth: firebaseClient.auth,
+  db: firebaseClient.db,
+}));
 vi.mock("firebase/auth", () => ({
   onAuthStateChanged: vi.fn((_auth, listener: (user: typeof auth.currentUser) => void) => {
     listener(auth.currentUser);
@@ -18,7 +28,7 @@ vi.mock("firebase/auth", () => ({
   }),
   signOut: auth.signOut,
 }));
-vi.mock("@firebase-oss/ui-core", () => ({ initializeUI: vi.fn(() => ({})) }));
+vi.mock("@firebase-oss/ui-core", () => ({ initializeUI: firebaseClient.initializeUI }));
 vi.mock("./location/LocationInput", () => ({
   default: ({ onResolveError }: { onResolveError: () => void }) => (
     <button onClick={onResolveError}>Fail location search</button>
@@ -101,6 +111,10 @@ describe("App", () => {
 
     await user.click(screen.getByRole("button", { name: "Sign in" }));
     const signInScreen = await screen.findByLabelText("FirebaseUI sign in");
+    expect(firebaseClient.initializeUI).toHaveBeenCalledWith({
+      app: firebaseClient.app,
+      auth: firebaseClient.auth,
+    });
     expect(signInScreen).toBeVisible();
     expect(signInScreen.parentElement).toHaveStyle({
       display: "flex",
