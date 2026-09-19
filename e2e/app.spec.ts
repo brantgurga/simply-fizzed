@@ -91,7 +91,7 @@ test.describe("App", () => {
       `rules-${testInfo.retry.toString()}`,
     );
     const validName = "Rules Test Shop";
-    const invalidName = " \t";
+    const invalidNames = [" \t", "\u00a0"];
 
     try {
       const auth = getAuth(app);
@@ -119,18 +119,27 @@ test.describe("App", () => {
 
       await setDoc(doc(db, "locations", `valid-${testInfo.retry.toString()}`), validLocation);
 
-      let invalidWriteError: unknown;
-      try {
-        await setDoc(doc(db, "locations", `blank-${testInfo.retry.toString()}`), {
-          ...validLocation,
-          name: invalidName,
-        });
-      } catch (error) {
-        invalidWriteError = error;
+      const invalidWriteErrors = await Promise.all(
+        invalidNames.map(async (invalidName, index): Promise<unknown> => {
+          try {
+            await setDoc(
+              doc(db, "locations", `blank-${testInfo.retry.toString()}-${index.toString()}`),
+              {
+                ...validLocation,
+                name: invalidName,
+              },
+            );
+            return undefined;
+          } catch (error) {
+            return error;
+          }
+        }),
+      );
+      for (const invalidWriteError of invalidWriteErrors) {
+        expect(invalidWriteError).toMatchObject({ code: "permission-denied" });
       }
-      expect(invalidWriteError).toMatchObject({ code: "permission-denied" });
     } finally {
-      await Promise.all([deleteLocationsNamed(validName, invalidName), deleteApp(app)]);
+      await Promise.all([deleteLocationsNamed(validName, ...invalidNames), deleteApp(app)]);
     }
   });
 
