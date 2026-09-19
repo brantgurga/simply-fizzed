@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const firebase = vi.hoisted(() => ({
   app: { name: "test-app" },
+  appCheck: { app: { name: "test-app" } },
   auth: { emulatorConfig: null },
   connectedAuth: { emulatorConfig: { host: "127.0.0.1", port: 9099 } },
   cache: { kind: "persistent" },
@@ -64,6 +65,7 @@ describe("Firebase initialization", () => {
     vi.stubEnv("VITE_FIREBASE_APPCHECK_SITE_KEY", "test-app-check-site-key");
     firebase.getApps.mockReturnValue([]);
     firebase.initializeApp.mockReturnValue(firebase.app);
+    firebase.initializeAppCheck.mockReturnValue(firebase.appCheck);
     firebase.initializeAuth.mockReturnValue(firebase.auth);
     firebase.persistentMultipleTabManager.mockReturnValue(firebase.tabManager);
     firebase.persistentLocalCache.mockReturnValue(firebase.cache);
@@ -75,8 +77,9 @@ describe("Firebase initialization", () => {
   });
 
   it("enables local persistence and connects demo projects to the emulators", async () => {
-    await import("./firebase");
+    const { appCheck } = await import("./firebase");
 
+    expect(appCheck).toBeUndefined();
     expect(firebase.initializeApp).toHaveBeenCalledWith(
       expect.objectContaining({
         projectId: "demo-simply-fizzed",
@@ -119,11 +122,12 @@ describe("Firebase initialization", () => {
     expect(firebase.connectAuthEmulator).not.toHaveBeenCalled();
   });
 
-  it("initializes App Check and skips emulators for non-demo projects", async () => {
+  it("exports App Check and skips emulators for non-demo projects", async () => {
     vi.stubEnv("VITE_FIREBASE_PROJECT_ID", "live-project");
 
-    await import("./firebase");
+    const { appCheck } = await import("./firebase");
 
+    expect(appCheck).toBe(firebase.appCheck);
     expect(firebase.connectAuthEmulator).not.toHaveBeenCalled();
     expect(firebase.connectFirestoreEmulator).not.toHaveBeenCalled();
     expect(firebase.initializeAppCheck).toHaveBeenCalledWith(firebase.app, {

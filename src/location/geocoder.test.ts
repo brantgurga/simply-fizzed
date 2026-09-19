@@ -1,4 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
+
+const firebase = vi.hoisted(() => ({
+  appCheck: { name: "test-app-check" },
+  getToken: vi.fn(async () => ({ token: "test-app-check-token" })),
+}));
+
+vi.mock("../firebase", () => ({ appCheck: firebase.appCheck }));
+vi.mock("firebase/app-check", () => ({ getToken: firebase.getToken }));
+
 import {
   createGeocoder,
   FakeGeocoder,
@@ -114,14 +123,26 @@ describe("GoogleMapsGeocoder", () => {
     );
   });
 
-  itInBrowser("loads the Maps JavaScript geocoding library", async () => {
-    const importLibrary = vi.fn(async () => ({
-      Geocoder: class {
-        geocode(_request: { address: string }, callback: GeocodeCallback) {
-          callback([{ geometry: { location: { lat: () => 39.7684, lng: () => -86.1581 } } }], "OK");
-        }
-      },
-    }));
+  itInBrowser("loads Maps geocoding with the shared App Check token provider", async () => {
+    const settings: {
+      fetchAppCheckToken?: () => Promise<{ token: string }>;
+    } = {};
+    const Settings = Object.assign(() => undefined, {
+      getInstance: () => settings,
+    });
+    const importLibrary = vi.fn(async (name: "core" | "geocoding") => {
+      if (name === "core") return { Settings };
+      return {
+        Geocoder: class {
+          geocode(_request: { address: string }, callback: GeocodeCallback) {
+            callback(
+              [{ geometry: { location: { lat: () => 39.7684, lng: () => -86.1581 } } }],
+              "OK",
+            );
+          }
+        },
+      };
+    });
     const append = vi.spyOn(document.head, "append").mockImplementation((node) => {
       if (!(node instanceof HTMLScriptElement)) throw new Error("Expected a script element");
       const url = new URL(node.src);
@@ -138,7 +159,11 @@ describe("GoogleMapsGeocoder", () => {
         lat: 39.7684,
         lng: -86.1581,
       });
-      expect(importLibrary).toHaveBeenCalledWith("geocoding");
+      expect(importLibrary.mock.calls.map(([name]) => name)).toEqual(["core", "geocoding"]);
+      await expect(settings.fetchAppCheckToken?.()).resolves.toEqual({
+        token: "test-app-check-token",
+      });
+      expect(firebase.getToken).toHaveBeenCalledWith(firebase.appCheck, false);
     } finally {
       append.mockRestore();
       delete window.google;

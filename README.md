@@ -222,18 +222,23 @@ See [Environment variables](#environment-variables) for configuration details.
 ### App Check
 
 Production builds initialize Firebase App Check with the reCAPTCHA Enterprise
-provider and automatic token refresh. Demo projects skip App Check, keeping local
-development, unit tests, and end-to-end tests fully offline.
+provider and automatic token refresh. The shared App Check instance also supplies
+tokens to the Maps JavaScript API. Demo projects skip App Check and use an offline
+geocoder, keeping local development, unit tests, and end-to-end tests fully offline.
 
 Register the web app and its score-based key in Firebase App Check, then set
-`VITE_FIREBASE_APPCHECK_SITE_KEY`. Allow only the fixed staging and production
-domains on that key. Use a separate non-production key if live Firebase must be
-tested from `localhost`; never allow `localhost` on the production key.
+`VITE_FIREBASE_APPCHECK_SITE_KEY`. Register the Maps JavaScript API with App Check
+for `simply-fizzed-prod` using the same reCAPTCHA Enterprise key. Allow only the
+fixed staging and production domains on that key and the Maps browser key. Use a
+separate non-production key if live services must be tested from `localhost`;
+never allow `localhost` on production keys.
 
 Deploy with enforcement disabled first. In **Firebase console > App Check >
 APIs**, review request metrics until legitimate staging and production traffic
-shows valid tokens, then enable enforcement separately for **Authentication** and
-**Cloud Firestore**. Disable enforcement there if valid clients are rejected.
+shows valid tokens, then enable enforcement separately for **Authentication**,
+**Cloud Firestore**, and **Maps JavaScript API**. Disable enforcement for an API
+if valid clients are rejected; App Check supplements rather than replaces browser
+key restrictions.
 
 ### Authentication and contributions
 

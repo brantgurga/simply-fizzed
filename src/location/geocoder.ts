@@ -4,6 +4,8 @@
 // makes no network calls and therefore incurs no billing. Only the manual
 // (city / postal-code) fallback needs geocoding; browser geolocation already
 // returns coordinates directly.
+import { getToken } from "firebase/app-check";
+import { appCheck } from "../firebase";
 import type { GeoPoint } from "../model/firestore";
 
 interface GoogleMapsGeocoderResult {
@@ -26,9 +28,17 @@ type GoogleMapsGeocoderConstructor = new () => GoogleMapsGeocoderClient;
 
 export type GoogleMapsGeocoderLoader = (apiKey: string) => Promise<GoogleMapsGeocoderConstructor>;
 
+interface GoogleMapsSettings {
+  fetchAppCheckToken?: () => Promise<{ token: string }>;
+}
+
+interface GoogleMapsSettingsConstructor {
+  getInstance(): GoogleMapsSettings;
+}
+
 interface GoogleMapsApi {
   maps: {
-    importLibrary(name: "geocoding"): Promise<unknown>;
+    importLibrary(name: "core" | "geocoding"): Promise<unknown>;
   };
 }
 
@@ -50,6 +60,12 @@ function isGoogleMapsApi(value: unknown): value is GoogleMapsApi {
 
 function isGeocoderConstructor(value: unknown): value is GoogleMapsGeocoderConstructor {
   return typeof value === "function";
+}
+
+function isSettingsConstructor(value: unknown): value is GoogleMapsSettingsConstructor {
+  return (
+    typeof value === "function" && "getInstance" in value && typeof value.getInstance === "function"
+  );
 }
 
 function currentGoogleMapsApi(): GoogleMapsApi | undefined {
@@ -96,6 +112,19 @@ async function loadGoogleMapsGeocoder(apiKey: string): Promise<GoogleMapsGeocode
       googleMapsApiPromise = undefined;
       throw error;
     }
+  }
+
+  const appCheckInstance = appCheck;
+  if (appCheckInstance) {
+    const coreLibrary = await api.maps.importLibrary("core");
+    if (typeof coreLibrary !== "object" || coreLibrary === null || !("Settings" in coreLibrary)) {
+      throw new Error("Google Maps loaded without the core settings library");
+    }
+    const { Settings } = coreLibrary;
+    if (!isSettingsConstructor(Settings)) {
+      throw new Error("Google Maps loaded an invalid core settings library");
+    }
+    Settings.getInstance().fetchAppCheckToken = () => getToken(appCheckInstance, false);
   }
 
   const library = await api.maps.importLibrary("geocoding");

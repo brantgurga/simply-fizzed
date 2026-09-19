@@ -34,13 +34,14 @@ const isDemoProject = firebaseConfig.projectId.startsWith("demo-");
 export const app = existingApp ? getApp() : initializeApp(firebaseConfig);
 
 // App Check is production-only: demo projects stay fully offline for local and
-// e2e use. HMR reuses the App Check instance initialized with the Firebase app.
-if (!isDemoProject && !existingApp) {
-  initializeAppCheck(app, {
-    provider: new ReCaptchaEnterpriseProvider(import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY),
-    isTokenAutoRefreshEnabled: true,
-  });
-}
+// e2e use. Reinitialization with the same options returns the existing instance
+// during HMR, so Firebase services and integrations share one App Check instance.
+export const appCheck = isDemoProject
+  ? undefined
+  : initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider(import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY),
+      isTokenAutoRefreshEnabled: true,
+    });
 
 // Keep authenticated sessions in IndexedDB/localStorage so they remain
 // available when the installed app starts offline.
