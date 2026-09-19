@@ -17,7 +17,7 @@ test.describe("App", () => {
 
     await page.getByRole("button", { name: "Add a location" }).click();
 
-    await expect(page.getByRole("heading", { name: "Create an account" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /create account/i })).toBeVisible();
     await expect(page.getByRole("button", { name: "Back to browsing" })).toBeVisible();
 
     await page
