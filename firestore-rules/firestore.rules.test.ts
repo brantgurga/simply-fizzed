@@ -5,9 +5,11 @@ import {
   type RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
 import {
+  collection,
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -16,7 +18,7 @@ import {
 import { readFile } from "node:fs/promises";
 import { afterAll, afterEach, beforeAll, describe, it } from "vitest";
 
-const PROJECT_ID = "demo-simply-fizzed-rules";
+const PROJECT_ID = "demo-simply-fizzed";
 const USER_ID = "rules-test-user";
 const RULES_PATH = new URL("../firestore.rules", import.meta.url);
 
@@ -55,11 +57,15 @@ afterAll(async () => {
 });
 
 describe("public reads", () => {
-  it.each(["locations", "sodas", "availability"])("allows reads from %s", async (collection) => {
-    const database = testEnvironment.unauthenticatedContext().firestore();
+  it.each(["locations", "sodas", "availability"])(
+    "allows reads from %s",
+    async (collectionName) => {
+      const database = testEnvironment.unauthenticatedContext().firestore();
 
-    await assertSucceeds(getDoc(doc(database, collection, "public-document")));
-  });
+      await assertSucceeds(getDoc(doc(database, collectionName, "public-document")));
+      await assertSucceeds(getDocs(collection(database, collectionName)));
+    },
+  );
 });
 
 describe("location creation", () => {
@@ -154,12 +160,16 @@ describe("immutable locations", () => {
 describe("protected collections and unmatched paths", () => {
   it.each(["sodas", "availability"])(
     "denies unauthenticated and authenticated writes to %s",
-    async (collection) => {
+    async (collectionName) => {
       const unauthenticated = testEnvironment.unauthenticatedContext().firestore();
       const authenticated = testEnvironment.authenticatedContext(USER_ID).firestore();
 
-      await assertFails(setDoc(doc(unauthenticated, collection, "new-document"), { name: "Cola" }));
-      await assertFails(setDoc(doc(authenticated, collection, "new-document"), { name: "Cola" }));
+      await assertFails(
+        setDoc(doc(unauthenticated, collectionName, "new-document"), { name: "Cola" }),
+      );
+      await assertFails(
+        setDoc(doc(authenticated, collectionName, "new-document"), { name: "Cola" }),
+      );
     },
   );
 
