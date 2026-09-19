@@ -17,7 +17,7 @@ Additional tooling (linting, formatting, testing, Firebase, and CI/CD) is tracke
 - [Node.js](https://nodejs.org/) 20 or newer (developed against v24)
 - npm 10 or newer
 - A Java 21 runtime for the Firestore emulator. Authentication and Hosting do
-  not require Java, but the end-to-end suite starts Firestore too.
+  not require Java, but the security-rule and end-to-end suites start Firestore.
 
 ## Getting started
 
@@ -46,6 +46,7 @@ npm run dev
 - `npm run fmt:check` – check formatting without writing changes
 - `npm test` – run the unit test suite once with Vitest
 - `npm run test:watch` – run Vitest in watch mode
+- `npm run test:rules` – start Firestore, test its security rules, and shut it down
 - `npm run e2e` – run the end-to-end tests with Playwright
 - `npm run e2e:ui` – run Playwright in interactive UI mode
 - `npm run emulators` – start the full Firebase Emulator Suite
@@ -105,6 +106,18 @@ Unit and component tests live next to the code they cover as `*.test.tsx` /
 
 Run `npm test` for a single run (used in CI) or `npm run test:watch` while
 developing.
+
+### Firestore security-rule testing
+
+The dedicated [`firestore-rules`](./firestore-rules) suite loads the committed
+[`firestore.rules`](./firestore.rules) with
+[`@firebase/rules-unit-testing`](https://firebase.google.com/docs/rules/unit-tests).
+It exercises public reads and the authorization, validation, immutability, and
+default-deny boundaries without production credentials or a browser.
+
+With Java 21 available, run `npm run test:rules`. The command starts only the
+Firestore emulator under the offline `demo-simply-fizzed` project, runs the
+Node-based Vitest suite, propagates failures, and shuts the emulator down.
 
 ## End-to-end testing
 
@@ -415,6 +428,7 @@ free of React and Firestore so they can be tested without a database.
 │   ├── app.spec.ts          # E2E specs (app shell + seeded search scenario)
 │   ├── fixtures.ts          # Deterministic seed data shared by setup + specs
 │   └── global-setup.ts      # Seeds the Firestore emulator before tests
+├── firestore-rules/         # Emulator-backed Firestore security-rule tests
 ├── public/                  # PWA icons and static assets
 ├── src/                     # Application source
 │   ├── location/            # Location input, geocoding, and saved search center
@@ -434,5 +448,6 @@ free of React and Firestore so they can be tested without a database.
 ├── firestore.indexes.json   # Firestore indexes
 ├── index.html               # HTML entry point
 ├── playwright.config.ts     # Playwright configuration
-└── vite.config.ts           # Vite, Vitest, and PWA configuration
+├── vite.config.ts           # Vite, Vitest, and PWA configuration
+└── vitest.rules.config.ts   # Node config for security-rule tests
 ```

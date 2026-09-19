@@ -46,7 +46,7 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",
-    // Playwright owns the e2e directory; keep Vitest out of it.
-    exclude: [...configDefaults.exclude, "e2e/**"],
+    // Dedicated runners own browser E2E and emulator-backed rules tests.
+    exclude: [...configDefaults.exclude, "e2e/**", "firestore-rules/**"],
   },
 });
