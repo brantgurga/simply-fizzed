@@ -219,6 +219,22 @@ Firestore instances. A `demo-` project automatically connects both services to
 the local emulators; other project ids use real Firebase with no manual flag.
 See [Environment variables](#environment-variables) for configuration details.
 
+### App Check
+
+Production builds initialize Firebase App Check with the reCAPTCHA Enterprise
+provider and automatic token refresh. Demo projects skip App Check, keeping local
+development, unit tests, and end-to-end tests fully offline.
+
+Register the web app and its score-based key in Firebase App Check, then set
+`VITE_FIREBASE_APPCHECK_SITE_KEY`. Allow only the fixed staging and production
+domains on that key. Use a separate non-production key if live Firebase must be
+tested from `localhost`; never allow `localhost` on the production key.
+
+Deploy with enforcement disabled first. In **Firebase console > App Check >
+APIs**, review request metrics until legitimate staging and production traffic
+shows valid tokens, then enable enforcement separately for **Authentication** and
+**Cloud Firestore**. Disable enforcement there if valid clients are rejected.
+
 ### Authentication and contributions
 
 Browsing remains public. The app bar offers FirebaseUI email/password sign-in and
@@ -270,8 +286,8 @@ unreviewed staging build cannot publish automatically.
 
 The workflow exchanges GitHub OIDC tokens for short-lived Google credentials
 through `google-github-actions/auth`; it stores no service-account key. Build
-scripts run in a separate job without OIDC access. Configure repository variables
-`VITE_FIREBASE_API_KEY`, `VITE_GOOGLE_MAPS_API_KEY`, and
+scripts run in a separate job without OIDC access. Configure repository variables `VITE_FIREBASE_API_KEY`,
+`VITE_FIREBASE_APPCHECK_SITE_KEY`, `VITE_GOOGLE_MAPS_API_KEY`, and
 `GCP_WORKLOAD_IDENTITY_PROVIDER` (the provider's full resource name).
 
 The dedicated `github-deployer@simply-fizzed-prod.iam.gserviceaccount.com`
