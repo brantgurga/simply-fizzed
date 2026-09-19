@@ -6,14 +6,11 @@ import "@fontsource/roboto/300.css";
 import "@fontsource/roboto/400.css";
 import "@fontsource/roboto/500.css";
 import "@fontsource/roboto/700.css";
-import ComingSoon from "./ComingSoon.tsx";
-import { isFullAppEnabled } from "./firebase.ts";
+import { getStartupContent } from "./startup.ts";
 import theme from "./theme.ts";
 
 async function render() {
-  const Content = (await isFullAppEnabled(window.location.hostname))
-    ? (await import("./App.tsx")).default
-    : ComingSoon;
+  const Content = await getStartupContent(window.location.hostname);
 
   createRoot(document.getElementById("root")!).render(
     <StrictMode>

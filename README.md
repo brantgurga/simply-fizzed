@@ -252,8 +252,9 @@ schemes are not supported.
 Create and publish the parameter in **Firebase console > Remote Config**. Changes
 require no rebuild or deployment; after the five-minute client cache expires,
 reload the page to fetch the new value. Production fails closed when no fetched
-or cached value exists, or a fetch fails before any value has been activated.
-Demo projects bypass Remote Config entirely and always show the app, keeping
+or cached value exists, a fetch fails before any value has been activated, or
+the browser cannot initialize Remote Config storage. Demo projects bypass Remote
+Config entirely and always show the app, keeping
 local development and automated tests offline.
 
 ### Authentication and contributions

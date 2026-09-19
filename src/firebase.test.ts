@@ -25,6 +25,7 @@ const firebase = vi.hoisted(() => ({
   getRemoteConfig: vi.fn(),
   getValue: vi.fn(),
   initializeApp: vi.fn(),
+  isSupported: vi.fn(),
   initializeAppCheck: vi.fn(),
   initializeAuth: vi.fn(),
   initializeFirestore: vi.fn(),
@@ -55,6 +56,7 @@ vi.mock("firebase/remote-config", () => ({
   fetchAndActivate: firebase.fetchAndActivate,
   getRemoteConfig: firebase.getRemoteConfig,
   getValue: firebase.getValue,
+  isSupported: firebase.isSupported,
 }));
 
 vi.mock("firebase/auth", () => ({
@@ -84,6 +86,7 @@ describe("Firebase initialization", () => {
     firebase.initializeAppCheck.mockReturnValue(firebase.appCheck);
     firebase.initializeAuth.mockReturnValue(firebase.auth);
     firebase.getRemoteConfig.mockReturnValue(firebase.remoteConfig);
+    firebase.isSupported.mockResolvedValue(true);
     firebase.ensureInitialized.mockResolvedValue(undefined);
     firebase.fetchAndActivate.mockResolvedValue(true);
     firebase.remoteValue.asString.mockReturnValue("");
@@ -100,10 +103,9 @@ describe("Firebase initialization", () => {
   });
 
   it("enables local persistence and connects demo projects to the emulators", async () => {
-    const { appCheck, isFullAppEnabled, remoteConfig } = await import("./firebase");
+    const { appCheck, isFullAppEnabled } = await import("./firebase");
 
     expect(appCheck).toBeUndefined();
-    expect(remoteConfig).toBeUndefined();
     await expect(isFullAppEnabled("any.example.com")).resolves.toBe(true);
     expect(firebase.initializeApp).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -128,6 +130,7 @@ describe("Firebase initialization", () => {
       8080,
     );
     expect(firebase.initializeAppCheck).not.toHaveBeenCalled();
+    expect(firebase.isSupported).not.toHaveBeenCalled();
     expect(firebase.getRemoteConfig).not.toHaveBeenCalled();
     expect(firebase.ensureInitialized).not.toHaveBeenCalled();
     expect(firebase.fetchAndActivate).not.toHaveBeenCalled();
@@ -153,16 +156,17 @@ describe("Firebase initialization", () => {
   it("exports App Check and configures Remote Config for non-demo projects", async () => {
     vi.stubEnv("VITE_FIREBASE_PROJECT_ID", "live-project");
 
-    const { appCheck, remoteConfig } = await import("./firebase");
+    const { appCheck, isFullAppEnabled } = await import("./firebase");
+    await isFullAppEnabled("www.example.com");
 
     expect(appCheck).toBe(firebase.appCheck);
-    expect(remoteConfig).toBe(firebase.remoteConfig);
     expect(firebase.connectAuthEmulator).not.toHaveBeenCalled();
     expect(firebase.connectFirestoreEmulator).not.toHaveBeenCalled();
     expect(firebase.initializeAppCheck).toHaveBeenCalledWith(firebase.app, {
       provider: expect.objectContaining({ siteKey: "test-app-check-site-key" }),
       isTokenAutoRefreshEnabled: true,
     });
+    expect(firebase.isSupported).toHaveBeenCalledOnce();
     expect(firebase.getRemoteConfig).toHaveBeenCalledWith(firebase.app);
     expect(firebase.remoteConfig.settings).toEqual({
       fetchTimeoutMillis: 5_000,
@@ -192,6 +196,24 @@ describe("Firebase initialization", () => {
     expect(firebase.ensureInitialized.mock.invocationCallOrder[0]).toBeLessThan(
       firebase.getValue.mock.invocationCallOrder[0]!,
     );
+  });
+
+  it("fails closed without initializing Remote Config when browser storage is unsupported", async () => {
+    vi.stubEnv("VITE_FIREBASE_PROJECT_ID", "live-project");
+    firebase.isSupported.mockResolvedValue(false);
+    const { isFullAppEnabled } = await import("./firebase");
+
+    await expect(isFullAppEnabled("staging.example.com")).resolves.toBe(false);
+    expect(firebase.getRemoteConfig).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when Remote Config storage initialization fails", async () => {
+    vi.stubEnv("VITE_FIREBASE_PROJECT_ID", "live-project");
+    firebase.ensureInitialized.mockRejectedValue(new Error("storage-open"));
+    const { isFullAppEnabled } = await import("./firebase");
+
+    await expect(isFullAppEnabled("staging.example.com")).resolves.toBe(false);
+    expect(firebase.getValue).not.toHaveBeenCalled();
   });
 
   it("fails closed when Remote Config is unavailable without a cached value", async () => {
