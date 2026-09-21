@@ -106,7 +106,7 @@ jobs:
           node-version: "24"
 
       - name: Download production artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: firebase-hosting
 
@@ -170,7 +170,7 @@ jobs:
 
       - name: Verify staging run
         id: verify
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           STAGING_RUN_ID: ${{ inputs.staging_run_id }}
         with:
@@ -187,7 +187,7 @@ jobs:
           node-version: "24"
 
       - name: Download approved artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: firebase-hosting
           github-token: ${{ github.token }}
