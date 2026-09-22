@@ -352,16 +352,20 @@ emulator seed script, and tests:
   and a `geohash` derived from `geo` with
   [`geofire-common`](https://www.npmjs.com/package/geofire-common) for radius
   queries.
-- **`sodas/{sodaId}`** – a soda product: `name`, `brand`, `flavor`.
+- **`sodas/{sodaId}`** – a soda product: canonical `name`, `brand`, `flavor`,
+  plus optional search `aliases`.
 - **`availability/{availabilityId}`** – a join record tying a soda to a location
-  in a given `form` (`draft`, `can`, or `bottle`), with the soda's display fields
-  (`sodaName`, `sodaBrand`, `sodaFlavor`) denormalized so search results render
-  without an extra lookup.
+  in a given `form` (`draft`, `can`, or `bottle`), with exact catalog display
+  fields (`sodaName`, `sodaBrand`, `sodaFlavor`) and creator/updater attribution
+  denormalized for rendering and moderation. New IDs join `locationId`, `sodaId`,
+  and `form` with a reserved `$` separator to enforce one exact tuple; legacy
+  records without attribution remain readable and are de-duplicated when listed.
 
 Security rules in [`firestore.rules`](./firestore.rules) allow public `read` on
-all three collections. Signed-in users may create validated `locations` documents
-attributed with `createdBy` and `createdAt`; updates, deletes, other writes, and
-all unmatched paths remain denied.
+all three collections. Signed-in users may create validated, attributed
+`locations` and `availability` documents. Availability creation also requires an
+existing location and exact fields from the referenced soda. Client updates,
+deletes, soda writes, and all unmatched paths remain denied.
 
 [`firestore.indexes.json`](./firestore.indexes.json) is intentionally empty: the
 only non-trivial query is the geohash radius search, which uses a single-field
@@ -402,6 +406,15 @@ API calls, no billing). `createGeocoder()` picks between them using the same
 `demo-` key convention as `src/firebase.ts`: a `demo-` prefixed key selects the
 fake, and any other key selects Google. Browser geolocation already returns
 coordinates, so geocoding is only needed for the manual fallback.
+
+### Detail routes and contributions
+
+Dependency-free hash routes keep browse at `#/`, with exact location and soda
+pages at `#/locations/{id}` and `#/sodas/{id}`. Location pages load independently
+of nearby search and let signed-in users contribute an exact catalog soda and
+form. Catalog matching normalizes case, Unicode diacritics, punctuation,
+hyphens, ampersands, and whitespace, then ranks aliases and canonical values
+without auto-selecting ambiguous matches.
 
 ### Nearby search
 

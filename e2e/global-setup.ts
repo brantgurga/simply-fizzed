@@ -67,6 +67,7 @@ export default async function globalSetup(): Promise<void> {
         name: soda.name,
         brand: soda.brand,
         flavor: soda.flavor,
+        ...(soda.aliases === undefined ? {} : { aliases: soda.aliases }),
       });
     }
     for (const item of AVAILABILITY) {

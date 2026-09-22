@@ -46,6 +46,7 @@ export interface Soda {
   name: string;
   brand: string;
   flavor: string;
+  aliases?: string[];
 }
 
 /** The physical form a soda is sold in at a location. */
@@ -64,4 +65,10 @@ export interface Availability {
   sodaName: string;
   sodaBrand: string;
   sodaFlavor: string;
+  createdBy?: string;
+  createdByName?: string;
+  createdAt?: Date;
+  updatedBy?: string;
+  updatedByName?: string;
+  updatedAt?: Date;
 }

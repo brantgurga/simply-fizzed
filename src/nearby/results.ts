@@ -123,15 +123,39 @@ export function parseAvailability(data: unknown): Availability | undefined {
   ) {
     return undefined;
   }
-  return { locationId, sodaId, form, sodaName, sodaBrand, sodaFlavor };
+  const createdBy = optionalStringField(data, "createdBy");
+  const createdByName = optionalStringField(data, "createdByName");
+  const createdAt = parseTimestamp(data["createdAt"]);
+  const updatedBy = optionalStringField(data, "updatedBy");
+  const updatedByName = optionalStringField(data, "updatedByName");
+  const updatedAt = parseTimestamp(data["updatedAt"]);
+  return {
+    locationId,
+    sodaId,
+    form,
+    sodaName,
+    sodaBrand,
+    sodaFlavor,
+    ...(createdBy === undefined ? {} : { createdBy }),
+    ...(createdByName === undefined ? {} : { createdByName }),
+    ...(createdAt === undefined ? {} : { createdAt }),
+    ...(updatedBy === undefined ? {} : { updatedBy }),
+    ...(updatedByName === undefined ? {} : { updatedByName }),
+    ...(updatedAt === undefined ? {} : { updatedAt }),
+  };
 }
 
-/** Group availability records by their `locationId`. */
+/** Group availability records by location, ignoring duplicate soda/form tuples. */
 export function groupAvailabilityByLocation(
   items: readonly Availability[],
 ): Map<string, Availability[]> {
   const byLocation = new Map<string, Availability[]>();
+  const identities = new Set<string>();
   for (const item of items) {
+    const identity = JSON.stringify([item.locationId, item.sodaId, item.form]);
+    if (identities.has(identity)) continue;
+    identities.add(identity);
+
     const existing = byLocation.get(item.locationId);
     if (existing === undefined) {
       byLocation.set(item.locationId, [item]);
@@ -154,7 +178,11 @@ const FORM_PHRASES: Record<SodaForm, string> = {
  * cans" or "Tim's Root Beer on draft".
  */
 export function formatSodaAvailability(item: Availability): string {
-  return `${item.sodaBrand} ${item.sodaName} ${FORM_PHRASES[item.form]}`;
+  const flavor =
+    item.sodaName.localeCompare(item.sodaFlavor, undefined, { sensitivity: "base" }) === 0
+      ? ""
+      : ` (${item.sodaFlavor})`;
+  return `${item.sodaBrand} ${item.sodaName}${flavor} ${FORM_PHRASES[item.form]}`;
 }
 
 /** Format an address as a single line: "street, city, state postalCode". */

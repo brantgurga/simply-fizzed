@@ -101,6 +101,7 @@ describe("App", () => {
     auth.addLocation.mockReset();
     auth.addLocation.mockResolvedValue(undefined);
     window.localStorage.clear();
+    window.history.replaceState(null, "", "#/");
   });
 
   it("provides accessible root beer palettes selected by the device color scheme", () => {

@@ -2,8 +2,8 @@ rules_version = "2";
 
 // Firestore security rules for location-based soda discovery. Search data is
 // public, while signed-in fans may create strictly validated, attributed
-// locations. Existing contributions cannot be changed or deleted from the
-// client; moderation is handled separately.
+// locations and availability. Existing contributions cannot be changed or
+// deleted from the client; moderation is handled separately.
 service cloud.firestore {
   match /databases/{database}/documents {
     function isNonEmptyString(value, maxLength) {
@@ -36,6 +36,33 @@ service cloud.firestore {
         && geo.lng <= 180;
     }
 
+    function isValidAvailability(data) {
+      return data.keys().hasOnly([
+          "locationId", "sodaId", "form",
+          "sodaName", "sodaBrand", "sodaFlavor",
+          "createdBy", "createdByName", "createdAt",
+          "updatedBy", "updatedByName", "updatedAt"
+        ])
+        && isNonEmptyString(data.locationId, 1500)
+        && isNonEmptyString(data.sodaId, 1500)
+        && data.form in ["draft", "can", "bottle"]
+        && isNonEmptyString(data.sodaName, 200)
+        && isNonEmptyString(data.sodaBrand, 200)
+        && isNonEmptyString(data.sodaFlavor, 200)
+        && data.createdBy == request.auth.uid
+        && isValidAttributionName(data.createdByName)
+        && data.createdAt == request.time
+        && data.updatedBy == request.auth.uid
+        && isValidAttributionName(data.updatedByName)
+        && data.updatedByName == data.createdByName
+        && data.updatedAt == request.time
+        && exists(/databases/$(database)/documents/locations/$(data.locationId))
+        && exists(/databases/$(database)/documents/sodas/$(data.sodaId))
+        && data.sodaName == get(/databases/$(database)/documents/sodas/$(data.sodaId)).data.name
+        && data.sodaBrand == get(/databases/$(database)/documents/sodas/$(data.sodaId)).data.brand
+        && data.sodaFlavor == get(/databases/$(database)/documents/sodas/$(data.sodaId)).data.flavor;
+    }
+
     match /locations/{locationId} {
       allow read: if true;
       allow create: if request.auth != null
@@ -65,7 +92,14 @@ service cloud.firestore {
 
     match /availability/{availabilityId} {
       allow read: if true;
-      allow write: if false;
+      allow create: if request.auth != null
+        && request.resource.data.locationId.matches("[^$]+")
+        && request.resource.data.sodaId.matches("[^$]+")
+        && availabilityId == request.resource.data.locationId
+          + "$" + request.resource.data.sodaId
+          + "$" + request.resource.data.form
+        && isValidAvailability(request.resource.data);
+      allow update, delete: if false;
     }
 
     match /{document=**} {

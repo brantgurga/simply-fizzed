@@ -16,7 +16,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { readFile } from "node:fs/promises";
-import { afterAll, afterEach, beforeAll, describe, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, it } from "vitest";
 
 const PROJECT_ID = "demo-simply-fizzed";
 const USER_ID = "rules-test-user";
@@ -43,6 +43,52 @@ function validLocation(overrides: Record<string, unknown> = {}): Record<string, 
     updatedAt: serverTimestamp(),
     ...overrides,
   };
+}
+
+const validSoda = {
+  name: "Cola",
+  brand: "Coca-Cola",
+  flavor: "Original",
+  aliases: ["Coke"],
+};
+
+function validAvailability(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    locationId: "existing-location",
+    sodaId: "existing-soda",
+    form: "can",
+    sodaName: validSoda.name,
+    sodaBrand: validSoda.brand,
+    sodaFlavor: validSoda.flavor,
+    createdBy: USER_ID,
+    createdByName: "Rules Test Fan",
+    createdAt: serverTimestamp(),
+    updatedBy: USER_ID,
+    updatedByName: "Rules Test Fan",
+    updatedAt: serverTimestamp(),
+    ...overrides,
+  };
+}
+
+function canonicalAvailabilityId(availability: Record<string, unknown>): string {
+  const locationId =
+    typeof availability["locationId"] === "string"
+      ? availability["locationId"]
+      : "invalid-location";
+  const sodaId =
+    typeof availability["sodaId"] === "string" ? availability["sodaId"] : "invalid-soda";
+  const form = typeof availability["form"] === "string" ? availability["form"] : "invalid-form";
+  return `${locationId}$${sodaId}$${form}`;
+}
+
+async function seedAvailabilityReferences(): Promise<void> {
+  await testEnvironment.withSecurityRulesDisabled(async (context) => {
+    const database = context.firestore();
+    await Promise.all([
+      setDoc(doc(database, "locations", "existing-location"), validLocation()),
+      setDoc(doc(database, "sodas", "existing-soda"), validSoda),
+    ]);
+  });
 }
 
 beforeAll(async () => {
@@ -184,21 +230,102 @@ describe("immutable locations", () => {
   });
 });
 
-describe("protected collections and unmatched paths", () => {
-  it.each(["sodas", "availability"])(
-    "denies unauthenticated and authenticated writes to %s",
-    async (collectionName) => {
-      const unauthenticated = testEnvironment.unauthenticatedContext().firestore();
-      const authenticated = testEnvironment.authenticatedContext(USER_ID).firestore();
+describe("availability creation", () => {
+  beforeEach(seedAvailabilityReferences);
 
-      await assertFails(
-        setDoc(doc(unauthenticated, collectionName, "new-document"), { name: "Cola" }),
-      );
-      await assertFails(
-        setDoc(doc(authenticated, collectionName, "new-document"), { name: "Cola" }),
-      );
-    },
-  );
+  it("allows an authenticated exact, attributed, server-timestamped record", async () => {
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+
+    await assertSucceeds(
+      setDoc(
+        doc(database, "availability", "existing-location$existing-soda$can"),
+        validAvailability(),
+      ),
+    );
+  });
+
+  it("denies unauthenticated creation", async () => {
+    const database = testEnvironment.unauthenticatedContext().firestore();
+
+    await assertFails(
+      setDoc(
+        doc(database, "availability", "existing-location$existing-soda$can"),
+        validAvailability(),
+      ),
+    );
+  });
+
+  it("denies a duplicate tuple under a non-canonical document ID", async () => {
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+
+    await assertFails(setDoc(doc(database, "availability", "duplicate-copy"), validAvailability()));
+  });
+
+  it("denies referenced IDs containing the reserved separator", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "locations", "location$one"), validLocation());
+    });
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+
+    await assertFails(
+      setDoc(
+        doc(database, "availability", "location$one$existing-soda$can"),
+        validAvailability({ locationId: "location$one" }),
+      ),
+    );
+  });
+
+  it.each([
+    ["an unsupported form", { form: "case" }],
+    ["an incorrect field type", { locationId: 42 }],
+    ["forged creator attribution", { createdBy: "another-user" }],
+    ["forged updater attribution", { updatedBy: "another-user" }],
+    ["mismatched attribution names", { updatedByName: "Another Fan" }],
+    ["a blank attribution name", { createdByName: "   \t" }],
+    ["a client timestamp", { createdAt: Timestamp.fromMillis(0) }],
+    ["a missing timestamp", { updatedAt: undefined }],
+    ["an unexpected field", { notes: "sale" }],
+    ["a mismatched soda name", { sodaName: "Diet Cola" }],
+    ["a mismatched soda brand", { sodaBrand: "Other" }],
+    ["a mismatched soda flavor", { sodaFlavor: "Cherry" }],
+    ["a missing location", { locationId: "missing-location" }],
+    ["a missing soda", { sodaId: "missing-soda" }],
+  ])("denies %s", async (_description, overrides) => {
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const availability = validAvailability(overrides);
+    for (const [key, value] of Object.entries(availability)) {
+      if (value === undefined) delete availability[key];
+    }
+
+    await assertFails(
+      setDoc(doc(database, "availability", canonicalAvailabilityId(availability)), availability),
+    );
+  });
+
+  it.each(["update", "delete"])("denies %s", async (operation) => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "availability", "existing"), validAvailability());
+    });
+    const reference = doc(
+      testEnvironment.authenticatedContext(USER_ID).firestore(),
+      "availability",
+      "existing",
+    );
+    const request =
+      operation === "update" ? updateDoc(reference, { form: "bottle" }) : deleteDoc(reference);
+
+    await assertFails(request);
+  });
+});
+
+describe("protected collections and unmatched paths", () => {
+  it("denies unauthenticated and authenticated soda writes", async () => {
+    const unauthenticated = testEnvironment.unauthenticatedContext().firestore();
+    const authenticated = testEnvironment.authenticatedContext(USER_ID).firestore();
+
+    await assertFails(setDoc(doc(unauthenticated, "sodas", "new-document"), { name: "Cola" }));
+    await assertFails(setDoc(doc(authenticated, "sodas", "new-document"), { name: "Cola" }));
+  });
 
   it.each(["private/document", "locations/location/private/document"])(
     "denies reads and writes to unmatched path %s",

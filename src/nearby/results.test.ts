@@ -94,8 +94,31 @@ describe("parseLocation", () => {
 });
 
 describe("parseAvailability", () => {
-  it("parses a valid document", () => {
+  it("parses a valid legacy document", () => {
     expect(parseAvailability(validAvailability)).toEqual(validAvailability);
+  });
+
+  it("parses optional contribution attribution", () => {
+    const timestamp = new Date("2026-09-22T12:00:00Z");
+    expect(
+      parseAvailability({
+        ...validAvailability,
+        createdBy: "fan-123",
+        createdByName: "Soda Fan",
+        createdAt: { toDate: () => timestamp },
+        updatedBy: "fan-123",
+        updatedByName: "Soda Fan",
+        updatedAt: { toDate: () => timestamp },
+      }),
+    ).toEqual({
+      ...validAvailability,
+      createdBy: "fan-123",
+      createdByName: "Soda Fan",
+      createdAt: timestamp,
+      updatedBy: "fan-123",
+      updatedByName: "Soda Fan",
+      updatedAt: timestamp,
+    });
   });
 
   it("returns undefined for an unknown or missing form", () => {
@@ -128,6 +151,14 @@ describe("groupAvailabilityByLocation", () => {
     expect(grouped.get("loc-2")).toEqual([other]);
   });
 
+  it("ignores duplicate soda and form tuples, including legacy records", () => {
+    const duplicate = { ...validAvailability, createdBy: "another-fan" };
+
+    expect(groupAvailabilityByLocation([validAvailability, duplicate]).get("loc-1")).toEqual([
+      validAvailability,
+    ]);
+  });
+
   it("returns an empty map for empty input", () => {
     expect(groupAvailabilityByLocation([]).size).toBe(0);
   });
@@ -144,6 +175,9 @@ describe("formatSodaAvailability", () => {
     expect(formatSodaAvailability({ ...validAvailability, form: "draft" })).toBe(
       "Big K Root Beer on draft",
     );
+    expect(
+      formatSodaAvailability({ ...validAvailability, sodaName: "Cola", sodaFlavor: "Cherry" }),
+    ).toBe("Big K Cola (Cherry) in cans");
   });
 });
 
