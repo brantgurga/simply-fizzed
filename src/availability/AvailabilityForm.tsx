@@ -101,8 +101,10 @@ export default function AvailabilityForm({
       <Autocomplete
         options={catalog}
         value={soda}
+        disabled={saving}
         onChange={(_event, value) => setSoda(value)}
         filterOptions={(_options, state) => rankSodas(catalog, state.inputValue)}
+        getOptionKey={(option) => option.id}
         getOptionLabel={formatSodaCatalogLabel}
         isOptionEqualToValue={(option, value) => option.id === value.id}
         renderInput={(parameters) => (
@@ -116,6 +118,7 @@ export default function AvailabilityForm({
           labelId="soda-form-label"
           label="Form"
           value={form}
+          disabled={saving}
           onChange={(event) => {
             const value = event.target.value;
             if (value === "draft" || value === "can" || value === "bottle") setForm(value);

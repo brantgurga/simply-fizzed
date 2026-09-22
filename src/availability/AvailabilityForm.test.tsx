@@ -42,6 +42,51 @@ describe("AvailabilityForm", () => {
     await waitFor(() => expect(onAdd).toHaveBeenCalledWith(catalog[1], "bottle"));
   });
 
+  it("keeps exact IDs distinct when catalog labels are identical", async () => {
+    const user = userEvent.setup();
+    const onAdd = vi.fn().mockResolvedValue(undefined);
+    const duplicateLabels = [
+      { id: "cola-one", brand: "Cola Co", name: "Cola", flavor: "Original" },
+      { id: "cola-two", brand: "Cola Co", name: "Cola", flavor: "Original" },
+    ];
+    render(
+      <AvailabilityForm onAdd={onAdd} loadCatalog={vi.fn().mockResolvedValue(duplicateLabels)} />,
+    );
+
+    const input = await screen.findByLabelText("Catalog soda");
+    await user.click(input);
+    const options = await screen.findAllByRole("option", {
+      name: "Cola Co Cola — Original",
+    });
+    expect(options).toHaveLength(2);
+    await user.click(options[1]!);
+    await user.click(screen.getByRole("button", { name: "Add soda" }));
+
+    await waitFor(() => expect(onAdd).toHaveBeenCalledWith(duplicateLabels[1], "can"));
+  });
+
+  it("locks the selection while an availability write is pending", async () => {
+    const user = userEvent.setup();
+    let finish: (() => void) | undefined;
+    const onAdd = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    render(<AvailabilityForm onAdd={onAdd} loadCatalog={vi.fn().mockResolvedValue(catalog)} />);
+
+    const input = await screen.findByLabelText("Catalog soda");
+    await user.click(input);
+    await user.click((await screen.findAllByRole("option"))[0]!);
+    await user.click(screen.getByRole("button", { name: "Add soda" }));
+
+    expect(input).toBeDisabled();
+    expect(screen.getByLabelText("Form")).toHaveAttribute("aria-disabled", "true");
+    finish?.();
+    await screen.findByText("Availability added.");
+  });
+
   it("requires an exact catalog selection", async () => {
     const user = userEvent.setup();
     const onAdd = vi.fn();
