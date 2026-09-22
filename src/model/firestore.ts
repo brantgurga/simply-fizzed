@@ -33,6 +33,12 @@ export interface Location {
   address: Address;
   geo: GeoPoint;
   geohash: string;
+  createdBy?: string;
+  createdByName?: string;
+  createdAt?: Date;
+  updatedBy?: string;
+  updatedByName?: string;
+  updatedAt?: Date;
 }
 
 /** A soda product. Stored under `sodas/{sodaId}`. */

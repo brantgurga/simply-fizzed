@@ -46,6 +46,22 @@ describe("NearbySearch", () => {
     expect(screen.getAllByText("Big K Root Beer in cans")).toHaveLength(2);
   });
 
+  it("styles missing attribution differently from a contributor named Unknown", async () => {
+    const attributed = nearby("loc-1", "Attributed Store", 2.3);
+    attributed.location.updatedAt = new Date("2026-09-19T15:30:00Z");
+    attributed.location.updatedByName = "Unknown";
+    const unattributed = nearby("loc-2", "Legacy Store", 3.1);
+
+    render(
+      <NearbySearch center={center} search={() => Promise.resolve([attributed, unattributed])} />,
+    );
+
+    await screen.findByRole("heading", { name: "Attributed Store" });
+    const unknownValues = screen.getAllByText("Unknown");
+    expect(unknownValues).toHaveLength(3);
+    expect(unknownValues.filter((value) => value.style.fontStyle === "italic")).toHaveLength(2);
+  });
+
   it("shows an empty message when nothing is within range", async () => {
     render(<NearbySearch center={center} search={() => Promise.resolve([])} />);
 
