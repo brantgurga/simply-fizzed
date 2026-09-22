@@ -21,6 +21,25 @@ function stringField(value: Record<string, unknown>, key: string): string | unde
   return typeof field === "string" ? field : undefined;
 }
 
+/** Return a non-blank optional string field, otherwise `undefined`. */
+function optionalStringField(value: Record<string, unknown>, key: string): string | undefined {
+  const field = stringField(value, key);
+  return field === undefined || field.trim().length === 0 ? undefined : field;
+}
+
+/** Convert a Firestore timestamp-like value to a valid `Date`. */
+function parseTimestamp(value: unknown): Date | undefined {
+  if (!isRecord(value)) return undefined;
+  const toDate = value["toDate"];
+  if (typeof toDate !== "function") return undefined;
+  try {
+    const date: unknown = toDate.call(value);
+    return date instanceof Date && !Number.isNaN(date.valueOf()) ? date : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Parse an `address` sub-object, returning `undefined` when malformed. */
 function parseAddress(value: unknown): Address | undefined {
   if (!isRecord(value)) return undefined;
@@ -54,7 +73,27 @@ export function parseLocation(id: string, data: unknown): LocationDoc | undefine
   if (!isRecord(geo) || typeof geo["lat"] !== "number" || typeof geo["lng"] !== "number") {
     return undefined;
   }
-  return { id, name, address, geo: { lat: geo["lat"], lng: geo["lng"] }, geohash };
+
+  const createdBy = optionalStringField(data, "createdBy");
+  const createdByName = optionalStringField(data, "createdByName");
+  const createdAt = parseTimestamp(data["createdAt"]);
+  const updatedBy = optionalStringField(data, "updatedBy");
+  const updatedByName = optionalStringField(data, "updatedByName");
+  const updatedAt = parseTimestamp(data["updatedAt"]);
+
+  return {
+    id,
+    name,
+    address,
+    geo: { lat: geo["lat"], lng: geo["lng"] },
+    geohash,
+    ...(createdBy === undefined ? {} : { createdBy }),
+    ...(createdByName === undefined ? {} : { createdByName }),
+    ...(createdAt === undefined ? {} : { createdAt }),
+    ...(updatedBy === undefined ? {} : { updatedBy }),
+    ...(updatedByName === undefined ? {} : { updatedByName }),
+    ...(updatedAt === undefined ? {} : { updatedAt }),
+  };
 }
 
 /** True when `value` is one of the known soda forms. */
@@ -121,4 +160,12 @@ export function formatSodaAvailability(item: Availability): string {
 /** Format an address as a single line: "street, city, state postalCode". */
 export function formatAddress(address: Address): string {
   return `${address.street}, ${address.city}, ${address.state} ${address.postalCode}`;
+}
+
+/** Format a location update timestamp using the visitor's locale. */
+export function formatLocationUpdatedAt(updatedAt: Date, locales?: Intl.LocalesArgument): string {
+  return new Intl.DateTimeFormat(locales, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(updatedAt);
 }

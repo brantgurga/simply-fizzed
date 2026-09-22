@@ -11,10 +11,15 @@ export interface NewLocationInput {
   postalCode: string;
 }
 
+export interface LocationContributor {
+  id: string;
+  name?: string;
+}
+
 export async function addLocation(
   db: Firestore,
   geocoder: Geocoder,
-  userId: string,
+  contributor: LocationContributor,
   input: NewLocationInput,
 ): Promise<void> {
   const address = {
@@ -27,12 +32,19 @@ export async function addLocation(
     `${address.street}, ${address.city}, ${address.state} ${address.postalCode}`,
   );
 
+  const timestamp = serverTimestamp();
+  const contributorName = contributor.name?.trim() || "";
+
   await addDoc(collection(db, COLLECTIONS.locations), {
     name: input.name.trim(),
     address,
     geo,
     geohash: geohashForLocation([geo.lat, geo.lng]),
-    createdBy: userId,
-    createdAt: serverTimestamp(),
+    createdBy: contributor.id,
+    createdByName: contributorName,
+    createdAt: timestamp,
+    updatedBy: contributor.id,
+    updatedByName: contributorName,
+    updatedAt: timestamp,
   });
 }

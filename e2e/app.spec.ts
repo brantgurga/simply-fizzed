@@ -103,6 +103,7 @@ test.describe("App", () => {
       );
       const db = getFirestore(app);
       connectFirestoreEmulator(db, "127.0.0.1", 8080);
+      const contributorName = credential.user.email ?? "Rules test fan";
       const validLocation = {
         name: validName,
         address: {
@@ -114,7 +115,11 @@ test.describe("App", () => {
         geo: { lat: 39.7684, lng: -86.1581 },
         geohash: "dp4dpr",
         createdBy: credential.user.uid,
+        createdByName: contributorName,
         createdAt: serverTimestamp(),
+        updatedBy: credential.user.uid,
+        updatedByName: contributorName,
+        updatedAt: serverTimestamp(),
       };
 
       await setDoc(doc(db, "locations", `valid-${testInfo.retry.toString()}`), validLocation);

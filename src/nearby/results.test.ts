@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Availability } from "../model/firestore";
 import {
   formatAddress,
+  formatLocationUpdatedAt,
   formatSodaAvailability,
   groupAvailabilityByLocation,
   parseAvailability,
@@ -27,6 +28,44 @@ const validAvailability: Availability = {
 describe("parseLocation", () => {
   it("parses a valid document and attaches the id", () => {
     expect(parseLocation("loc-1", validLocation)).toEqual({ id: "loc-1", ...validLocation });
+  });
+
+  it("parses optional attribution and Firestore timestamps", () => {
+    const createdAt = new Date("2026-09-18T12:00:00Z");
+    const updatedAt = new Date("2026-09-19T15:30:00Z");
+
+    expect(
+      parseLocation("loc-1", {
+        ...validLocation,
+        createdBy: "fan-123",
+        createdByName: "First Fan",
+        createdAt: { toDate: () => createdAt },
+        updatedBy: "fan-456",
+        updatedByName: "Unknown",
+        updatedAt: { toDate: () => updatedAt },
+      }),
+    ).toEqual({
+      id: "loc-1",
+      ...validLocation,
+      createdBy: "fan-123",
+      createdByName: "First Fan",
+      createdAt,
+      updatedBy: "fan-456",
+      updatedByName: "Unknown",
+      updatedAt,
+    });
+  });
+
+  it("drops missing or malformed optional attribution", () => {
+    expect(
+      parseLocation("loc-1", {
+        ...validLocation,
+        createdBy: 123,
+        createdByName: "   ",
+        createdAt: { toDate: () => "not-a-date" },
+        updatedAt: { toDate: () => new Date(Number.NaN) },
+      }),
+    ).toEqual({ id: "loc-1", ...validLocation });
   });
 
   it("returns undefined when a required field is missing or mistyped", () => {
@@ -111,5 +150,13 @@ describe("formatSodaAvailability", () => {
 describe("formatAddress", () => {
   it("renders a single line", () => {
     expect(formatAddress(validLocation.address)).toBe("1 Main St, Kansas City, MO 64106");
+  });
+});
+
+describe("formatLocationUpdatedAt", () => {
+  it("includes a localized date and time", () => {
+    const formatted = formatLocationUpdatedAt(new Date(2026, 8, 19, 15, 30), "en-US");
+
+    expect(formatted).toBe("Sep 19, 2026, 3:30 PM");
   });
 });

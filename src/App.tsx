@@ -138,7 +138,13 @@ function App() {
   const saveLocation = useCallback(
     async (input: NewLocationInput) => {
       if (user === null) throw new Error("Authentication is required to add a location");
-      await addLocation(db, geocoder, user.uid, input);
+      const contributorName = user.displayName?.trim() || user.email?.trim();
+      await addLocation(
+        db,
+        geocoder,
+        { id: user.uid, ...(contributorName === undefined ? {} : { name: contributorName }) },
+        input,
+      );
     },
     [geocoder, user],
   );

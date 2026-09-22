@@ -36,7 +36,11 @@ function validLocation(overrides: Record<string, unknown> = {}): Record<string, 
     geo: { lat: 39.7684, lng: -86.1581 },
     geohash: "dp4dpr",
     createdBy: USER_ID,
+    createdByName: "Rules Test Fan",
     createdAt: serverTimestamp(),
+    updatedBy: USER_ID,
+    updatedByName: "Rules Test Fan",
+    updatedAt: serverTimestamp(),
     ...overrides,
   };
 }
@@ -81,6 +85,13 @@ describe("location creation", () => {
     await assertSucceeds(setDoc(doc(database, "locations", "valid"), validLocation()));
   });
 
+  it("allows an empty sentinel when no friendly name is available", async () => {
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const location = validLocation({ createdByName: "", updatedByName: "" });
+
+    await assertSucceeds(setDoc(doc(database, "locations", "unknown-friendly-name"), location));
+  });
+
   it("allows representative maximum string and coordinate boundaries", async () => {
     const database = testEnvironment.authenticatedContext(USER_ID).firestore();
     const boundaryLocation = validLocation({
@@ -93,19 +104,30 @@ describe("location creation", () => {
       },
       geo: { lat: 90, lng: -180 },
       geohash: "G".repeat(20),
+      createdByName: "C".repeat(320),
+      updatedByName: "C".repeat(320),
     });
 
     await assertSucceeds(setDoc(doc(database, "locations", "boundaries"), boundaryLocation));
   });
 
   it.each([
-    ["forged attribution", { createdBy: "another-user" }],
+    ["forged creator attribution", { createdBy: "another-user" }],
+    ["forged updater attribution", { updatedBy: "another-user" }],
+    ["missing creator name", { createdByName: undefined }],
+    ["missing updater name", { updatedByName: undefined }],
+    ["mismatched updater name", { updatedByName: "Another Fan" }],
     ["missing creation timestamp", { createdAt: undefined }],
     ["client-generated creation timestamp", { createdAt: Timestamp.fromMillis(0) }],
+    ["missing update timestamp", { updatedAt: undefined }],
+    ["client-generated update timestamp", { updatedAt: Timestamp.fromMillis(0) }],
   ])("denies %s", async (_description, overrides) => {
     const database = testEnvironment.authenticatedContext(USER_ID).firestore();
     const location = validLocation(overrides);
+    if (location["createdByName"] === undefined) delete location["createdByName"];
+    if (location["updatedByName"] === undefined) delete location["updatedByName"];
     if (location["createdAt"] === undefined) delete location["createdAt"];
+    if (location["updatedAt"] === undefined) delete location["updatedAt"];
 
     await assertFails(setDoc(doc(database, "locations", "invalid-attribution"), location));
   });
@@ -116,6 +138,11 @@ describe("location creation", () => {
     ["incorrect field type", { name: 42 }],
     ["blank string", { name: "   \t" }],
     ["oversized string", { name: "N".repeat(201) }],
+    ["blank attribution names", { createdByName: "   \t", updatedByName: "   \t" }],
+    [
+      "oversized attribution names",
+      { createdByName: "C".repeat(321), updatedByName: "C".repeat(321) },
+    ],
     ["address missing a field", { address: { street: "1 Main", city: "Indy", state: "IN" } }],
     [
       "address with an unexpected field",

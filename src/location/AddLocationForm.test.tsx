@@ -33,13 +33,18 @@ describe("addLocation", () => {
     const geocode = vi.fn().mockResolvedValue({ lat: 39.1, lng: -94.6 });
     const geocoder: Geocoder = { geocode };
 
-    await addLocation(db, geocoder, "fan-123", {
-      name: "  Corner Shop  ",
-      street: "  1 Main St ",
-      city: " Kansas City ",
-      state: " mo ",
-      postalCode: " 64106 ",
-    });
+    await addLocation(
+      db,
+      geocoder,
+      { id: "fan-123", name: "  Soda Fan  " },
+      {
+        name: "  Corner Shop  ",
+        street: "  1 Main St ",
+        city: " Kansas City ",
+        state: " mo ",
+        postalCode: " 64106 ",
+      },
+    );
 
     expect(geocode).toHaveBeenCalledWith("1 Main St, Kansas City, MO 64106");
     expect(firebase.collection).toHaveBeenCalledWith(db, "locations");
@@ -54,8 +59,34 @@ describe("addLocation", () => {
       geo: { lat: 39.1, lng: -94.6 },
       geohash: "9yzgcjb0dz",
       createdBy: "fan-123",
+      createdByName: "Soda Fan",
       createdAt: "server-time",
+      updatedBy: "fan-123",
+      updatedByName: "Soda Fan",
+      updatedAt: "server-time",
     });
+  });
+
+  it("stores an empty sentinel when the contributor does not have a friendly name", async () => {
+    const geocoder: Geocoder = { geocode: vi.fn().mockResolvedValue({ lat: 39.1, lng: -94.6 }) };
+
+    await addLocation(
+      db,
+      geocoder,
+      { id: "fan-123" },
+      {
+        name: "Corner Shop",
+        street: "1 Main St",
+        city: "Kansas City",
+        state: "MO",
+        postalCode: "64106",
+      },
+    );
+
+    expect(firebase.addDoc).toHaveBeenCalledWith(
+      "locations-ref",
+      expect.objectContaining({ createdByName: "", updatedByName: "" }),
+    );
   });
 });
 
