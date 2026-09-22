@@ -155,9 +155,8 @@ describe("formatAddress", () => {
 
 describe("formatLocationUpdatedAt", () => {
   it("includes a localized date and time", () => {
-    const formatted = formatLocationUpdatedAt(new Date(2026, 8, 19, 15, 30));
+    const formatted = formatLocationUpdatedAt(new Date(2026, 8, 19, 15, 30), "en-US");
 
-    expect(formatted).toMatch(/2026/);
-    expect(formatted).toMatch(/3:30|15:30/);
+    expect(formatted).toBe("Sep 19, 2026, 3:30 PM");
   });
 });

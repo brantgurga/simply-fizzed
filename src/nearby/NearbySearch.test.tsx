@@ -5,6 +5,10 @@ import NearbySearch, { type NearbySearcher } from "./NearbySearch";
 
 const center = { lat: 39.0997, lng: -94.5786 };
 
+function expectUnknownAttributionCount(values: readonly HTMLElement[], count: number): void {
+  expect(values.filter((value) => value.style.fontStyle === "italic")).toHaveLength(count);
+}
+
 function nearby(id: string, name: string, distanceMiles: number): NearbyLocation {
   return {
     location: {
@@ -59,7 +63,7 @@ describe("NearbySearch", () => {
     await screen.findByRole("heading", { name: "Attributed Store" });
     const unknownValues = screen.getAllByText("Unknown");
     expect(unknownValues).toHaveLength(3);
-    expect(unknownValues.filter((value) => value.style.fontStyle === "italic")).toHaveLength(2);
+    expectUnknownAttributionCount(unknownValues, 2);
   });
 
   it("shows an empty message when nothing is within range", async () => {

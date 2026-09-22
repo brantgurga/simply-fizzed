@@ -163,8 +163,8 @@ export function formatAddress(address: Address): string {
 }
 
 /** Format a location update timestamp using the visitor's locale. */
-export function formatLocationUpdatedAt(updatedAt: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
+export function formatLocationUpdatedAt(updatedAt: Date, locales?: Intl.LocalesArgument): string {
+  return new Intl.DateTimeFormat(locales, {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(updatedAt);
