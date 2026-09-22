@@ -138,8 +138,11 @@ describe("location creation", () => {
     ["incorrect field type", { name: 42 }],
     ["blank string", { name: "   \t" }],
     ["oversized string", { name: "N".repeat(201) }],
-    ["blank updater name", { updatedByName: "   \t" }],
-    ["oversized creator name", { createdByName: "C".repeat(321) }],
+    ["blank attribution names", { createdByName: "   \t", updatedByName: "   \t" }],
+    [
+      "oversized attribution names",
+      { createdByName: "C".repeat(321), updatedByName: "C".repeat(321) },
+    ],
     ["address missing a field", { address: { street: "1 Main", city: "Indy", state: "IN" } }],
     [
       "address with an unexpected field",
