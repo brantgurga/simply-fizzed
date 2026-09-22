@@ -5,6 +5,11 @@ export interface SodaDocument extends Soda {
   id: string;
 }
 
+/** Whether a document ID can participate in canonical availability IDs. */
+export function isAvailabilityReferenceId(id: string): boolean {
+  return !id.includes("$");
+}
+
 export type DocumentLoad<T> =
   | { status: "found"; value: T }
   | { status: "missing" }
@@ -51,6 +56,7 @@ export async function loadSoda(db: Firestore, id: string): Promise<DocumentLoad<
 export async function loadSodaCatalog(db: Firestore): Promise<SodaDocument[]> {
   const snapshot = await getDocs(collection(db, COLLECTIONS.sodas));
   return snapshot.docs.flatMap((item) => {
+    if (!isAvailabilityReferenceId(item.id)) return [];
     const soda = parseSoda(item.id, item.data());
     return soda === undefined ? [] : [soda];
   });

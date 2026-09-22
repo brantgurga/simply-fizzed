@@ -1,5 +1,23 @@
-import { describe, expect, it } from "vitest";
-import { normalizeSodaSearch, parseSoda, rankSodas, type SodaDocument } from "./sodas";
+import type { Firestore } from "firebase/firestore";
+import { describe, expect, it, vi } from "vitest";
+
+const firebase = vi.hoisted(() => ({
+  collection: vi.fn(),
+  doc: vi.fn(),
+  getDoc: vi.fn(),
+  getDocs: vi.fn(),
+}));
+
+vi.mock("firebase/firestore", () => firebase);
+
+import {
+  isAvailabilityReferenceId,
+  loadSodaCatalog,
+  normalizeSodaSearch,
+  parseSoda,
+  rankSodas,
+  type SodaDocument,
+} from "./sodas";
 
 const sodas: SodaDocument[] = [
   {
@@ -24,6 +42,33 @@ const sodas: SodaDocument[] = [
     aliases: ["Coke", "Pepsi"],
   },
 ];
+
+describe("availability catalog IDs", () => {
+  it("reserves the canonical tuple separator", () => {
+    expect(isAvailabilityReferenceId("coca-cola-zero")).toBe(true);
+    expect(isAvailabilityReferenceId("coca$cola")).toBe(false);
+  });
+
+  it("excludes catalog entries that cannot be referenced by availability", async () => {
+    firebase.getDocs.mockResolvedValue({
+      docs: [
+        {
+          id: "coca-cola",
+          data: () => ({ brand: "Coca-Cola", name: "Cola", flavor: "Original" }),
+        },
+        {
+          id: "coca$cola",
+          data: () => ({ brand: "Coca-Cola", name: "Cola", flavor: "Original" }),
+        },
+      ],
+    });
+
+    const db = vi.fn<() => Firestore>()();
+    await expect(loadSodaCatalog(db)).resolves.toEqual([
+      { id: "coca-cola", brand: "Coca-Cola", name: "Cola", flavor: "Original" },
+    ]);
+  });
+});
 
 describe("parseSoda", () => {
   it("parses optional aliases", () => {

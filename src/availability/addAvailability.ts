@@ -1,6 +1,6 @@
 import { doc, type Firestore, runTransaction, serverTimestamp } from "firebase/firestore";
 import { COLLECTIONS, type Availability, type SodaForm } from "../model/firestore";
-import { parseSoda } from "../soda/sodas";
+import { isAvailabilityReferenceId, parseSoda } from "../soda/sodas";
 
 export interface AvailabilityContributor {
   id: string;
@@ -16,7 +16,7 @@ export class DuplicateAvailabilityError extends Error {
 
 /** Build the canonical ID enforced by Firestore rules for one exact availability tuple. */
 export function availabilityDocumentId(locationId: string, sodaId: string, form: SodaForm): string {
-  if (locationId.includes("$") || sodaId.includes("$")) {
+  if (!isAvailabilityReferenceId(locationId) || !isAvailabilityReferenceId(sodaId)) {
     throw new Error("Catalog and location IDs cannot contain '$'.");
   }
   return `${locationId}$${sodaId}$${form}`;
