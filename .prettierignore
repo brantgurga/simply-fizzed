@@ -1,0 +1,2 @@
+# Vendored schemas retain upstream formatting and modification history.
+.v8r/schemas/*.json
