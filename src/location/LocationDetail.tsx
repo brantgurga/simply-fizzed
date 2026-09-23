@@ -8,20 +8,27 @@ import ListItem from "@mui/material/ListItem";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import type { User } from "firebase/auth";
-import { addAvailability, DuplicateAvailabilityError } from "../availability/addAvailability";
+import {
+  addAvailability,
+  addNewSodaAvailability,
+  DuplicateAvailabilityError,
+  type NewSodaAvailability,
+} from "../availability/addAvailability";
 import AvailabilityForm from "../availability/AvailabilityForm";
 import { publicContributorName } from "../contributor";
 import { db } from "../firebase";
-import type { Availability, SodaForm } from "../model/firestore";
+import type { Availability, Soda, SodaForm } from "../model/firestore";
 import { formatAddress, formatSodaAvailability } from "../nearby/results";
 import { sodaRoute } from "../routes";
 import { loadSodaCatalog, type DocumentLoad, type SodaDocument } from "../soda/sodas";
 import type { LocationDoc } from "../nearby/distance";
 import { loadLocation, loadLocationAvailability, type AvailabilityLoad } from "./locationDetail";
 
+type ContributionUser = Pick<User, "uid" | "displayName" | "email">;
+
 interface LocationDetailProps {
   locationId: string;
-  user: User | null;
+  user: ContributionUser | null;
   onSignIn: () => void;
   locationLoader?: (id: string) => Promise<DocumentLoad<LocationDoc>>;
   availabilityLoader?: (id: string) => Promise<AvailabilityLoad>;
@@ -30,8 +37,14 @@ interface LocationDetailProps {
     locationId: string,
     sodaId: string,
     form: SodaForm,
-    user: User,
+    user: ContributionUser,
   ) => Promise<Availability>;
+  newSodaAvailabilityWriter?: (
+    locationId: string,
+    soda: Soda,
+    form: SodaForm,
+    user: ContributionUser,
+  ) => Promise<NewSodaAvailability>;
 }
 
 type State =
@@ -46,18 +59,24 @@ type State =
 const defaultLocationLoader = (id: string) => loadLocation(db, id);
 const defaultAvailabilityLoader = (id: string) => loadLocationAvailability(db, id);
 const defaultCatalogLoader = () => loadSodaCatalog(db);
+const contributorFor = (user: ContributionUser) => {
+  const name = publicContributorName(user);
+  return { id: user.uid, ...(name === undefined ? {} : { name }) };
+};
+
 const defaultAvailabilityWriter = (
   locationId: string,
   sodaId: string,
   form: SodaForm,
-  user: User,
-) => {
-  const name = publicContributorName(user);
-  return addAvailability(db, locationId, sodaId, form, {
-    id: user.uid,
-    ...(name === undefined ? {} : { name }),
-  });
-};
+  user: ContributionUser,
+) => addAvailability(db, locationId, sodaId, form, contributorFor(user));
+
+const defaultNewSodaAvailabilityWriter = (
+  locationId: string,
+  soda: Soda,
+  form: SodaForm,
+  user: ContributionUser,
+) => addNewSodaAvailability(db, locationId, soda, form, contributorFor(user));
 
 export default function LocationDetail({
   locationId,
@@ -67,6 +86,7 @@ export default function LocationDetail({
   availabilityLoader = defaultAvailabilityLoader,
   catalogLoader = defaultCatalogLoader,
   availabilityWriter = defaultAvailabilityWriter,
+  newSodaAvailabilityWriter = defaultNewSodaAvailabilityWriter,
 }: LocationDetailProps) {
   const [state, setState] = useState<State>({ status: "loading" });
   const [request, setRequest] = useState({ locationId, locationLoader, availabilityLoader });
@@ -113,13 +133,22 @@ export default function LocationDetail({
   }
 
   const location = state.location.value;
-  const add = async (soda: SodaDocument, form: SodaForm) => {
+  const add = async (soda: SodaDocument | Soda, form: SodaForm) => {
     if (user === null) throw new Error("Sign in to contribute.");
-    if (state.availability.items.some((item) => item.sodaId === soda.id && item.form === form)) {
-      throw new DuplicateAvailabilityError();
+    let added: Availability;
+    let catalogSoda: SodaDocument;
+    if ("id" in soda) {
+      if (state.availability.items.some((item) => item.sodaId === soda.id && item.form === form)) {
+        throw new DuplicateAvailabilityError();
+      }
+      added = await availabilityWriter(locationId, soda.id, form, user);
+      catalogSoda = soda;
+    } else {
+      const result = await newSodaAvailabilityWriter(locationId, soda, form, user);
+      added = result.availability;
+      catalogSoda = result.soda;
     }
 
-    const added = await availabilityWriter(locationId, soda.id, form, user);
     setState((current) =>
       current.status === "ready" &&
       current.location.status === "found" &&
@@ -133,6 +162,7 @@ export default function LocationDetail({
           }
         : current,
     );
+    return catalogSoda;
   };
 
   return (

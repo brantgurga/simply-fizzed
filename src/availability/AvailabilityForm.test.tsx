@@ -76,7 +76,7 @@ describe("AvailabilityForm", () => {
     await user.type(input, " Zero");
     await user.click(screen.getByRole("button", { name: "Add soda" }));
 
-    expect(screen.getByText("Choose an exact soda from the catalog.")).toBeVisible();
+    expect(screen.getByText("Choose a catalog soda or add a new one.")).toBeVisible();
     expect(onAdd).not.toHaveBeenCalled();
   });
 
@@ -102,7 +102,39 @@ describe("AvailabilityForm", () => {
     await screen.findByText("Availability added.");
   });
 
-  it("requires an exact catalog selection", async () => {
+  it("creates an unmatched soda and reuses it for another form", async () => {
+    const user = userEvent.setup();
+    const created = {
+      id: "sprecher-root-beer",
+      brand: "Sprecher",
+      name: "Root Beer",
+      flavor: "Original",
+    };
+    const onAdd = vi.fn().mockResolvedValue(created);
+    render(<AvailabilityForm onAdd={onAdd} loadCatalog={vi.fn().mockResolvedValue([])} />);
+
+    const input = await screen.findByLabelText("Catalog soda");
+    await user.type(input, "Root Beer");
+    await user.click(screen.getByRole("button", { name: /add “root beer” as a new soda/i }));
+    await user.type(screen.getByLabelText("Brand"), " Sprecher ");
+    await user.click(screen.getByRole("button", { name: "Add soda" }));
+
+    await waitFor(() =>
+      expect(onAdd).toHaveBeenCalledWith(
+        { brand: "Sprecher", name: "Root Beer", flavor: "Original" },
+        "can",
+      ),
+    );
+    await user.click(await screen.findByLabelText("Catalog soda"));
+    await user.click(await screen.findByRole("option", { name: "Sprecher Root Beer — Original" }));
+    await user.click(screen.getByLabelText("Form"));
+    await user.click(screen.getByRole("option", { name: "Bottle" }));
+    await user.click(screen.getByRole("button", { name: "Add soda" }));
+
+    await waitFor(() => expect(onAdd).toHaveBeenLastCalledWith(created, "bottle"));
+  });
+
+  it("requires a catalog selection or new soda", async () => {
     const user = userEvent.setup();
     const onAdd = vi.fn();
     render(<AvailabilityForm onAdd={onAdd} loadCatalog={vi.fn().mockResolvedValue(catalog)} />);
@@ -110,7 +142,7 @@ describe("AvailabilityForm", () => {
     await screen.findByLabelText("Catalog soda");
     await user.click(screen.getByRole("button", { name: "Add soda" }));
 
-    expect(screen.getByText("Choose an exact soda from the catalog.")).toBeVisible();
+    expect(screen.getByText("Choose a catalog soda or add a new one.")).toBeVisible();
     expect(onAdd).not.toHaveBeenCalled();
   });
 });

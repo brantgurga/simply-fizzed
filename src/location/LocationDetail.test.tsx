@@ -51,6 +51,55 @@ describe("LocationDetail", () => {
     expect(onSignIn).toHaveBeenCalledOnce();
   });
 
+  it("adds a new soda and immediately lists its availability", async () => {
+    const interaction = userEvent.setup();
+    const signedInUser = { uid: "fan-123", displayName: "Soda Fan", email: null };
+    const soda = {
+      id: "sprecher-root-beer",
+      brand: "Sprecher",
+      name: "Root Beer",
+      flavor: "Original",
+    };
+    const newSodaAvailabilityWriter = vi.fn().mockResolvedValue({
+      soda,
+      availability: {
+        locationId: location.id,
+        sodaId: soda.id,
+        form: "can",
+        sodaName: soda.name,
+        sodaBrand: soda.brand,
+        sodaFlavor: soda.flavor,
+      },
+    });
+    render(
+      <LocationDetail
+        locationId={location.id}
+        user={signedInUser}
+        onSignIn={vi.fn()}
+        locationLoader={locationLoader}
+        availabilityLoader={vi.fn().mockResolvedValue({ items: [], malformedCount: 0 })}
+        catalogLoader={vi.fn().mockResolvedValue([])}
+        newSodaAvailabilityWriter={newSodaAvailabilityWriter}
+      />,
+    );
+
+    const input = await screen.findByLabelText("Catalog soda");
+    await interaction.type(input, "Root Beer");
+    await interaction.click(screen.getByRole("button", { name: /add “root beer” as a new soda/i }));
+    await interaction.type(screen.getByLabelText("Brand"), "Sprecher");
+    await interaction.click(screen.getByRole("button", { name: "Add soda" }));
+
+    expect(
+      await screen.findByRole("link", { name: "Sprecher Root Beer (Original) in cans" }),
+    ).toBeVisible();
+    expect(newSodaAvailabilityWriter).toHaveBeenCalledWith(
+      location.id,
+      { brand: "Sprecher", name: "Root Beer", flavor: "Original" },
+      "can",
+      signedInUser,
+    );
+  });
+
   it.each([
     ["missing", "could not be found"],
     ["malformed", "malformed data"],

@@ -14,6 +14,7 @@ import {
   setDoc,
   Timestamp,
   updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { readFile } from "node:fs/promises";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, it } from "vitest";
@@ -51,6 +52,21 @@ const validSoda = {
   flavor: "Original",
   aliases: ["Coke"],
 };
+
+function validNewSoda(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    name: "Root Beer",
+    brand: "Sprecher",
+    flavor: "Original",
+    createdBy: USER_ID,
+    createdByName: "Rules Test Fan",
+    createdAt: serverTimestamp(),
+    updatedBy: USER_ID,
+    updatedByName: "Rules Test Fan",
+    updatedAt: serverTimestamp(),
+    ...overrides,
+  };
+}
 
 function validAvailability(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -244,6 +260,23 @@ describe("availability creation", () => {
     );
   });
 
+  it("allows a new soda and its first availability in one atomic write", async () => {
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const batch = writeBatch(database);
+    batch.set(doc(database, "sodas", "new-soda"), validNewSoda());
+    batch.set(
+      doc(database, "availability", "existing-location$new-soda$draft"),
+      validAvailability({
+        sodaId: "new-soda",
+        form: "draft",
+        sodaName: "Root Beer",
+        sodaBrand: "Sprecher",
+      }),
+    );
+
+    await assertSucceeds(batch.commit());
+  });
+
   it("denies unauthenticated creation", async () => {
     const database = testEnvironment.unauthenticatedContext().firestore();
 
@@ -318,15 +351,41 @@ describe("availability creation", () => {
   });
 });
 
-describe("protected collections and unmatched paths", () => {
-  it("denies unauthenticated and authenticated soda writes", async () => {
+describe("soda creation and immutability", () => {
+  it("allows authenticated attributed creation", async () => {
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+
+    await assertSucceeds(setDoc(doc(database, "sodas", "new-document"), validNewSoda()));
+  });
+
+  it("denies unauthenticated or malformed creation", async () => {
     const unauthenticated = testEnvironment.unauthenticatedContext().firestore();
     const authenticated = testEnvironment.authenticatedContext(USER_ID).firestore();
 
-    await assertFails(setDoc(doc(unauthenticated, "sodas", "new-document"), { name: "Cola" }));
-    await assertFails(setDoc(doc(authenticated, "sodas", "new-document"), { name: "Cola" }));
+    await assertFails(setDoc(doc(unauthenticated, "sodas", "unauthenticated"), validNewSoda()));
+    await assertFails(
+      setDoc(doc(authenticated, "sodas", "malformed"), validNewSoda({ brand: " " })),
+    );
+    await assertFails(setDoc(doc(authenticated, "sodas", "invalid$id"), validNewSoda()));
   });
 
+  it.each(["update", "delete"])("denies %s", async (operation) => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "sodas", "existing"), validSoda);
+    });
+    const reference = doc(
+      testEnvironment.authenticatedContext(USER_ID).firestore(),
+      "sodas",
+      "existing",
+    );
+    const request =
+      operation === "update" ? updateDoc(reference, { flavor: "Cherry" }) : deleteDoc(reference);
+
+    await assertFails(request);
+  });
+});
+
+describe("protected unmatched paths", () => {
   it.each(["private/document", "locations/location/private/document"])(
     "denies reads and writes to unmatched path %s",
     async (path) => {
