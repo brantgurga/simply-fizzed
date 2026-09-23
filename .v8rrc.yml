@@ -1,35 +1,42 @@
-# v8r configuration: validate config files against their JSON Schemas.
+# v8r configuration: validate config files against vendored JSON Schemas.
 # Docs: https://chris48s.github.io/v8r/configuration/
 #
-# v8r resolves a schema for each file by filename via SchemaStore.org. Only
-# files that have a resolvable, clean public schema are matched here so that a
-# missing schema is never treated as a failure. The whole tsconfig* family is
-# matched by glob (not enumerated) so a newly added tsconfig is validated
-# automatically; every tsconfig maps to the TSConfig schema via the custom
-# catalog below, so the glob can never select a schema-less file.
-# v8r also validates YAML, so .github/dependabot.yml is checked against the
-# public Dependabot schema (dependabot-2.0.json) that SchemaStore resolves by
-# filename. Structural/duplicate-key linting of every JSON/JSONC file is handled
-# separately by Biome; the oxc tool configs (.oxlintrc.json, .oxfmtrc.json)
-# additionally carry a bundled "$schema" that their own tooling and editors
-# validate against, and firestore.indexes.json has no published schema, so
-# those are out of scope here.
+# Every matched file maps to a local schema so validation does not depend on
+# SchemaStore or another schema host being available. The vendored files retain
+# their upstream names under .v8r/schemas to make future refreshes traceable.
+# Structural/duplicate-key linting of JSON/JSONC remains Biome's responsibility.
 patterns:
   - package.json
   - firebase.json
   - tsconfig*.json
   - .github/dependabot.yml
 
-# A custom catalog is searched ahead of SchemaStore. TypeScript config files
-# permit JSONC comments, so match the whole tsconfig* family to the public
-# TSConfig schema and parse them with json5 (which allows comments) instead of
-# the strict JSON parser v8r would otherwise infer from the .json extension.
 customCatalog:
   schemas:
+    # Source: https://www.schemastore.org/package.json
+    - name: package.json
+      fileMatch:
+        - package.json
+      location: .v8r/schemas/package.json
+
+    # Source: https://raw.githubusercontent.com/firebase/firebase-tools/master/schema/firebase-config.json
+    - name: Firebase configuration
+      fileMatch:
+        - firebase.json
+      location: .v8r/schemas/firebase-config.json
+
+    # Source: https://www.schemastore.org/dependabot-2.0.json
+    - name: Dependabot v2 configuration
+      fileMatch:
+        - .github/dependabot.yml
+      location: .v8r/schemas/dependabot-2.0.json
+
+    # Source: https://www.schemastore.org/tsconfig.json
+    # TypeScript configuration files allow JSONC comments, so parse them with
+    # json5 instead of the strict parser inferred from their .json extension.
     - name: TSConfig
-      description: TypeScript compiler configuration (JSONC, allows comments)
       fileMatch:
         - tsconfig.json
         - tsconfig.*.json
-      location: https://www.schemastore.org/tsconfig.json
+      location: .v8r/schemas/tsconfig.json
       parser: json5

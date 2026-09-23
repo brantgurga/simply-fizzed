@@ -98,8 +98,8 @@ jobs:
       - name: Lint JSON/JSONC
         run: npx --yes @biomejs/biome@2.5.14 lint
 
-      # v8r validates config files against their JSON Schema (via SchemaStore).
-      # Run via npx (pinned); the file list comes from .v8rrc.yml.
+      # v8r validates config files against vendored JSON Schemas, avoiding
+      # network lookups; the file list and local mappings come from .v8rrc.yml.
       - name: Validate JSON Schemas
         run: npx --yes v8r@6.1.0
 
