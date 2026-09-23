@@ -115,11 +115,8 @@ export async function addNewSodaAvailability(
 ): Promise<NewSodaAvailability> {
   const soda = canonicalSoda(sodaInput);
   const sodaRef = doc(collection(db, COLLECTIONS.sodas));
-  const availabilityRef = doc(
-    db,
-    COLLECTIONS.availability,
-    availabilityDocumentId(locationId, sodaRef.id, form),
-  );
+  const availabilityId = availabilityDocumentId(locationId, sodaRef.id, form);
+  const availabilityRef = doc(db, COLLECTIONS.availability, availabilityId);
   const locationRef = doc(db, COLLECTIONS.locations, locationId);
 
   return runTransaction(db, async (transaction) => {
@@ -136,6 +133,7 @@ export async function addNewSodaAvailability(
     const timestamp = serverTimestamp();
     transaction.set(sodaRef, {
       ...soda,
+      initialAvailabilityId: availabilityId,
       createdBy: contributor.id,
       createdByName: contributorName,
       createdAt: timestamp,

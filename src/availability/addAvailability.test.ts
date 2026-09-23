@@ -149,7 +149,11 @@ describe("addAvailability", () => {
     expect(set).toHaveBeenNthCalledWith(
       1,
       firebase.generatedSodaReference,
-      expect.objectContaining({ createdByName: "Soda Fan", createdAt: "server-time" }),
+      expect.objectContaining({
+        initialAvailabilityId: "location-one$generated-soda$draft",
+        createdByName: "Soda Fan",
+        createdAt: "server-time",
+      }),
     );
     expect(set).toHaveBeenNthCalledWith(
       2,

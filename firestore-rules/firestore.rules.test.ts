@@ -58,6 +58,7 @@ function validNewSoda(overrides: Record<string, unknown> = {}): Record<string, u
     name: "Root Beer",
     brand: "Sprecher",
     flavor: "Original",
+    initialAvailabilityId: "existing-location$new-soda$draft",
     createdBy: USER_ID,
     createdByName: "Rules Test Fan",
     createdAt: serverTimestamp(),
@@ -352,10 +353,10 @@ describe("availability creation", () => {
 });
 
 describe("soda creation and immutability", () => {
-  it("allows authenticated attributed creation", async () => {
+  it("denies standalone creation without its initial availability", async () => {
     const database = testEnvironment.authenticatedContext(USER_ID).firestore();
 
-    await assertSucceeds(setDoc(doc(database, "sodas", "new-document"), validNewSoda()));
+    await assertFails(setDoc(doc(database, "sodas", "new-soda"), validNewSoda()));
   });
 
   it("denies unauthenticated or malformed creation", async () => {

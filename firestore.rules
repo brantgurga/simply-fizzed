@@ -36,22 +36,29 @@ service cloud.firestore {
         && geo.lng <= 180;
     }
 
-    function isValidSoda(data) {
+    function isValidSoda(data, sodaId) {
       return data.keys().hasOnly([
-          "name", "brand", "flavor",
+          "name", "brand", "flavor", "initialAvailabilityId",
           "createdBy", "createdByName", "createdAt",
           "updatedBy", "updatedByName", "updatedAt"
         ])
         && isNonEmptyString(data.name, 200)
         && isNonEmptyString(data.brand, 200)
         && isNonEmptyString(data.flavor, 200)
+        && isNonEmptyString(data.initialAvailabilityId, 1500)
         && data.createdBy == request.auth.uid
         && isValidAttributionName(data.createdByName)
         && data.createdAt == request.time
         && data.updatedBy == request.auth.uid
         && isValidAttributionName(data.updatedByName)
         && data.updatedByName == data.createdByName
-        && data.updatedAt == request.time;
+        && data.updatedAt == request.time
+        && existsAfter(
+          /databases/$(database)/documents/availability/$(data.initialAvailabilityId)
+        )
+        && getAfter(
+          /databases/$(database)/documents/availability/$(data.initialAvailabilityId)
+        ).data.sodaId == sodaId;
     }
 
     function isValidAvailability(data) {
@@ -107,7 +114,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null
         && sodaId.matches("[^$]+")
-        && isValidSoda(request.resource.data);
+        && isValidSoda(request.resource.data, sodaId);
       allow update, delete: if false;
     }
 

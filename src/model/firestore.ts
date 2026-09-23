@@ -47,6 +47,7 @@ export interface Soda {
   brand: string;
   flavor: string;
   aliases?: string[];
+  initialAvailabilityId?: string;
   createdBy?: string;
   createdByName?: string;
   createdAt?: Date;
