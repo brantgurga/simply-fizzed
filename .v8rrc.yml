@@ -4,6 +4,8 @@
 # Every matched file maps to a local schema so validation does not depend on
 # SchemaStore or another schema host being available. The vendored files retain
 # their upstream names under .v8r/schemas to make future refreshes traceable.
+# SchemaStore files are Apache-2.0 and the Firebase schema is MIT; the upstream
+# license and notice files are preserved in the same directory.
 # Structural/duplicate-key linting of JSON/JSONC remains Biome's responsibility.
 patterns:
   - package.json

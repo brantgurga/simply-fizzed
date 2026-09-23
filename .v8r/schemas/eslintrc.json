@@ -1,5 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "Modified for simply-fizzed: removed the upstream $id so the partial schema reference resolves to the vendored local file.",
   "definitions": {
     "stringOrStringArray": {
       "oneOf": [
