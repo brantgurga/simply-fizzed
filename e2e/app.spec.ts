@@ -76,7 +76,7 @@ test.describe("App", () => {
 
     await page
       .getByLabel(/email address/i)
-      .fill(`contributor-${testInfo.retry.toString()}@example.test`);
+      .fill(`contributor-${testInfo.retry.toString()}@example.com`);
     await page.getByLabel(/password/i).fill("emulator-password");
     await page.getByRole("button", { name: /create account/i }).click();
 
@@ -112,7 +112,7 @@ test.describe("App", () => {
       connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
       const credential = await createUserWithEmailAndPassword(
         auth,
-        `rules-fan-${testInfo.retry.toString()}@example.test`,
+        `rules-fan-${testInfo.retry.toString()}@example.com`,
         "emulator-password",
       );
       const db = getFirestore(app);
@@ -168,7 +168,7 @@ test.describe("App", () => {
     browserName,
   }, testInfo) => {
     test.skip(browserName !== "chromium", "Auth persistence is exercised once in Chromium.");
-    const email = `offline-fan-retry-${testInfo.retry.toString()}@example.test`;
+    const email = `offline-fan-retry-${testInfo.retry.toString()}@example.com`;
 
     await page.route(/https:\/\/.*(?:firebaseapp|firebaseio|googleapis)\.com/, (route) =>
       route.abort(),
@@ -274,7 +274,7 @@ test.describe("App", () => {
     await page.getByRole("button", { name: /sign up/i }).click();
     await page
       .getByLabel(/email address/i)
-      .fill(`availability-${testInfo.retry.toString()}@example.test`);
+      .fill(`availability-${testInfo.retry.toString()}@example.com`);
     await page.getByLabel(/password/i).fill("emulator-password");
     await page.getByRole("button", { name: /create account/i }).click();
 
