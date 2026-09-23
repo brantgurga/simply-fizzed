@@ -67,8 +67,20 @@
     "vitest": "^5.0.1",
     "wait-on": "^9.1.0"
   },
+  "overrides": {
+    "@opentelemetry/core": "2.8.0",
+    "csv-parse": "7.0.2",
+    "qs": "6.16.0",
+    "uuid@<11.1.1": "11.1.1"
+  },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,json,css,html}": "oxfmt",
     "*.{ts,tsx,js,jsx}": "oxlint"
+  },
+  "overrideNotes": {
+    "qs": "Temporary security pin for GHSA-4mjr-xmp4-gh2g and GHSA-x5fp-wj9c-mxmx; remove when firebase-tools permits qs >=6.16.0.",
+    "csv-parse": "Temporary security pin for GHSA-8cw4-87c7-c6xx; remove when firebase-tools permits csv-parse >=7.0.2.",
+    "@opentelemetry/core": "Temporary security pin for GHSA-8988-4f7v-96qf; remove when firebase-tools through @google-cloud/pubsub permits @opentelemetry/core >=2.8.0.",
+    "uuid@<11.1.1": "Temporary security pin for GHSA-w5hq-g745-h8pq; remove when firebase-tools and its transitive dependencies no longer install uuid <11.1.1."
   }
 }
