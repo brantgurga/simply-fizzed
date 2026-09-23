@@ -10,6 +10,7 @@ import Typography from "@mui/material/Typography";
 import type { User } from "firebase/auth";
 import { addAvailability, DuplicateAvailabilityError } from "../availability/addAvailability";
 import AvailabilityForm from "../availability/AvailabilityForm";
+import { publicContributorName } from "../contributor";
 import { db } from "../firebase";
 import type { Availability, SodaForm } from "../model/firestore";
 import { formatAddress, formatSodaAvailability } from "../nearby/results";
@@ -51,7 +52,7 @@ const defaultAvailabilityWriter = (
   form: SodaForm,
   user: User,
 ) => {
-  const name = user.displayName?.trim() || user.email?.trim();
+  const name = publicContributorName(user);
   return addAvailability(db, locationId, sodaId, form, {
     id: user.uid,
     ...(name === undefined ? {} : { name }),

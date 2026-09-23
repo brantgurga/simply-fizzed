@@ -19,6 +19,7 @@ import Stack from "@mui/material/Stack";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
+import { publicContributorName } from "./contributor";
 import { app, auth, db } from "./firebase";
 import type { GeoPoint } from "./model/firestore";
 import AddLocationForm from "./location/AddLocationForm";
@@ -147,7 +148,7 @@ function App() {
   const saveLocation = useCallback(
     async (input: NewLocationInput) => {
       if (user === null) throw new Error("Authentication is required to add a location");
-      const contributorName = user.displayName?.trim() || user.email?.trim();
+      const contributorName = publicContributorName(user);
       await addLocation(
         db,
         geocoder,

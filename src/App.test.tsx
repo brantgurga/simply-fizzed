@@ -211,7 +211,7 @@ describe("App", () => {
     expect(auth.addLocation).toHaveBeenCalledWith(
       {},
       expect.anything(),
-      { id: "fan-123", name: "fan@example.test" },
+      { id: "fan-123", name: "fa…@example.test" },
       expect.objectContaining({ name: "Corner Shop" }),
     );
     expect(await screen.findByText("Thanks — Corner Shop was added.")).toBeVisible();
