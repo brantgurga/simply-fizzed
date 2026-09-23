@@ -363,9 +363,9 @@ emulator seed script, and tests:
 
 Security rules in [`firestore.rules`](./firestore.rules) allow public `read` on
 all three collections. Signed-in users may create validated, attributed
-`locations` and `availability` documents. Availability creation also requires an
-existing location and exact fields from the referenced soda. Client updates,
-deletes, soda writes, and all unmatched paths remain denied.
+`locations`, `sodas`, and `availability` documents. A new soda and its first
+availability are written atomically; availability fields must exactly match the
+referenced soda. Client updates, deletes, and all unmatched paths remain denied.
 
 [`firestore.indexes.json`](./firestore.indexes.json) is intentionally empty: the
 only non-trivial query is the geohash radius search, which uses a single-field
@@ -411,10 +411,11 @@ coordinates, so geocoding is only needed for the manual fallback.
 
 Dependency-free hash routes keep browse at `#/`, with exact location and soda
 pages at `#/locations/{id}` and `#/sodas/{id}`. Location pages load independently
-of nearby search and let signed-in users contribute an exact catalog soda and
-form. Catalog matching normalizes case, Unicode diacritics, punctuation,
-hyphens, ampersands, and whitespace, then ranks aliases and canonical values
-without auto-selecting ambiguous matches.
+of nearby search and let signed-in users contribute a catalog soda and form or
+create an unmatched soda while adding its first availability. Catalog matching
+normalizes case, Unicode diacritics, punctuation, hyphens, ampersands, and
+whitespace, then ranks aliases and canonical values without auto-selecting
+ambiguous matches.
 
 ### Nearby search
 

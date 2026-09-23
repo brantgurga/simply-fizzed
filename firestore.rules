@@ -2,7 +2,7 @@ rules_version = "2";
 
 // Firestore security rules for location-based soda discovery. Search data is
 // public, while signed-in fans may create strictly validated, attributed
-// locations and availability. Existing contributions cannot be changed or
+// locations, sodas, and availability. Existing contributions cannot be changed or
 // deleted from the client; moderation is handled separately.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -36,6 +36,31 @@ service cloud.firestore {
         && geo.lng <= 180;
     }
 
+    function isValidSoda(data, sodaId) {
+      return data.keys().hasOnly([
+          "name", "brand", "flavor", "initialAvailabilityId",
+          "createdBy", "createdByName", "createdAt",
+          "updatedBy", "updatedByName", "updatedAt"
+        ])
+        && isNonEmptyString(data.name, 200)
+        && isNonEmptyString(data.brand, 200)
+        && isNonEmptyString(data.flavor, 200)
+        && isNonEmptyString(data.initialAvailabilityId, 1500)
+        && data.createdBy == request.auth.uid
+        && isValidAttributionName(data.createdByName)
+        && data.createdAt == request.time
+        && data.updatedBy == request.auth.uid
+        && isValidAttributionName(data.updatedByName)
+        && data.updatedByName == data.createdByName
+        && data.updatedAt == request.time
+        && existsAfter(
+          /databases/$(database)/documents/availability/$(data.initialAvailabilityId)
+        )
+        && getAfter(
+          /databases/$(database)/documents/availability/$(data.initialAvailabilityId)
+        ).data.sodaId == sodaId;
+    }
+
     function isValidAvailability(data) {
       return data.keys().hasOnly([
           "locationId", "sodaId", "form",
@@ -57,10 +82,10 @@ service cloud.firestore {
         && data.updatedByName == data.createdByName
         && data.updatedAt == request.time
         && exists(/databases/$(database)/documents/locations/$(data.locationId))
-        && exists(/databases/$(database)/documents/sodas/$(data.sodaId))
-        && data.sodaName == get(/databases/$(database)/documents/sodas/$(data.sodaId)).data.name
-        && data.sodaBrand == get(/databases/$(database)/documents/sodas/$(data.sodaId)).data.brand
-        && data.sodaFlavor == get(/databases/$(database)/documents/sodas/$(data.sodaId)).data.flavor;
+        && existsAfter(/databases/$(database)/documents/sodas/$(data.sodaId))
+        && data.sodaName == getAfter(/databases/$(database)/documents/sodas/$(data.sodaId)).data.name
+        && data.sodaBrand == getAfter(/databases/$(database)/documents/sodas/$(data.sodaId)).data.brand
+        && data.sodaFlavor == getAfter(/databases/$(database)/documents/sodas/$(data.sodaId)).data.flavor;
     }
 
     match /locations/{locationId} {
@@ -87,7 +112,10 @@ service cloud.firestore {
 
     match /sodas/{sodaId} {
       allow read: if true;
-      allow write: if false;
+      allow create: if request.auth != null
+        && sodaId.matches("[^$]+")
+        && isValidSoda(request.resource.data, sodaId);
+      allow update, delete: if false;
     }
 
     match /availability/{availabilityId} {

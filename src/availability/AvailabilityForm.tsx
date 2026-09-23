@@ -11,7 +11,7 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { db } from "../firebase";
-import type { SodaForm } from "../model/firestore";
+import type { Soda, SodaForm } from "../model/firestore";
 import {
   formatSodaCatalogLabel,
   loadSodaCatalog,
@@ -20,7 +20,7 @@ import {
 } from "../soda/sodas";
 
 interface AvailabilityFormProps {
-  onAdd: (soda: SodaDocument, form: SodaForm) => Promise<void>;
+  onAdd: (soda: SodaDocument | Soda, form: SodaForm) => Promise<SodaDocument | void>;
   loadCatalog?: () => Promise<SodaDocument[]>;
 }
 
@@ -34,6 +34,7 @@ export default function AvailabilityForm({
   const [catalogStatus, setCatalogStatus] = useState<"loading" | "ready" | "error">("loading");
   const [soda, setSoda] = useState<SodaDocument | null>(null);
   const [sodaInput, setSodaInput] = useState("");
+  const [newSoda, setNewSoda] = useState<Soda | null>(null);
   const [form, setForm] = useState<SodaForm>("can");
   const [message, setMessage] = useState<{ severity: "error" | "success"; text: string }>();
   const [saving, setSaving] = useState(false);
@@ -57,16 +58,38 @@ export default function AvailabilityForm({
 
   async function save() {
     setMessage(undefined);
-    if (soda === null) {
-      setMessage({ severity: "error", text: "Choose an exact soda from the catalog." });
+    const sodaToAdd =
+      newSoda === null
+        ? soda
+        : {
+            brand: newSoda.brand.trim(),
+            name: newSoda.name.trim(),
+            flavor: newSoda.flavor.trim(),
+          };
+    if (sodaToAdd === null) {
+      setMessage({ severity: "error", text: "Choose a catalog soda or add a new one." });
+      return;
+    }
+    if (
+      sodaToAdd.brand.length === 0 ||
+      sodaToAdd.name.length === 0 ||
+      sodaToAdd.flavor.length === 0
+    ) {
+      setMessage({ severity: "error", text: "Enter the brand, name, and flavor." });
       return;
     }
     setSaving(true);
     try {
-      await onAdd(soda, form);
+      const addedSoda = await onAdd(sodaToAdd, form);
+      if (addedSoda !== undefined) {
+        setCatalog((current) =>
+          current.some((item) => item.id === addedSoda.id) ? current : [...current, addedSoda],
+        );
+      }
       setMessage({ severity: "success", text: "Availability added." });
       setSoda(null);
       setSodaInput("");
+      setNewSoda(null);
     } catch (error) {
       setMessage({
         severity: "error",
@@ -100,30 +123,82 @@ export default function AvailabilityForm({
         Add availability
       </Typography>
       {message !== undefined && <Alert severity={message.severity}>{message.text}</Alert>}
-      <Autocomplete
-        options={catalog}
-        value={soda}
-        inputValue={sodaInput}
-        disabled={saving}
-        onChange={(_event, value) => {
-          setSoda(value);
-          setSodaInput(value === null ? "" : formatSodaCatalogLabel(value));
-        }}
-        onInputChange={(_event, value, reason) => {
-          setSodaInput(value);
-          if (reason === "input" && soda !== null && value !== formatSodaCatalogLabel(soda)) {
-            setSoda(null);
-          }
-        }}
-        filterOptions={(_options, state) => rankSodas(catalog, state.inputValue)}
-        getOptionKey={(option) => option.id}
-        getOptionLabel={formatSodaCatalogLabel}
-        isOptionEqualToValue={(option, value) => option.id === value.id}
-        renderInput={(parameters) => (
-          <TextField {...parameters} label="Catalog soda" placeholder="Search names or aliases" />
-        )}
-        noOptionsText="No matching catalog sodas"
-      />
+      {newSoda === null ? (
+        <>
+          <Autocomplete
+            options={catalog}
+            value={soda}
+            inputValue={sodaInput}
+            disabled={saving}
+            onChange={(_event, value) => {
+              setSoda(value);
+              setSodaInput(value === null ? "" : formatSodaCatalogLabel(value));
+            }}
+            onInputChange={(_event, value, reason) => {
+              if (reason === "input") {
+                setSodaInput(value);
+                if (soda !== null && value !== formatSodaCatalogLabel(soda)) setSoda(null);
+              } else if (reason === "clear") {
+                setSoda(null);
+                setSodaInput("");
+              }
+            }}
+            filterOptions={(_options, state) => rankSodas(catalog, state.inputValue)}
+            getOptionKey={(option) => option.id}
+            getOptionLabel={formatSodaCatalogLabel}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            renderInput={(parameters) => (
+              <TextField
+                {...parameters}
+                label="Catalog soda"
+                placeholder="Search names or aliases"
+              />
+            )}
+            noOptionsText="No matching catalog sodas"
+          />
+          {soda === null && sodaInput.trim().length > 0 && (
+            <Button
+              type="button"
+              variant="outlined"
+              disabled={saving}
+              onClick={() => {
+                setNewSoda({ brand: "", name: sodaInput.trim(), flavor: "Original" });
+                setMessage(undefined);
+              }}
+            >
+              Add “{sodaInput.trim()}” as a new soda
+            </Button>
+          )}
+        </>
+      ) : (
+        <Stack spacing={2}>
+          <Typography variant="subtitle1">New soda details</Typography>
+          <TextField
+            label="Brand"
+            value={newSoda.brand}
+            disabled={saving}
+            slotProps={{ htmlInput: { maxLength: 200 } }}
+            onChange={(event) => setNewSoda({ ...newSoda, brand: event.target.value })}
+          />
+          <TextField
+            label="Name"
+            value={newSoda.name}
+            disabled={saving}
+            slotProps={{ htmlInput: { maxLength: 200 } }}
+            onChange={(event) => setNewSoda({ ...newSoda, name: event.target.value })}
+          />
+          <TextField
+            label="Flavor"
+            value={newSoda.flavor}
+            disabled={saving}
+            slotProps={{ htmlInput: { maxLength: 200 } }}
+            onChange={(event) => setNewSoda({ ...newSoda, flavor: event.target.value })}
+          />
+          <Button type="button" disabled={saving} onClick={() => setNewSoda(null)}>
+            Back to catalog search
+          </Button>
+        </Stack>
+      )}
       <FormControl>
         <InputLabel id="soda-form-label">Form</InputLabel>
         <Select
@@ -141,7 +216,7 @@ export default function AvailabilityForm({
           <MenuItem value="bottle">Bottle</MenuItem>
         </Select>
       </FormControl>
-      <Button type="submit" variant="contained" disabled={saving || catalog.length === 0}>
+      <Button type="submit" variant="contained" disabled={saving}>
         {saving ? "Adding…" : "Add soda"}
       </Button>
     </Stack>

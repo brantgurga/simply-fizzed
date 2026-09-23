@@ -1,14 +1,23 @@
 import type { Firestore } from "firebase/firestore";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const firebase = vi.hoisted(() => ({
-  collection: vi.fn(),
-  doc: vi.fn((...parts: unknown[]) => parts.slice(1).join("/")),
-  getDoc: vi.fn(),
-  getDocs: vi.fn(),
-  runTransaction: vi.fn(),
-  serverTimestamp: vi.fn(() => "server-time"),
-}));
+const firebase = vi.hoisted(() => {
+  const generatedSodaReference = {
+    id: "generated-soda",
+    toString: () => "sodas/generated-soda",
+  };
+  return {
+    generatedSodaReference,
+    collection: vi.fn(() => "sodas"),
+    doc: vi.fn((...parts: unknown[]) =>
+      parts.length === 1 ? generatedSodaReference : parts.slice(1).join("/"),
+    ),
+    getDoc: vi.fn(),
+    getDocs: vi.fn(),
+    runTransaction: vi.fn(),
+    serverTimestamp: vi.fn(() => "server-time"),
+  };
+});
 
 vi.mock("firebase/firestore", () => ({
   collection: firebase.collection,
@@ -21,6 +30,7 @@ vi.mock("firebase/firestore", () => ({
 
 import {
   addAvailability,
+  addNewSodaAvailability,
   availabilityDocumentId,
   DuplicateAvailabilityError,
 } from "./addAvailability";
@@ -100,6 +110,55 @@ describe("addAvailability", () => {
         createdAt: "server-time",
         updatedAt: "server-time",
       }),
+    );
+  });
+
+  it("atomically creates a canonical soda and its first availability", async () => {
+    const set = vi.fn();
+    const get = vi.fn(async (reference: unknown) =>
+      String(reference) === "locations/location-one" ? snapshot(true) : snapshot(false),
+    );
+    firebase.runTransaction.mockImplementation(
+      async (
+        _database: unknown,
+        update: (transaction: { get: typeof get; set: typeof set }) => Promise<unknown>,
+      ) => update({ get, set }),
+    );
+
+    await expect(
+      addNewSodaAvailability(
+        db,
+        "location-one",
+        { brand: " Sprecher ", name: " Root Beer ", flavor: " Original " },
+        "draft",
+        { id: "fan-123", name: " Soda Fan " },
+      ),
+    ).resolves.toEqual({
+      soda: {
+        id: "generated-soda",
+        brand: "Sprecher",
+        name: "Root Beer",
+        flavor: "Original",
+      },
+      availability: expect.objectContaining({
+        sodaId: "generated-soda",
+        form: "draft",
+        createdBy: "fan-123",
+      }),
+    });
+    expect(set).toHaveBeenNthCalledWith(
+      1,
+      firebase.generatedSodaReference,
+      expect.objectContaining({
+        initialAvailabilityId: "location-one$generated-soda$draft",
+        createdByName: "Soda Fan",
+        createdAt: "server-time",
+      }),
+    );
+    expect(set).toHaveBeenNthCalledWith(
+      2,
+      "availability/location-one$generated-soda$draft",
+      expect.objectContaining({ sodaBrand: "Sprecher", updatedAt: "server-time" }),
     );
   });
 

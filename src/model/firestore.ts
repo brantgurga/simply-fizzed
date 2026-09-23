@@ -47,6 +47,13 @@ export interface Soda {
   brand: string;
   flavor: string;
   aliases?: string[];
+  initialAvailabilityId?: string;
+  createdBy?: string;
+  createdByName?: string;
+  createdAt?: Date;
+  updatedBy?: string;
+  updatedByName?: string;
+  updatedAt?: Date;
 }
 
 /** The physical form a soda is sold in at a location. */
