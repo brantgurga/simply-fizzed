@@ -127,7 +127,13 @@
           "items": {
             "$ref": "#/definitions/pathPattern",
             "description": "Path or pattern of file or directory to ignore.  Can also use regular expressions wrapped in an object with a single property named \"re\".",
-            "examples": [".gitignore", ".vscode", "__tests__/*", "__*__/*.js", "*.test.js"]
+            "examples": [
+              ".gitignore",
+              ".vscode",
+              "__tests__/*",
+              "__*__/*.js",
+              "*.test.js"
+            ]
           }
         }
       ]

@@ -29,3 +29,4 @@ rules:
 ignore: |
   node_modules/
   dist/
+  .v8r/schemas/

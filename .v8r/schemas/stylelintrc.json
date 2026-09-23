@@ -510,7 +510,13 @@
         },
         {
           "type": "string",
-          "enum": ["always", "never", "always-single-line", "never-single-line", []]
+          "enum": [
+            "always",
+            "never",
+            "always-single-line",
+            "never-single-line",
+            []
+          ]
         },
         {
           "type": "array",
@@ -522,7 +528,13 @@
             "anyOf": [
               {
                 "type": "string",
-                "enum": ["always", "never", "always-single-line", "never-single-line", {}]
+                "enum": [
+                  "always",
+                  "never",
+                  "always-single-line",
+                  "never-single-line",
+                  {}
+                ]
               },
               {
                 "$ref": "#/definitions/coreRule"
@@ -1730,7 +1742,12 @@
                       "unspecified": {
                         "description": "These options only apply if you've defined your own array of properties",
                         "type": "string",
-                        "enum": ["top", "bottom", "bottomAlphabetical", "ignore"]
+                        "enum": [
+                          "top",
+                          "bottom",
+                          "bottomAlphabetical",
+                          "ignore"
+                        ]
                       },
                       "order": {
                         "type": "string",
@@ -2805,7 +2822,13 @@
             },
             {
               "type": "string",
-              "enum": ["always", "never", "always-multi-line", "never-multi-line", []]
+              "enum": [
+                "always",
+                "never",
+                "always-multi-line",
+                "never-multi-line",
+                []
+              ]
             },
             {
               "type": "array",
@@ -2817,7 +2840,13 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "enum": ["always", "never", "always-multi-line", "never-multi-line", {}]
+                    "enum": [
+                      "always",
+                      "never",
+                      "always-multi-line",
+                      "never-multi-line",
+                      {}
+                    ]
                   },
                   {
                     "type": "object",
@@ -2863,7 +2892,13 @@
             },
             {
               "type": "string",
-              "enum": ["always", "never", "always-multi-line", "never-multi-line", []]
+              "enum": [
+                "always",
+                "never",
+                "always-multi-line",
+                "never-multi-line",
+                []
+              ]
             },
             {
               "type": "array",
@@ -2875,7 +2910,13 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "enum": ["always", "never", "always-multi-line", "never-multi-line", {}]
+                    "enum": [
+                      "always",
+                      "never",
+                      "always-multi-line",
+                      "never-multi-line",
+                      {}
+                    ]
                   },
                   {
                     "type": "object",

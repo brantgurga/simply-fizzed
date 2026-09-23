@@ -645,7 +645,13 @@
     },
     "versioning-strategy": {
       "type": "string",
-      "enum": ["auto", "increase", "increase-if-necessary", "lockfile-only", "widen"],
+      "enum": [
+        "auto",
+        "increase",
+        "increase-if-necessary",
+        "lockfile-only",
+        "widen"
+      ],
       "x-intellij-enum-metadata": {
         "auto": {
           "description": "Try to differentiate between apps and libraries. Use 'increase' for apps and 'widen' for libraries."
@@ -703,11 +709,27 @@
     },
     "schedule-day": {
       "type": "string",
-      "enum": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+      "enum": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
+      ]
     },
     "schedule-interval": {
       "type": "string",
-      "enum": ["daily", "weekly", "monthly", "quarterly", "semiannually", "yearly", "cron"]
+      "enum": [
+        "daily",
+        "weekly",
+        "monthly",
+        "quarterly",
+        "semiannually",
+        "yearly",
+        "cron"
+      ]
     },
     "update": {
       "type": "object",

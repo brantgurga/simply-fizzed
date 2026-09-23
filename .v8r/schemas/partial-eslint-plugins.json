@@ -1785,7 +1785,12 @@
                   }
                 },
                 "newlines-between": {
-                  "enum": ["ignore", "always", "always-and-inside-groups", "never"]
+                  "enum": [
+                    "ignore",
+                    "always",
+                    "always-and-inside-groups",
+                    "never"
+                  ]
                 },
                 "alphabetize": {
                   "type": "object",
@@ -3426,7 +3431,11 @@
                   "default": 3
                 },
                 "emptyDefaultCase": {
-                  "enum": ["no-default-comment", "do-nothing-comment", "no-default-case"],
+                  "enum": [
+                    "no-default-comment",
+                    "do-nothing-comment",
+                    "no-default-case"
+                  ],
                   "default": "no-default-comment"
                 }
               }
@@ -7940,7 +7949,14 @@
                 "groups": {
                   "type": "array",
                   "items": {
-                    "enum": ["props", "data", "asyncData", "computed", "methods", "setup"]
+                    "enum": [
+                      "props",
+                      "data",
+                      "asyncData",
+                      "computed",
+                      "methods",
+                      "setup"
+                    ]
                   },
                   "uniqueItems": true
                 },
@@ -7953,7 +7969,10 @@
                 "unreferencedOptions": {
                   "type": "array",
                   "items": {
-                    "enum": ["unknownMemberAsUnreferenced", "returnAsUnreferenced"]
+                    "enum": [
+                      "unknownMemberAsUnreferenced",
+                      "returnAsUnreferenced"
+                    ]
                   },
                   "uniqueItems": true
                 }

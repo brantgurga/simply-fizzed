@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "object",
   "$comment": "Modified for simply-fizzed: removed the upstream $id and rewrote remote references to vendored local files for offline validation.",
+  "title": "JSON schema for NPM package.json files",
   "definitions": {
     "person": {
       "description": "A person who has been involved in creating or maintaining this package.",
@@ -366,6 +366,7 @@
       }
     }
   },
+  "type": "object",
   "patternProperties": {
     "^_": {
       "description": "Any property starting with _ is valid.",
@@ -1369,6 +1370,5 @@
         }
       ]
     }
-  },
-  "title": "JSON schema for NPM package.json files"
+  }
 }

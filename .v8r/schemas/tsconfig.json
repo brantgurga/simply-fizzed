@@ -620,7 +620,13 @@
                 },
                 "jsx": {
                   "description": "Controls how JSX constructs are emitted in JavaScript files.\nThis only affects output of JS files that started in `.tsx` files.\n\n- `react-jsx`: Emit `.js` files with the JSX changed to `_jsx` calls optimized for production\n- `react-jsxdev`: Emit `.js` files with the JSX changed to `_jsx` calls for development only\n- `preserve`: Emit `.jsx` files with the JSX unchanged\n- `react-native`: Emit `.js` files with the JSX unchanged\n- `react`: Emit `.js` files with JSX changed to the equivalent `React.createElement` calls\n\n### For example\n\nThis sample code:\n\n```tsx\nexport const HelloWorld = () => <h1>Hello world</h1>;\n```\n\nReact: `\"react-jsx\"`<sup>[[1]](https://reactjs.org/blog/2020/09/22/introducing-the-new-jsx-transform.html)</sup>\n\n```tsx twoslash\ndeclare module JSX {\n  interface Element {}\n  interface IntrinsicElements {\n    [s: string]: any;\n  }\n}\n// @showEmit\n// @noErrors\n// @jsx: react-jsx\nexport const HelloWorld = () => <h1>Hello world</h1>;\n```\n\nReact dev transform: `\"react-jsxdev\"`<sup>[[1]](https://reactjs.org/blog/2020/09/22/introducing-the-new-jsx-transform.html)</sup>\n\n```tsx twoslash\ndeclare module JSX {\n  interface Element {}\n  interface IntrinsicElements {\n    [s: string]: any;\n  }\n}\n// @showEmit\n// @noErrors\n// @jsx: react-jsxdev\nexport const HelloWorld = () => <h1>Hello world</h1>;\n```\n\nPreserve: `\"preserve\"`\n\n```tsx twoslash\ndeclare module JSX {\n  interface Element {}\n  interface IntrinsicElements {\n    [s: string]: any;\n  }\n}\n// @showEmit\n// @noErrors\n// @jsx: preserve\nexport const HelloWorld = () => <h1>Hello world</h1>;\n```\n\nReact Native: `\"react-native\"`\n\n```tsx twoslash\ndeclare module JSX {\n  interface Element {}\n  interface IntrinsicElements {\n    [s: string]: any;\n  }\n}\n// @showEmit\n// @noErrors\n// @jsx: react-native\nexport const HelloWorld = () => <h1>Hello world</h1>;\n```\n\n\nLegacy React runtime: `\"react\"`\n\n```tsx twoslash\ndeclare module JSX {\n  interface Element {}\n  interface IntrinsicElements {\n    [s: string]: any;\n  }\n}\n// @showEmit\n// @noErrors\nexport const HelloWorld = () => <h1>Hello world</h1>;\n```\n\nThis option can be used on a per-file basis too using an `@jsxRuntime` comment.\n\nAlways use the classic runtime (`\"react\"`) for this file:\n\n```tsx\n/* @jsxRuntime classic */\nexport const HelloWorld = () => <h1>Hello world</h1>;\n```\n\nAlways use the automatic runtime (`\"react-jsx\"`) for this file:\n\n```tsx\n/* @jsxRuntime automatic */\nexport const HelloWorld = () => <h1>Hello world</h1>;\n```",
-                  "enum": ["preserve", "react", "react-jsx", "react-jsxdev", "react-native"]
+                  "enum": [
+                    "preserve",
+                    "react",
+                    "react-jsx",
+                    "react-jsxdev",
+                    "react-native"
+                  ]
                 },
                 "reactNamespace": {
                   "anyOf": [
@@ -742,7 +748,14 @@
                   "anyOf": [
                     {
                       "type": "string",
-                      "enum": ["classic", "node", "node10", "node16", "nodenext", "bundler"],
+                      "enum": [
+                        "classic",
+                        "node",
+                        "node10",
+                        "node16",
+                        "nodenext",
+                        "bundler"
+                      ],
                       "markdownEnumDescriptions": [
                         "It's recommended to use `\"node16\"` instead",
                         "Deprecated, use `\"node10\"` in TypeScript 5.0+ instead",
