@@ -30,6 +30,7 @@ export interface SeedSoda {
   name: string;
   brand: string;
   flavor: string;
+  aliases?: string[];
 }
 
 /** A seed `availability/{id}` document joining a soda to a location. */
@@ -66,13 +67,26 @@ export const LOCATIONS: readonly SeedLocation[] = [KROGER, TIMS_BREWERY];
 
 export const SODAS: readonly SeedSoda[] = [
   { id: "big-k-root-beer", name: "Root Beer", brand: "Big K", flavor: "root beer" },
-  { id: "coca-cola", name: "Classic", brand: "Coca-Cola", flavor: "cola" },
+  {
+    id: "coca-cola",
+    name: "Cola",
+    brand: "Coca-Cola",
+    flavor: "Original",
+    aliases: ["Coke", "Coca Cola"],
+  },
+  {
+    id: "pepsi-cola",
+    name: "Cola",
+    brand: "Pepsi-Cola",
+    flavor: "Original",
+    aliases: ["Coke", "Pepsi"],
+  },
   { id: "tims-root-beer", name: "Root Beer", brand: "Tim's", flavor: "root beer" },
 ];
 
 export const AVAILABILITY: readonly SeedAvailability[] = [
   {
-    id: "kroger-big-k-root-beer",
+    id: `${KROGER.id}$big-k-root-beer$can`,
     locationId: KROGER.id,
     sodaId: "big-k-root-beer",
     form: "can",
@@ -81,16 +95,16 @@ export const AVAILABILITY: readonly SeedAvailability[] = [
     sodaFlavor: "root beer",
   },
   {
-    id: "kroger-coca-cola",
+    id: `${KROGER.id}$coca-cola$can`,
     locationId: KROGER.id,
     sodaId: "coca-cola",
     form: "can",
-    sodaName: "Classic",
+    sodaName: "Cola",
     sodaBrand: "Coca-Cola",
-    sodaFlavor: "cola",
+    sodaFlavor: "Original",
   },
   {
-    id: "tims-tims-root-beer",
+    id: `${TIMS_BREWERY.id}$tims-root-beer$draft`,
     locationId: TIMS_BREWERY.id,
     sodaId: "tims-root-beer",
     form: "draft",

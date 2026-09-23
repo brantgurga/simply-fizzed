@@ -101,6 +101,15 @@ function isSodaForm(value: unknown): value is SodaForm {
   return value === "draft" || value === "can" || value === "bottle";
 }
 
+const AVAILABILITY_ATTRIBUTION_FIELDS = [
+  "createdBy",
+  "createdByName",
+  "createdAt",
+  "updatedBy",
+  "updatedByName",
+  "updatedAt",
+] as const;
+
 /**
  * Validate an `availability/{id}` document at runtime, returning `undefined` if
  * any required field is missing or the wrong type.
@@ -123,15 +132,51 @@ export function parseAvailability(data: unknown): Availability | undefined {
   ) {
     return undefined;
   }
-  return { locationId, sodaId, form, sodaName, sodaBrand, sodaFlavor };
+  const availability = { locationId, sodaId, form, sodaName, sodaBrand, sodaFlavor };
+  const presentAttributionFields = AVAILABILITY_ATTRIBUTION_FIELDS.filter((field) =>
+    Object.hasOwn(data, field),
+  );
+  if (presentAttributionFields.length === 0) return availability;
+  if (presentAttributionFields.length !== AVAILABILITY_ATTRIBUTION_FIELDS.length) return undefined;
+
+  const createdBy = optionalStringField(data, "createdBy");
+  const createdByName = stringField(data, "createdByName");
+  const createdAt = parseTimestamp(data["createdAt"]);
+  const updatedBy = optionalStringField(data, "updatedBy");
+  const updatedByName = stringField(data, "updatedByName");
+  const updatedAt = parseTimestamp(data["updatedAt"]);
+  if (
+    createdBy === undefined ||
+    createdByName === undefined ||
+    createdAt === undefined ||
+    updatedBy === undefined ||
+    updatedByName === undefined ||
+    updatedAt === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    ...availability,
+    createdBy,
+    createdByName,
+    createdAt,
+    updatedBy,
+    updatedByName,
+    updatedAt,
+  };
 }
 
-/** Group availability records by their `locationId`. */
+/** Group availability records by location, ignoring duplicate soda/form tuples. */
 export function groupAvailabilityByLocation(
   items: readonly Availability[],
 ): Map<string, Availability[]> {
   const byLocation = new Map<string, Availability[]>();
+  const identities = new Set<string>();
   for (const item of items) {
+    const identity = JSON.stringify([item.locationId, item.sodaId, item.form]);
+    if (identities.has(identity)) continue;
+    identities.add(identity);
+
     const existing = byLocation.get(item.locationId);
     if (existing === undefined) {
       byLocation.set(item.locationId, [item]);
@@ -154,7 +199,11 @@ const FORM_PHRASES: Record<SodaForm, string> = {
  * cans" or "Tim's Root Beer on draft".
  */
 export function formatSodaAvailability(item: Availability): string {
-  return `${item.sodaBrand} ${item.sodaName} ${FORM_PHRASES[item.form]}`;
+  const flavor =
+    item.sodaName.localeCompare(item.sodaFlavor, undefined, { sensitivity: "base" }) === 0
+      ? ""
+      : ` (${item.sodaFlavor})`;
+  return `${item.sodaBrand} ${item.sodaName}${flavor} ${FORM_PHRASES[item.form]}`;
 }
 
 /** Format an address as a single line: "street, city, state postalCode". */

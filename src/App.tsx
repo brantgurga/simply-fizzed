@@ -14,19 +14,24 @@ import AppBar from "@mui/material/AppBar";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Container from "@mui/material/Container";
+import Link from "@mui/material/Link";
 import Stack from "@mui/material/Stack";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
+import { publicContributorName } from "./contributor";
 import { app, auth, db } from "./firebase";
 import type { GeoPoint } from "./model/firestore";
 import AddLocationForm from "./location/AddLocationForm";
 import { addLocation, type NewLocationInput } from "./location/addLocation";
+import LocationDetail from "./location/LocationDetail";
 import LocationInput from "./location/LocationInput";
 import { createGeocoder } from "./location/geocoder";
 import { loadLastSearchCenter, saveLastSearchCenter } from "./location/lastSearchCenter";
 import NearbySearch from "./nearby/NearbySearch";
 import { searchNearby } from "./nearby/nearby";
+import { useHashRoute } from "./routes";
+import SodaDetail from "./soda/SodaDetail";
 
 type LoginScreenProps = {
   initialMode: "signIn" | "signUp";
@@ -102,6 +107,7 @@ const LoginScreen = lazy(async () => {
 });
 
 function App() {
+  const route = useHashRoute();
   const geocoder = useMemo(() => createGeocoder(), []);
   const [location, setLocation] = useState<GeoPoint | undefined>(loadLastSearchCenter);
   const [user, setUser] = useState<User | null>(null);
@@ -117,6 +123,10 @@ function App() {
   }, []);
   const clearLocation = useCallback(() => setLocation(undefined), []);
   const closeLogin = useCallback(() => setShowLogin(false), []);
+  const requestSignIn = useCallback(() => {
+    setLoginMode("signIn");
+    setShowLogin(true);
+  }, []);
   const cancelLogin = useCallback(() => {
     setShowLogin(false);
     pendingLocation.current = false;
@@ -138,7 +148,7 @@ function App() {
   const saveLocation = useCallback(
     async (input: NewLocationInput) => {
       if (user === null) throw new Error("Authentication is required to add a location");
-      const contributorName = user.displayName?.trim() || user.email?.trim();
+      const contributorName = publicContributorName(user);
       await addLocation(
         db,
         geocoder,
@@ -171,16 +181,12 @@ function App() {
       <AppBar position="static">
         <Toolbar sx={{ gap: 2 }}>
           <Typography variant="h6" component="h1" sx={{ flexGrow: 1 }}>
-            Simply Fizzed
+            <Link href="#/" color="inherit" underline="none">
+              Simply Fizzed
+            </Link>
           </Typography>
           {user === null ? (
-            <Button
-              color="inherit"
-              onClick={() => {
-                setLoginMode("signIn");
-                setShowLogin(true);
-              }}
-            >
+            <Button color="inherit" onClick={requestSignIn}>
               Sign in
             </Button>
           ) : (
@@ -208,57 +214,68 @@ function App() {
         </Suspense>
       ) : (
         <Container component="main" maxWidth="md" sx={{ py: 4 }}>
-          <Stack spacing={2}>
-            {contributionMessage !== undefined && (
-              <Alert severity="success">{contributionMessage}</Alert>
-            )}
+          {route.page === "location" ? (
+            <LocationDetail locationId={route.id} user={user} onSignIn={requestSignIn} />
+          ) : route.page === "soda" ? (
+            <SodaDetail sodaId={route.id} />
+          ) : route.page === "notFound" ? (
+            <Stack spacing={2}>
+              <Alert severity="warning">This page could not be found.</Alert>
+              <Link href="#/">Back to browse</Link>
+            </Stack>
+          ) : (
+            <Stack spacing={2}>
+              {contributionMessage !== undefined && (
+                <Alert severity="success">{contributionMessage}</Alert>
+              )}
 
-            {addingLocation && user !== null ? (
-              <>
-                <Typography variant="h4" component="h2">
-                  Add a soda location
-                </Typography>
-                <Typography variant="body1" color="text.secondary">
-                  Share a place where other fans can find soda.
-                </Typography>
-                <AddLocationForm
-                  onSave={saveLocation}
-                  onAdded={handleLocationAdded}
-                  onCancel={() => setAddingLocation(false)}
-                />
-              </>
-            ) : (
-              <>
-                <Stack
-                  direction={{ xs: "column", sm: "row" }}
-                  spacing={2}
-                  sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}
-                >
-                  <Typography variant="body1" color="text.secondary">
-                    Find soda near you. Set your location to start searching.
+              {addingLocation && user !== null ? (
+                <>
+                  <Typography variant="h4" component="h2">
+                    Add a soda location
                   </Typography>
-                  <Button variant="outlined" onClick={requestLocationContribution}>
-                    Add a location
-                  </Button>
-                </Stack>
-
-                <LocationInput
-                  geocoder={geocoder}
-                  onResolve={resolveLocation}
-                  onResolveError={clearLocation}
-                />
-
-                {location !== undefined && (
-                  <>
-                    <Typography variant="body2" color="text.secondary">
-                      Searching near {location.lat.toFixed(4)}, {location.lng.toFixed(4)}.
+                  <Typography variant="body1" color="text.secondary">
+                    Share a place where other fans can find soda.
+                  </Typography>
+                  <AddLocationForm
+                    onSave={saveLocation}
+                    onAdded={handleLocationAdded}
+                    onCancel={() => setAddingLocation(false)}
+                  />
+                </>
+              ) : (
+                <>
+                  <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    spacing={2}
+                    sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}
+                  >
+                    <Typography variant="body1" color="text.secondary">
+                      Find soda near you. Set your location to start searching.
                     </Typography>
-                    <NearbySearch center={location} search={search} />
-                  </>
-                )}
-              </>
-            )}
-          </Stack>
+                    <Button variant="outlined" onClick={requestLocationContribution}>
+                      Add a location
+                    </Button>
+                  </Stack>
+
+                  <LocationInput
+                    geocoder={geocoder}
+                    onResolve={resolveLocation}
+                    onResolveError={clearLocation}
+                  />
+
+                  {location !== undefined && (
+                    <>
+                      <Typography variant="body2" color="text.secondary">
+                        Searching near {location.lat.toFixed(4)}, {location.lng.toFixed(4)}.
+                      </Typography>
+                      <NearbySearch center={location} search={search} />
+                    </>
+                  )}
+                </>
+              )}
+            </Stack>
+          )}
         </Container>
       )}
     </>

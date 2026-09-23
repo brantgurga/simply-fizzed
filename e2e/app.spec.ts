@@ -13,7 +13,7 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
-import { INDIANAPOLIS, KROGER, TIMS_BREWERY } from "./fixtures.ts";
+import { INDIANAPOLIS, KROGER, SODAS, TIMS_BREWERY } from "./fixtures.ts";
 
 const PROJECT_ID = "demo-simply-fizzed";
 let cleanupAppNumber = 0;
@@ -34,6 +34,20 @@ async function deleteLocationsNamed(...names: string[]): Promise<void> {
     await Promise.all(
       snapshots.flatMap((snapshot) => snapshot.docs.map((item) => item.ref.delete())),
     );
+  } finally {
+    await deleteAdminApp(app);
+  }
+}
+
+async function deleteAvailability(id: string): Promise<void> {
+  process.env["FIRESTORE_EMULATOR_HOST"] = "127.0.0.1:8080";
+  const app = initializeAdminApp(
+    { projectId: PROJECT_ID },
+    `availability-cleanup-${cleanupAppNumber.toString()}`,
+  );
+  cleanupAppNumber += 1;
+  try {
+    await getAdminFirestore(app).collection("availability").doc(id).delete();
   } finally {
     await deleteAdminApp(app);
   }
@@ -62,7 +76,7 @@ test.describe("App", () => {
 
     await page
       .getByLabel(/email address/i)
-      .fill(`contributor-${testInfo.retry.toString()}@example.test`);
+      .fill(`contributor-${testInfo.retry.toString()}@example.com`);
     await page.getByLabel(/password/i).fill("emulator-password");
     await page.getByRole("button", { name: /create account/i }).click();
 
@@ -98,7 +112,7 @@ test.describe("App", () => {
       connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
       const credential = await createUserWithEmailAndPassword(
         auth,
-        `rules-fan-${testInfo.retry.toString()}@example.test`,
+        `rules-fan-${testInfo.retry.toString()}@example.com`,
         "emulator-password",
       );
       const db = getFirestore(app);
@@ -154,7 +168,7 @@ test.describe("App", () => {
     browserName,
   }, testInfo) => {
     test.skip(browserName !== "chromium", "Auth persistence is exercised once in Chromium.");
-    const email = `offline-fan-retry-${testInfo.retry.toString()}@example.test`;
+    const email = `offline-fan-retry-${testInfo.retry.toString()}@example.com`;
 
     await page.route(/https:\/\/.*(?:firebaseapp|firebaseio|googleapis)\.com/, (route) =>
       route.abort(),
@@ -229,6 +243,60 @@ test.describe("App", () => {
     await context.setOffline(false);
   });
 
+  test("loads exact location and soda hash routes", async ({ page }) => {
+    const cocaCola = SODAS.find((soda) => soda.id === "coca-cola");
+    if (cocaCola === undefined) throw new Error("Missing Coca-Cola fixture");
+
+    await page.goto(`/#/locations/${KROGER.id}`);
+
+    await expect(page.getByRole("heading", { name: KROGER.name })).toBeVisible();
+    const sodaLink = page.getByRole("link", { name: "Coca-Cola Cola (Original) in cans" });
+    await expect(sodaLink).toHaveAttribute("href", "#/sodas/coca-cola");
+    await sodaLink.click();
+    await expect(
+      page.getByRole("heading", { name: `${cocaCola.brand} ${cocaCola.name}` }),
+    ).toBeVisible();
+    await expect(page.getByText("Coke", { exact: true })).toBeVisible();
+  });
+
+  test("requires an exact ambiguous soda selection before contributing", async ({
+    page,
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== "chromium", "The authenticated contribution is exercised once.");
+    const pepsi = SODAS.find((soda) => soda.id === "pepsi-cola");
+    if (pepsi === undefined) throw new Error("Missing Pepsi fixture");
+    const availabilityId = `${encodeURIComponent(KROGER.id)}$${encodeURIComponent(pepsi.id)}$bottle`;
+
+    await page.goto(`/#/locations/${KROGER.id}`);
+    await expect(page.getByText("Sign in to contribute soda availability.")).toBeVisible();
+    await page.getByRole("button", { name: "Sign in" }).last().click();
+    await page.getByRole("button", { name: /sign up/i }).click();
+    await page
+      .getByLabel(/email address/i)
+      .fill(`availability-${testInfo.retry.toString()}@example.com`);
+    await page.getByLabel(/password/i).fill("emulator-password");
+    await page.getByRole("button", { name: /create account/i }).click();
+
+    try {
+      const sodaInput = page.getByLabel("Catalog soda");
+      await expect(sodaInput).toBeVisible();
+      await sodaInput.fill("Coke");
+      const options = page.getByRole("option");
+      await expect(options).toHaveCount(2);
+      await page.getByRole("option", { name: "Pepsi-Cola Cola — Original" }).click();
+      await page.getByLabel("Form").click();
+      await page.getByRole("option", { name: "Bottle" }).click();
+      await page.getByRole("button", { name: "Add soda" }).click();
+
+      await expect(
+        page.getByRole("link", { name: "Pepsi-Cola Cola (Original) in bottles" }),
+      ).toBeVisible();
+    } finally {
+      await deleteAvailability(availabilityId);
+    }
+  });
+
   test("lists seeded soda locations nearest-first with their sodas", async ({
     page,
     context,
@@ -252,7 +320,7 @@ test.describe("App", () => {
       .getByRole("listitem")
       .filter({ has: page.getByRole("heading", { name: KROGER.name }) });
     await expect(krogerCard.getByText("Big K Root Beer in cans")).toBeVisible();
-    await expect(krogerCard.getByText("Coca-Cola Classic in cans")).toBeVisible();
+    await expect(krogerCard.getByText("Coca-Cola Cola (Original) in cans")).toBeVisible();
     await expect(krogerCard.getByText("0.0 miles away")).toBeVisible();
 
     const timsCard = page

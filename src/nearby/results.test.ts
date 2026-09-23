@@ -16,7 +16,7 @@ const validLocation = {
   geohash: "9yzgcjb0dz",
 };
 
-const validAvailability: Availability = {
+const availabilityWithoutContributionAttribution: Availability = {
   locationId: "loc-1",
   sodaId: "soda-1",
   form: "can",
@@ -94,21 +94,84 @@ describe("parseLocation", () => {
 });
 
 describe("parseAvailability", () => {
-  it("parses a valid document", () => {
-    expect(parseAvailability(validAvailability)).toEqual(validAvailability);
+  it("parses a document created before contribution attribution was added", () => {
+    expect(parseAvailability(availabilityWithoutContributionAttribution)).toEqual(
+      availabilityWithoutContributionAttribution,
+    );
+  });
+
+  it("parses complete contribution attribution", () => {
+    const timestamp = new Date("2026-09-22T12:00:00Z");
+    expect(
+      parseAvailability({
+        ...availabilityWithoutContributionAttribution,
+        createdBy: "fan-123",
+        createdByName: "Soda Fan",
+        createdAt: { toDate: () => timestamp },
+        updatedBy: "fan-123",
+        updatedByName: "Soda Fan",
+        updatedAt: { toDate: () => timestamp },
+      }),
+    ).toEqual({
+      ...availabilityWithoutContributionAttribution,
+      createdBy: "fan-123",
+      createdByName: "Soda Fan",
+      createdAt: timestamp,
+      updatedBy: "fan-123",
+      updatedByName: "Soda Fan",
+      updatedAt: timestamp,
+    });
+  });
+
+  it("returns undefined for partial contribution attribution", () => {
+    expect(
+      parseAvailability({
+        ...availabilityWithoutContributionAttribution,
+        createdBy: "fan-123",
+        createdByName: "Soda Fan",
+      }),
+    ).toBeUndefined();
+  });
+
+  it("returns undefined for malformed complete contribution attribution", () => {
+    expect(
+      parseAvailability({
+        ...availabilityWithoutContributionAttribution,
+        createdBy: "fan-123",
+        createdByName: "Soda Fan",
+        createdAt: "not-a-timestamp",
+        updatedBy: "fan-123",
+        updatedByName: "Soda Fan",
+        updatedAt: "not-a-timestamp",
+      }),
+    ).toBeUndefined();
   });
 
   it("returns undefined for an unknown or missing form", () => {
-    expect(parseAvailability({ ...validAvailability, form: "keg" })).toBeUndefined();
-    expect(parseAvailability({ ...validAvailability, form: undefined })).toBeUndefined();
+    expect(
+      parseAvailability({ ...availabilityWithoutContributionAttribution, form: "keg" }),
+    ).toBeUndefined();
+    expect(
+      parseAvailability({ ...availabilityWithoutContributionAttribution, form: undefined }),
+    ).toBeUndefined();
   });
 
   it("returns undefined when any required string field is missing or mistyped", () => {
-    expect(parseAvailability({ ...validAvailability, locationId: undefined })).toBeUndefined();
-    expect(parseAvailability({ ...validAvailability, sodaId: 7 })).toBeUndefined();
-    expect(parseAvailability({ ...validAvailability, sodaName: undefined })).toBeUndefined();
-    expect(parseAvailability({ ...validAvailability, sodaBrand: null })).toBeUndefined();
-    expect(parseAvailability({ ...validAvailability, sodaFlavor: undefined })).toBeUndefined();
+    expect(
+      parseAvailability({ ...availabilityWithoutContributionAttribution, locationId: undefined }),
+    ).toBeUndefined();
+    expect(
+      parseAvailability({ ...availabilityWithoutContributionAttribution, sodaId: 7 }),
+    ).toBeUndefined();
+    expect(
+      parseAvailability({ ...availabilityWithoutContributionAttribution, sodaName: undefined }),
+    ).toBeUndefined();
+    expect(
+      parseAvailability({ ...availabilityWithoutContributionAttribution, sodaBrand: null }),
+    ).toBeUndefined();
+    expect(
+      parseAvailability({ ...availabilityWithoutContributionAttribution, sodaFlavor: undefined }),
+    ).toBeUndefined();
   });
 
   it("returns undefined for non-object input", () => {
@@ -119,13 +182,37 @@ describe("parseAvailability", () => {
 
 describe("groupAvailabilityByLocation", () => {
   it("buckets records by their locationId", () => {
-    const other: Availability = { ...validAvailability, locationId: "loc-2", sodaId: "soda-2" };
-    const another: Availability = { ...validAvailability, sodaId: "soda-3" };
+    const other: Availability = {
+      ...availabilityWithoutContributionAttribution,
+      locationId: "loc-2",
+      sodaId: "soda-2",
+    };
+    const another: Availability = {
+      ...availabilityWithoutContributionAttribution,
+      sodaId: "soda-3",
+    };
 
-    const grouped = groupAvailabilityByLocation([validAvailability, other, another]);
+    const grouped = groupAvailabilityByLocation([
+      availabilityWithoutContributionAttribution,
+      other,
+      another,
+    ]);
 
-    expect(grouped.get("loc-1")).toEqual([validAvailability, another]);
+    expect(grouped.get("loc-1")).toEqual([availabilityWithoutContributionAttribution, another]);
     expect(grouped.get("loc-2")).toEqual([other]);
+  });
+
+  it("ignores duplicate soda and form tuples across attribution schema versions", () => {
+    const duplicate = {
+      ...availabilityWithoutContributionAttribution,
+      createdBy: "another-fan",
+    };
+
+    expect(
+      groupAvailabilityByLocation([availabilityWithoutContributionAttribution, duplicate]).get(
+        "loc-1",
+      ),
+    ).toEqual([availabilityWithoutContributionAttribution]);
   });
 
   it("returns an empty map for empty input", () => {
@@ -135,15 +222,22 @@ describe("groupAvailabilityByLocation", () => {
 
 describe("formatSodaAvailability", () => {
   it("phrases each form for display", () => {
-    expect(formatSodaAvailability({ ...validAvailability, form: "can" })).toBe(
-      "Big K Root Beer in cans",
-    );
-    expect(formatSodaAvailability({ ...validAvailability, form: "bottle" })).toBe(
-      "Big K Root Beer in bottles",
-    );
-    expect(formatSodaAvailability({ ...validAvailability, form: "draft" })).toBe(
-      "Big K Root Beer on draft",
-    );
+    expect(
+      formatSodaAvailability({ ...availabilityWithoutContributionAttribution, form: "can" }),
+    ).toBe("Big K Root Beer in cans");
+    expect(
+      formatSodaAvailability({ ...availabilityWithoutContributionAttribution, form: "bottle" }),
+    ).toBe("Big K Root Beer in bottles");
+    expect(
+      formatSodaAvailability({ ...availabilityWithoutContributionAttribution, form: "draft" }),
+    ).toBe("Big K Root Beer on draft");
+    expect(
+      formatSodaAvailability({
+        ...availabilityWithoutContributionAttribution,
+        sodaName: "Cola",
+        sodaFlavor: "Cherry",
+      }),
+    ).toBe("Big K Cola (Cherry) in cans");
   });
 });
 

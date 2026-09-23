@@ -101,6 +101,7 @@ describe("App", () => {
     auth.addLocation.mockReset();
     auth.addLocation.mockResolvedValue(undefined);
     window.localStorage.clear();
+    window.history.replaceState(null, "", "#/");
   });
 
   it("provides accessible root beer palettes selected by the device color scheme", () => {
@@ -199,7 +200,7 @@ describe("App", () => {
   });
 
   it("allows an authenticated fan to add an attributed location", async () => {
-    auth.currentUser = { uid: "fan-123", displayName: null, email: "fan@example.test" };
+    auth.currentUser = { uid: "fan-123", displayName: null, email: "fan@example.com" };
     const user = userEvent.setup();
     render(<App />);
 
@@ -210,18 +211,18 @@ describe("App", () => {
     expect(auth.addLocation).toHaveBeenCalledWith(
       {},
       expect.anything(),
-      { id: "fan-123", name: "fan@example.test" },
+      { id: "fan-123", name: "fa…@example.com" },
       expect.objectContaining({ name: "Corner Shop" }),
     );
     expect(await screen.findByText("Thanks — Corner Shop was added.")).toBeVisible();
   });
 
   it("shows the authenticated user and allows sign-out", async () => {
-    auth.currentUser = { uid: "fan-123", displayName: null, email: "fan@example.test" };
+    auth.currentUser = { uid: "fan-123", displayName: null, email: "fan@example.com" };
     const user = userEvent.setup();
     render(<App />);
 
-    expect(screen.getByText("fan@example.test")).toBeVisible();
+    expect(screen.getByText("fan@example.com")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Sign out" }));
     expect(auth.signOut).toHaveBeenCalledOnce();
   });
