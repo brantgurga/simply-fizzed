@@ -1,7 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "$id": "https://json.schemastore.org/package.json",
   "definitions": {
     "person": {
       "description": "A person who has been involved in creating or maintaining this package.",
@@ -1100,7 +1099,7 @@
       "$ref": "eslintrc.json"
     },
     "prettier": {
-      "$ref": "https://www.schemastore.org/prettierrc.json"
+      "$ref": "prettierrc.json"
     },
     "stylelint": {
       "$ref": "stylelintrc.json"
@@ -1121,7 +1120,7 @@
       "$ref": "nodemon.json"
     },
     "quikrun": {
-      "$ref": "https://www.schemastore.org/quikrun.json"
+      "$ref": "quikrun.json"
     },
     "pnpm": {
       "description": "Defines pnpm specific configuration.",

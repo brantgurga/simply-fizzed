@@ -14,6 +14,8 @@ patterns:
 customCatalog:
   schemas:
     # Source: https://www.schemastore.org/package.json
+    # Its transitive SchemaStore references are vendored alongside it; the root
+    # and ESLint schema IDs are omitted so relative refs resolve to local files.
     - name: package.json
       fileMatch:
         - package.json
