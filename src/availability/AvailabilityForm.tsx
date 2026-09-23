@@ -33,6 +33,7 @@ export default function AvailabilityForm({
   const [catalog, setCatalog] = useState<SodaDocument[]>([]);
   const [catalogStatus, setCatalogStatus] = useState<"loading" | "ready" | "error">("loading");
   const [soda, setSoda] = useState<SodaDocument | null>(null);
+  const [sodaInput, setSodaInput] = useState("");
   const [form, setForm] = useState<SodaForm>("can");
   const [message, setMessage] = useState<{ severity: "error" | "success"; text: string }>();
   const [saving, setSaving] = useState(false);
@@ -65,6 +66,7 @@ export default function AvailabilityForm({
       await onAdd(soda, form);
       setMessage({ severity: "success", text: "Availability added." });
       setSoda(null);
+      setSodaInput("");
     } catch (error) {
       setMessage({
         severity: "error",
@@ -101,8 +103,18 @@ export default function AvailabilityForm({
       <Autocomplete
         options={catalog}
         value={soda}
+        inputValue={sodaInput}
         disabled={saving}
-        onChange={(_event, value) => setSoda(value)}
+        onChange={(_event, value) => {
+          setSoda(value);
+          setSodaInput(value === null ? "" : formatSodaCatalogLabel(value));
+        }}
+        onInputChange={(_event, value, reason) => {
+          setSodaInput(value);
+          if (reason === "input" && soda !== null && value !== formatSodaCatalogLabel(soda)) {
+            setSoda(null);
+          }
+        }}
         filterOptions={(_options, state) => rankSodas(catalog, state.inputValue)}
         getOptionKey={(option) => option.id}
         getOptionLabel={formatSodaCatalogLabel}

@@ -62,16 +62,21 @@ export async function loadSodaCatalog(db: Firestore): Promise<SodaDocument[]> {
   });
 }
 
+const COMBINING_MARKS = /\p{M}/gu;
+const AMPERSANDS = /&/g;
+const NON_ALPHANUMERIC_CHARACTERS = /[^\p{L}\p{N}]+/gu;
+const REPEATED_WHITESPACE = /\s+/g;
+
 /** Normalize user input while retaining every meaningful word. */
 export function normalizeSodaSearch(value: string): string {
   return value
     .normalize("NFKD")
-    .replace(/\p{M}/gu, "")
+    .replace(COMBINING_MARKS, "")
     .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(AMPERSANDS, " and ")
+    .replace(NON_ALPHANUMERIC_CHARACTERS, " ")
     .trim()
-    .replace(/\s+/g, " ");
+    .replace(REPEATED_WHITESPACE, " ");
 }
 
 export function formatSodaCatalogLabel(soda: Soda): string {

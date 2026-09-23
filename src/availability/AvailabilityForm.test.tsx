@@ -65,6 +65,21 @@ describe("AvailabilityForm", () => {
     await waitFor(() => expect(onAdd).toHaveBeenCalledWith(duplicateLabels[1], "can"));
   });
 
+  it("rejects a stale selection after its displayed text is edited", async () => {
+    const user = userEvent.setup();
+    const onAdd = vi.fn();
+    render(<AvailabilityForm onAdd={onAdd} loadCatalog={vi.fn().mockResolvedValue(catalog)} />);
+
+    const input = await screen.findByLabelText("Catalog soda");
+    await user.click(input);
+    await user.click((await screen.findAllByRole("option"))[0]!);
+    await user.type(input, " Zero");
+    await user.click(screen.getByRole("button", { name: "Add soda" }));
+
+    expect(screen.getByText("Choose an exact soda from the catalog.")).toBeVisible();
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
   it("locks the selection while an availability write is pending", async () => {
     const user = userEvent.setup();
     let finish: (() => void) | undefined;
