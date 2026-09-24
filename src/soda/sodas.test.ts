@@ -130,10 +130,11 @@ describe("parseSoda", () => {
 });
 
 describe("formatSodaUpdatedAt", () => {
-  it("formats the date and time for the requested locale", () => {
-    expect(formatSodaUpdatedAt(new Date(2026, 8, 23, 15, 30), "en-US")).toBe(
-      "Sep 23, 2026, 3:30 PM",
-    );
+  it("formats the date and time for contrasting requested locales", () => {
+    const updatedAt = new Date(2026, 8, 23, 15, 30);
+
+    expect(formatSodaUpdatedAt(updatedAt, "en-US")).toBe("Sep 23, 2026, 3:30 PM");
+    expect(formatSodaUpdatedAt(updatedAt, "de-DE")).toBe("23.09.2026, 15:30");
   });
 });
 
