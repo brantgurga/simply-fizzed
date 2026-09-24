@@ -157,6 +157,24 @@ jobs:
           restore-keys: |
             firebase-emulators-${{ runner.os }}-
 
+      - name: Read Playwright version
+        id: playwright-version
+        run: >-
+          node -e "console.log('version=' +
+          require('@playwright/test/package.json').version)" >> "$GITHUB_OUTPUT"
+
+      # Keep local installs hermetic. `npm ci` removes node_modules, so restore
+      # the browser cache only afterward, at Playwright's hermetic path.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: node_modules/playwright-core/.local-browsers
+          key: >-
+            playwright-browsers-${{ runner.os }}-${{
+            steps.playwright-version.outputs.version }}
+          restore-keys: |
+            playwright-browsers-${{ runner.os }}-
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
