@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import SodaDetail from "./SodaDetail";
 
 describe("SodaDetail", () => {
-  it("renders canonical fields and aliases from an exact document", async () => {
+  it("renders canonical fields, aliases, and update attribution", async () => {
     const loader = vi.fn().mockResolvedValue({
       status: "found",
       value: {
@@ -12,13 +12,31 @@ describe("SodaDetail", () => {
         name: "Zero Sugar",
         flavor: "Cola",
         aliases: ["Coke Zero", "Coca-Cola Zero"],
+        updatedByName: "Soda Fan",
+        updatedAt: new Date("2026-09-23T02:48:11Z"),
       },
     });
     render(<SodaDetail sodaId="coke-zero" loader={loader} />);
 
     expect(await screen.findByRole("heading", { name: "Coca-Cola Zero Sugar" })).toBeVisible();
     expect(screen.getByText("Coke Zero")).toBeVisible();
+    expect(screen.getByText("Soda Fan")).toBeVisible();
+    expect(screen.getByText(/2026/)).toBeVisible();
     expect(loader).toHaveBeenCalledWith("coke-zero");
+  });
+
+  it("shows unknown values for a legacy unattributed soda", async () => {
+    const loader = vi.fn().mockResolvedValue({
+      status: "found",
+      value: { id: "legacy", brand: "Brand", name: "Name", flavor: "Flavor" },
+    });
+
+    render(<SodaDetail sodaId="legacy" loader={loader} />);
+
+    expect(await screen.findByRole("heading", { name: "Brand Name" })).toBeVisible();
+    const unknownValues = screen.getAllByText("Unknown");
+    expect(unknownValues).toHaveLength(2);
+    expect(unknownValues.every((value) => value.style.fontStyle === "italic")).toBe(true);
   });
 
   it.each([
