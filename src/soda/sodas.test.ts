@@ -109,7 +109,21 @@ describe("parseSoda", () => {
     });
   });
 
-  it("omits malformed optional update attribution", () => {
+  it.each([
+    ["name only", { updatedByName: "Soda Fan" }],
+    ["timestamp only", { updatedAt: { toDate: () => new Date("2026-09-23T02:48:11Z") } }],
+  ])("rejects partial update attribution with %s", (_case, attribution) => {
+    expect(
+      parseSoda("cola", {
+        brand: "Brand",
+        name: "Name",
+        flavor: "Flavor",
+        ...attribution,
+      }),
+    ).toBeUndefined();
+  });
+
+  it("rejects malformed update attribution", () => {
     expect(
       parseSoda("cola", {
         brand: "Brand",
@@ -118,7 +132,7 @@ describe("parseSoda", () => {
         updatedByName: "   ",
         updatedAt: { toDate: () => new Date(Number.NaN) },
       }),
-    ).toEqual({ id: "cola", brand: "Brand", name: "Name", flavor: "Flavor" });
+    ).toBeUndefined();
   });
 
   it("rejects malformed canonical fields or aliases", () => {

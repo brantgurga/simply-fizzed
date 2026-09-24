@@ -59,16 +59,22 @@ export function parseSoda(id: string, value: unknown): SodaDocument | undefined 
       aliases.push(alias);
     }
   }
+  const hasUpdatedByName = value["updatedByName"] !== undefined;
+  const hasUpdatedAt = value["updatedAt"] !== undefined;
+  if (hasUpdatedByName !== hasUpdatedAt) return undefined;
+
   const updatedByName = optionalString(value, "updatedByName");
   const updatedAt = parseTimestamp(value["updatedAt"]);
+  if (hasUpdatedByName && (updatedByName === undefined || updatedAt === undefined))
+    return undefined;
+
   return {
     id,
     name,
     brand,
     flavor,
     ...(aliases === undefined ? {} : { aliases }),
-    ...(updatedByName === undefined ? {} : { updatedByName }),
-    ...(updatedAt === undefined ? {} : { updatedAt }),
+    ...(updatedByName === undefined || updatedAt === undefined ? {} : { updatedByName, updatedAt }),
   };
 }
 
