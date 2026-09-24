@@ -158,6 +158,17 @@ describe("parseAvailability", () => {
     expect(
       parseAvailability({
         ...availabilityWithoutContributionAttribution,
+        createdBy: undefined,
+        createdByName: undefined,
+        createdAt: undefined,
+        updatedBy: undefined,
+        updatedByName: undefined,
+        updatedAt: undefined,
+      }),
+    ).toBeUndefined();
+    expect(
+      parseAvailability({
+        ...availabilityWithoutContributionAttribution,
         createdBy: "fan-123",
         createdByName: "Soda Fan",
         createdAt: "not-a-timestamp",

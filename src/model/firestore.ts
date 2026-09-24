@@ -186,9 +186,16 @@ export const availabilityDocumentSchema = z.pipe(
     })
     .check(
       z.refine(
-        (value) =>
-          AVAILABILITY_ATTRIBUTION_FIELDS.every((field) => value[field] === undefined) ||
-          AVAILABILITY_ATTRIBUTION_FIELDS.every((field) => value[field] !== undefined),
+        (value) => {
+          const presentFields = AVAILABILITY_ATTRIBUTION_FIELDS.filter((field) =>
+            Object.hasOwn(value, field),
+          );
+          return (
+            presentFields.length === 0 ||
+            (presentFields.length === AVAILABILITY_ATTRIBUTION_FIELDS.length &&
+              AVAILABILITY_ATTRIBUTION_FIELDS.every((field) => value[field] !== undefined))
+          );
+        },
         { error: "Availability attribution must be absent or complete." },
       ),
     ),
