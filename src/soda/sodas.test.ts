@@ -133,6 +133,15 @@ describe("parseSoda", () => {
         updatedAt: { toDate: () => new Date(Number.NaN) },
       }),
     ).toBeUndefined();
+    expect(
+      parseSoda("cola", {
+        brand: "Brand",
+        name: "Name",
+        flavor: "Flavor",
+        updatedByName: "Soda Fan",
+        updatedAt: new Date(),
+      }),
+    ).toBeUndefined();
   });
 
   it("rejects malformed canonical fields or aliases", () => {

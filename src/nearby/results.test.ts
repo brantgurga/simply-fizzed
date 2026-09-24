@@ -66,6 +66,10 @@ describe("parseLocation", () => {
         updatedAt: { toDate: () => new Date(Number.NaN) },
       }),
     ).toEqual({ id: "loc-1", ...validLocation });
+    expect(parseLocation("loc-1", { ...validLocation, createdAt: new Date() })).toEqual({
+      id: "loc-1",
+      ...validLocation,
+    });
   });
 
   it("returns undefined when a required field is missing or mistyped", () => {
@@ -123,6 +127,20 @@ describe("parseAvailability", () => {
     });
   });
 
+  it("ignores inherited contribution attribution", () => {
+    const value = { ...availabilityWithoutContributionAttribution };
+    Object.setPrototypeOf(value, {
+      createdBy: "fan-123",
+      createdByName: "Soda Fan",
+      createdAt: { toDate: () => new Date() },
+      updatedBy: "fan-123",
+      updatedByName: "Soda Fan",
+      updatedAt: { toDate: () => new Date() },
+    });
+
+    expect(parseAvailability(value)).toEqual(availabilityWithoutContributionAttribution);
+  });
+
   it("returns undefined for partial contribution attribution", () => {
     expect(
       parseAvailability({
@@ -131,9 +149,23 @@ describe("parseAvailability", () => {
         createdByName: "Soda Fan",
       }),
     ).toBeUndefined();
+    expect(
+      parseAvailability({ ...availabilityWithoutContributionAttribution, createdBy: undefined }),
+    ).toBeUndefined();
   });
 
   it("returns undefined for malformed complete contribution attribution", () => {
+    expect(
+      parseAvailability({
+        ...availabilityWithoutContributionAttribution,
+        createdBy: undefined,
+        createdByName: undefined,
+        createdAt: undefined,
+        updatedBy: undefined,
+        updatedByName: undefined,
+        updatedAt: undefined,
+      }),
+    ).toBeUndefined();
     expect(
       parseAvailability({
         ...availabilityWithoutContributionAttribution,
@@ -143,6 +175,17 @@ describe("parseAvailability", () => {
         updatedBy: "fan-123",
         updatedByName: "Soda Fan",
         updatedAt: "not-a-timestamp",
+      }),
+    ).toBeUndefined();
+    expect(
+      parseAvailability({
+        ...availabilityWithoutContributionAttribution,
+        createdBy: "fan-123",
+        createdByName: "Soda Fan",
+        createdAt: new Date(),
+        updatedBy: "fan-123",
+        updatedByName: "Soda Fan",
+        updatedAt: new Date(),
       }),
     ).toBeUndefined();
   });

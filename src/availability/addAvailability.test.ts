@@ -162,6 +162,31 @@ describe("addAvailability", () => {
     );
   });
 
+  it("validates every new-soda payload before staging writes", async () => {
+    const set = vi.fn();
+    const get = vi.fn(async (reference: unknown) =>
+      String(reference) === "locations/location-one" ? snapshot(true) : snapshot(false),
+    );
+    firebase.runTransaction.mockImplementation(
+      async (
+        _database: unknown,
+        update: (transaction: { get: typeof get; set: typeof set }) => Promise<unknown>,
+      ) => update({ get, set }),
+    );
+
+    await expect(
+      Reflect.apply(addNewSodaAvailability, undefined, [
+        db,
+        "location-one",
+        { brand: "Sprecher", name: "Root Beer", flavor: "Original" },
+        "keg",
+        { id: "fan-123" },
+      ]),
+    ).rejects.toThrow();
+    expect(set).not.toHaveBeenCalled();
+    expect(firebase.serverTimestamp).not.toHaveBeenCalled();
+  });
+
   it("rejects a duplicate before writing", async () => {
     const set = vi.fn();
     const get = vi.fn(async (reference: unknown) => {
@@ -183,5 +208,29 @@ describe("addAvailability", () => {
       addAvailability(db, "location-one", "soda-one", "can", { id: "fan-123" }),
     ).rejects.toBeInstanceOf(DuplicateAvailabilityError);
     expect(set).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed attribution before writing", async () => {
+    const set = vi.fn();
+    const get = vi.fn(async (reference: unknown) => {
+      const path = String(reference);
+      if (path.startsWith("locations/")) return snapshot(true);
+      if (path.startsWith("sodas/")) {
+        return snapshot(true, "soda-one", { name: "Cola", brand: "Brand", flavor: "Cola" });
+      }
+      return snapshot(false);
+    });
+    firebase.runTransaction.mockImplementation(
+      async (
+        _database: unknown,
+        update: (transaction: { get: typeof get; set: typeof set }) => Promise<unknown>,
+      ) => update({ get, set }),
+    );
+
+    await expect(
+      addAvailability(db, "location-one", "soda-one", "can", { id: "   " }),
+    ).rejects.toThrow();
+    expect(set).not.toHaveBeenCalled();
+    expect(firebase.serverTimestamp).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 import { addDoc, collection, type Firestore, serverTimestamp } from "firebase/firestore";
 import { geohashForLocation } from "geofire-common";
-import { COLLECTIONS } from "../model/firestore";
+import { COLLECTIONS, locationWriteSchema } from "../model/firestore";
 import type { Geocoder } from "./geocoder";
 
 export interface NewLocationInput {
@@ -32,19 +32,22 @@ export async function addLocation(
     `${address.street}, ${address.city}, ${address.state} ${address.postalCode}`,
   );
 
-  const timestamp = serverTimestamp();
   const contributorName = contributor.name?.trim() || "";
-
-  await addDoc(collection(db, COLLECTIONS.locations), {
+  const location = locationWriteSchema.parse({
     name: input.name.trim(),
     address,
     geo,
     geohash: geohashForLocation([geo.lat, geo.lng]),
     createdBy: contributor.id,
     createdByName: contributorName,
-    createdAt: timestamp,
     updatedBy: contributor.id,
     updatedByName: contributorName,
+  });
+  const timestamp = serverTimestamp();
+
+  await addDoc(collection(db, COLLECTIONS.locations), {
+    ...location,
+    createdAt: timestamp,
     updatedAt: timestamp,
   });
 }
