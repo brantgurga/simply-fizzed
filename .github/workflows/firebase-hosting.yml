@@ -89,6 +89,8 @@ jobs:
             firebase.json
             firestore.indexes.json
             firestore.rules
+            package.json
+            package-lock.json
           if-no-files-found: error
           retention-days: 30
 
@@ -110,6 +112,9 @@ jobs:
         with:
           name: firebase-hosting
 
+      - name: Install deployment dependencies
+        run: npm ci
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
         with:
@@ -119,7 +124,7 @@ jobs:
 
       - name: Deploy Firestore rules
         run: >-
-          npx --yes firebase-tools@15.30.0 deploy --only firestore:rules
+          ./node_modules/.bin/firebase deploy --only firestore:rules
           --project simply-fizzed-prod --non-interactive
 
       - name: Deploy staging channel
@@ -129,7 +134,7 @@ jobs:
         run: |
           set -euo pipefail
           output="$RUNNER_TEMP/firebase-hosting-staging.json"
-          npx --yes firebase-tools@15.30.0 hosting:channel:deploy "$CHANNEL_ID" \
+          ./node_modules/.bin/firebase hosting:channel:deploy "$CHANNEL_ID" \
             --project simply-fizzed-prod \
             --expires 30d \
             --non-interactive \
@@ -193,6 +198,9 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.staging_run_id }}
 
+      - name: Install deployment dependencies
+        run: npm ci
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
         with:
@@ -202,7 +210,7 @@ jobs:
 
       - name: Deploy live channel
         run: >-
-          npx --yes firebase-tools@15.30.0 deploy --only hosting
+          ./node_modules/.bin/firebase deploy --only hosting
           --project simply-fizzed-prod --non-interactive
 
       - name: Summarize production deployment
