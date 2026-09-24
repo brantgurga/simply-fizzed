@@ -5,7 +5,15 @@ import {
   runTransaction,
   serverTimestamp,
 } from "firebase/firestore";
-import { COLLECTIONS, type Availability, type Soda, type SodaForm } from "../model/firestore";
+import {
+  type Availability,
+  availabilityWriteSchema,
+  canonicalSodaSchema,
+  COLLECTIONS,
+  type Soda,
+  sodaWriteSchema,
+  type SodaForm,
+} from "../model/firestore";
 import { isAvailabilityReferenceId, parseSoda, type SodaDocument } from "../soda/sodas";
 
 export interface AvailabilityContributor {
@@ -26,15 +34,15 @@ export interface NewSodaAvailability {
 }
 
 function canonicalSoda(soda: Soda): Soda {
-  const canonical = {
+  const parsed = canonicalSodaSchema.safeParse({
     brand: soda.brand.trim(),
     name: soda.name.trim(),
     flavor: soda.flavor.trim(),
-  };
-  if (Object.values(canonical).some((value) => value.length === 0 || value.length > 200)) {
+  });
+  if (!parsed.success) {
     throw new Error("Brand, name, and flavor must each be between 1 and 200 characters.");
   }
-  return canonical;
+  return parsed.data;
 }
 
 function availabilityData(
@@ -45,7 +53,7 @@ function availabilityData(
   contributor: AvailabilityContributor,
 ): Availability {
   const contributorName = contributor.name?.trim() || "";
-  return {
+  return availabilityWriteSchema.parse({
     locationId,
     sodaId,
     form,
@@ -56,7 +64,7 @@ function availabilityData(
     createdByName: contributorName,
     updatedBy: contributor.id,
     updatedByName: contributorName,
-  };
+  });
 }
 
 /** Build the canonical ID enforced by Firestore rules for one exact availability tuple. */
@@ -130,18 +138,21 @@ export async function addNewSodaAvailability(
     if (existingSnapshot.exists()) throw new DuplicateAvailabilityError();
 
     const contributorName = contributor.name?.trim() || "";
-    const timestamp = serverTimestamp();
-    transaction.set(sodaRef, {
+    const sodaWrite = sodaWriteSchema.parse({
       ...soda,
       initialAvailabilityId: availabilityId,
       createdBy: contributor.id,
       createdByName: contributorName,
-      createdAt: timestamp,
       updatedBy: contributor.id,
       updatedByName: contributorName,
-      updatedAt: timestamp,
     });
     const availability = availabilityData(locationId, sodaRef.id, soda, form, contributor);
+    const timestamp = serverTimestamp();
+    transaction.set(sodaRef, {
+      ...sodaWrite,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
     transaction.set(availabilityRef, {
       ...availability,
       createdAt: timestamp,

@@ -88,6 +88,28 @@ describe("addLocation", () => {
       expect.objectContaining({ createdByName: "", updatedByName: "" }),
     );
   });
+
+  it("rejects malformed coordinates before writing", async () => {
+    const geocoder: Geocoder = { geocode: vi.fn().mockResolvedValue({ lat: 91, lng: -94.6 }) };
+
+    await expect(
+      addLocation(
+        db,
+        geocoder,
+        { id: "fan-123" },
+        {
+          name: "Corner Shop",
+          street: "1 Main St",
+          city: "Kansas City",
+          state: "MO",
+          postalCode: "64106",
+        },
+      ),
+    ).rejects.toThrow();
+
+    expect(firebase.addDoc).not.toHaveBeenCalled();
+    expect(firebase.serverTimestamp).not.toHaveBeenCalled();
+  });
 });
 
 describe("AddLocationForm", () => {
