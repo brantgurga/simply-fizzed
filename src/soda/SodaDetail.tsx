@@ -7,7 +7,7 @@ import ListItem from "@mui/material/ListItem";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { db } from "../firebase";
-import { loadSoda, type DocumentLoad, type SodaDocument } from "./sodas";
+import { formatSodaUpdatedAt, loadSoda, type DocumentLoad, type SodaDocument } from "./sodas";
 
 interface SodaDetailProps {
   sodaId: string;
@@ -17,6 +17,19 @@ interface SodaDetailProps {
 type State = { status: "loading" } | { status: "error" } | DocumentLoad<SodaDocument>;
 
 const defaultLoader = (id: string) => loadSoda(db, id);
+
+function AttributionValue({ value }: { value: string | undefined }) {
+  return (
+    <Typography
+      component="span"
+      variant="inherit"
+      color={value === undefined ? "text.disabled" : undefined}
+      style={value === undefined ? { fontStyle: "italic" } : undefined}
+    >
+      {value ?? "Unknown"}
+    </Typography>
+  );
+}
 
 export default function SodaDetail({ sodaId, loader = defaultLoader }: SodaDetailProps) {
   const [state, setState] = useState<State>({ status: "loading" });
@@ -74,6 +87,15 @@ export default function SodaDetail({ sodaId, loader = defaultLoader }: SodaDetai
       </Typography>
       <Typography>
         <strong>Flavor:</strong> {soda.flavor}
+      </Typography>
+      <Typography color="text.secondary">
+        Last updated:{" "}
+        <AttributionValue
+          value={soda.updatedAt === undefined ? undefined : formatSodaUpdatedAt(soda.updatedAt)}
+        />
+      </Typography>
+      <Typography color="text.secondary">
+        Last updated by: <AttributionValue value={soda.updatedByName} />
       </Typography>
       <section aria-labelledby="aliases-heading">
         <Typography id="aliases-heading" variant="h6" component="h3">

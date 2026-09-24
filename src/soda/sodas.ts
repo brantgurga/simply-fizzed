@@ -24,6 +24,23 @@ function requiredString(data: Record<string, unknown>, key: string): string | un
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
+function optionalString(data: Record<string, unknown>, key: string): string | undefined {
+  const value = data[key];
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+function parseTimestamp(value: unknown): Date | undefined {
+  if (!isRecord(value)) return undefined;
+  const toDate = value["toDate"];
+  if (typeof toDate !== "function") return undefined;
+  try {
+    const date: unknown = toDate.call(value);
+    return date instanceof Date && !Number.isNaN(date.valueOf()) ? date : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Parse an untrusted catalog document without unsafe casts. */
 export function parseSoda(id: string, value: unknown): SodaDocument | undefined {
   if (!isRecord(value)) return undefined;
@@ -42,7 +59,31 @@ export function parseSoda(id: string, value: unknown): SodaDocument | undefined 
       aliases.push(alias);
     }
   }
-  return { id, name, brand, flavor, ...(aliases === undefined ? {} : { aliases }) };
+  const hasUpdatedByName = value["updatedByName"] !== undefined;
+  const hasUpdatedAt = value["updatedAt"] !== undefined;
+  if (hasUpdatedByName !== hasUpdatedAt) return undefined;
+
+  const updatedByName = optionalString(value, "updatedByName");
+  const updatedAt = parseTimestamp(value["updatedAt"]);
+  if (hasUpdatedByName && (updatedByName === undefined || updatedAt === undefined))
+    return undefined;
+
+  return {
+    id,
+    name,
+    brand,
+    flavor,
+    ...(aliases === undefined ? {} : { aliases }),
+    ...(updatedByName === undefined || updatedAt === undefined ? {} : { updatedByName, updatedAt }),
+  };
+}
+
+/** Format a soda update timestamp using the visitor's locale. */
+export function formatSodaUpdatedAt(updatedAt: Date, locales?: Intl.LocalesArgument): string {
+  return new Intl.DateTimeFormat(locales, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(updatedAt);
 }
 
 export async function loadSoda(db: Firestore, id: string): Promise<DocumentLoad<SodaDocument>> {

@@ -11,6 +11,7 @@ const firebase = vi.hoisted(() => ({
 vi.mock("firebase/firestore", () => firebase);
 
 import {
+  formatSodaUpdatedAt,
   isAvailabilityReferenceId,
   loadSodaCatalog,
   normalizeSodaSearch,
@@ -87,11 +88,67 @@ describe("parseSoda", () => {
     });
   });
 
+  it("parses valid update attribution", () => {
+    const updatedAt = new Date("2026-09-23T02:48:11Z");
+
+    expect(
+      parseSoda("cola", {
+        brand: "Brand",
+        name: "Name",
+        flavor: "Flavor",
+        updatedByName: "Soda Fan",
+        updatedAt: { toDate: () => updatedAt },
+      }),
+    ).toEqual({
+      id: "cola",
+      brand: "Brand",
+      name: "Name",
+      flavor: "Flavor",
+      updatedByName: "Soda Fan",
+      updatedAt,
+    });
+  });
+
+  it.each([
+    ["name only", { updatedByName: "Soda Fan" }],
+    ["timestamp only", { updatedAt: { toDate: () => new Date("2026-09-23T02:48:11Z") } }],
+  ])("rejects partial update attribution with %s", (_case, attribution) => {
+    expect(
+      parseSoda("cola", {
+        brand: "Brand",
+        name: "Name",
+        flavor: "Flavor",
+        ...attribution,
+      }),
+    ).toBeUndefined();
+  });
+
+  it("rejects malformed update attribution", () => {
+    expect(
+      parseSoda("cola", {
+        brand: "Brand",
+        name: "Name",
+        flavor: "Flavor",
+        updatedByName: "   ",
+        updatedAt: { toDate: () => new Date(Number.NaN) },
+      }),
+    ).toBeUndefined();
+  });
+
   it("rejects malformed canonical fields or aliases", () => {
     expect(parseSoda("bad", { brand: "Brand", name: "", flavor: "Cola" })).toBeUndefined();
     expect(
       parseSoda("bad", { brand: "Brand", name: "Cola", flavor: "Cola", aliases: [42] }),
     ).toBeUndefined();
+  });
+});
+
+describe("formatSodaUpdatedAt", () => {
+  it("formats the date and time for contrasting requested locales", () => {
+    const updatedAt = new Date(2026, 8, 23, 15, 30);
+
+    expect(formatSodaUpdatedAt(updatedAt, "en-US")).toBe("Sep 23, 2026, 3:30 PM");
+    expect(formatSodaUpdatedAt(updatedAt, "de-DE")).toBe("23.09.2026, 15:30");
   });
 });
 
