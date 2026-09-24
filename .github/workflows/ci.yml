@@ -125,10 +125,6 @@ jobs:
   e2e:
     name: End-to-end tests
     runs-on: ubuntu-latest
-    env:
-      # Match the hermetic browser path used in playwright.config.ts so the
-      # install step and the test run resolve the same binaries.
-      PLAYWRIGHT_BROWSERS_PATH: "0"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -145,6 +141,11 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+
+      # Use Playwright's global Linux cache in CI so `npm ci` cannot delete
+      # restored browsers. Local installs remain hermetic via the config file.
+      - name: Configure Playwright browser path
+        run: echo "PLAYWRIGHT_BROWSERS_PATH=$HOME/.cache/ms-playwright" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: npm ci
@@ -163,12 +164,10 @@ jobs:
           node -e "console.log('version=' +
           require('@playwright/test/package.json').version)" >> "$GITHUB_OUTPUT"
 
-      # Keep local installs hermetic. `npm ci` removes node_modules, so restore
-      # the browser cache only afterward, at Playwright's hermetic path.
       - name: Cache Playwright browsers
         uses: actions/cache@v6
         with:
-          path: node_modules/playwright-core/.local-browsers
+          path: ~/.cache/ms-playwright
           key: >-
             playwright-browsers-${{ runner.os }}-${{
             steps.playwright-version.outputs.version }}
