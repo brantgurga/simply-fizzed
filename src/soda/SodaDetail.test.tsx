@@ -25,10 +25,16 @@ describe("SodaDetail", () => {
     expect(loader).toHaveBeenCalledWith("coke-zero");
   });
 
-  it("shows unknown values for a legacy unattributed soda", async () => {
+  it("styles missing attribution differently from a contributor named Unknown", async () => {
     const loader = vi.fn().mockResolvedValue({
       status: "found",
-      value: { id: "legacy", brand: "Brand", name: "Name", flavor: "Flavor" },
+      value: {
+        id: "legacy",
+        brand: "Brand",
+        name: "Name",
+        flavor: "Flavor",
+        updatedByName: "Unknown",
+      },
     });
 
     render(<SodaDetail sodaId="legacy" loader={loader} />);
@@ -36,7 +42,7 @@ describe("SodaDetail", () => {
     expect(await screen.findByRole("heading", { name: "Brand Name" })).toBeVisible();
     const unknownValues = screen.getAllByText("Unknown");
     expect(unknownValues).toHaveLength(2);
-    expect(unknownValues.every((value) => value.style.fontStyle === "italic")).toBe(true);
+    expect(unknownValues.filter((value) => value.style.fontStyle === "italic")).toHaveLength(1);
   });
 
   it.each([
