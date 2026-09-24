@@ -176,6 +176,7 @@ export default function AvailabilityForm({
           <TextField
             label="Brand"
             value={newSoda.brand}
+            helperText="Examples: Sprecher, A&W"
             disabled={saving}
             slotProps={{ htmlInput: { maxLength: 200 } }}
             onChange={(event) => setNewSoda({ ...newSoda, brand: event.target.value })}
@@ -183,6 +184,7 @@ export default function AvailabilityForm({
           <TextField
             label="Name"
             value={newSoda.name}
+            helperText="The product name, such as Root Beer, Low-Cal Root Beer, or Energy Root Beer."
             disabled={saving}
             slotProps={{ htmlInput: { maxLength: 200 } }}
             onChange={(event) => setNewSoda({ ...newSoda, name: event.target.value })}
@@ -190,6 +192,7 @@ export default function AvailabilityForm({
           <TextField
             label="Flavor"
             value={newSoda.flavor}
+            helperText="A flavor shared across products, such as root beer or cola."
             disabled={saving}
             slotProps={{ htmlInput: { maxLength: 200 } }}
             onChange={(event) => setNewSoda({ ...newSoda, flavor: event.target.value })}

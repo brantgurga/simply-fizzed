@@ -102,6 +102,24 @@ describe("AvailabilityForm", () => {
     await screen.findByText("Availability added.");
   });
 
+  it("explains the distinction between a product name and its shared flavor", async () => {
+    const user = userEvent.setup();
+    render(<AvailabilityForm onAdd={vi.fn()} loadCatalog={vi.fn().mockResolvedValue([])} />);
+
+    await user.type(await screen.findByLabelText("Catalog soda"), "Root Beer");
+    await user.click(screen.getByRole("button", { name: /add “root beer” as a new soda/i }));
+
+    expect(screen.getByText("Examples: Sprecher, A&W")).toBeVisible();
+    expect(
+      screen.getByText(
+        "The product name, such as Root Beer, Low-Cal Root Beer, or Energy Root Beer.",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByText("A flavor shared across products, such as root beer or cola."),
+    ).toBeVisible();
+  });
+
   it("creates an unmatched soda and reuses it for another form", async () => {
     const user = userEvent.setup();
     const created = {
