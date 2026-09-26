@@ -11,14 +11,14 @@ import {
 import {
   COLLECTIONS,
   profileDocumentSchema,
-  samplingDocumentSchema,
+  ratingDocumentSchema,
   type MugRating,
   type ProfileDocument,
-  type SamplingDocument,
+  type RatingDocument,
 } from "../model/firestore";
 import type { SodaDocument } from "../soda/sodas";
 
-export interface Sampling extends SamplingDocument {
+export interface RatingRecord extends RatingDocument {
   id: string;
 }
 
@@ -26,20 +26,20 @@ export interface PublicProfile extends ProfileDocument {
   id: string;
 }
 
-export type SamplingLoad =
-  | { status: "found"; value: Sampling }
+export type RatingLoad =
+  | { status: "found"; value: RatingRecord }
   | { status: "missing" }
   | { status: "malformed" };
 
 export type InventoryLoad =
-  | { status: "found"; profile: PublicProfile; samplings: Sampling[] }
+  | { status: "found"; profile: PublicProfile; ratings: RatingRecord[] }
   | { status: "missing" }
   | { status: "malformed" };
 
-export type SamplingValue = MugRating | null | undefined;
+export type RatingValue = MugRating | null | undefined;
 
-function parseSampling(id: string, value: unknown): Sampling | undefined {
-  const parsed = samplingDocumentSchema.safeParse(value);
+function parseRating(id: string, value: unknown): RatingRecord | undefined {
+  const parsed = ratingDocumentSchema.safeParse(value);
   return parsed.success ? { id, ...parsed.data } : undefined;
 }
 
@@ -56,36 +56,36 @@ export async function savePublicProfile(
   await setDoc(reference, { publicName, updatedAt: serverTimestamp() }, { merge: true });
 }
 
-/** Load the signed-in user's sampling for one soda offering. */
-export async function loadSampling(
+/** Load the signed-in user's rating record for one soda offering. */
+export async function loadRating(
   db: Firestore,
   userId: string,
   sodaOfferingId: string,
-): Promise<SamplingLoad> {
+): Promise<RatingLoad> {
   const snapshot = await getDoc(
-    doc(db, COLLECTIONS.profiles, userId, COLLECTIONS.samplings, sodaOfferingId),
+    doc(db, COLLECTIONS.profiles, userId, COLLECTIONS.ratings, sodaOfferingId),
   );
   if (!snapshot.exists()) return { status: "missing" };
-  const sampling = parseSampling(snapshot.id, snapshot.data());
-  return sampling === undefined ? { status: "malformed" } : { status: "found", value: sampling };
+  const rating = parseRating(snapshot.id, snapshot.data());
+  return rating === undefined ? { status: "malformed" } : { status: "found", value: rating };
 }
 
 /**
- * Persist the complete sampling state. Undefined removes it, null records an
- * unrated sampling, and a number records a whole-mug rating.
+ * Persist the complete rating state. Undefined removes it, null records an
+ * unrated sampled offering, and a number records its mug rating.
  */
-export async function saveSampling(
+export async function saveRating(
   db: Firestore,
   userId: string,
   publicName: string,
   soda: SodaDocument,
-  value: SamplingValue,
+  value: RatingValue,
 ): Promise<void> {
   const profileReference = doc(db, COLLECTIONS.profiles, userId);
-  const samplingReference = doc(db, COLLECTIONS.profiles, userId, COLLECTIONS.samplings, soda.id);
+  const ratingReference = doc(db, COLLECTIONS.profiles, userId, COLLECTIONS.ratings, soda.id);
 
   await runTransaction(db, async (transaction) => {
-    const existing = await transaction.get(samplingReference);
+    const existing = await transaction.get(ratingReference);
     transaction.set(
       profileReference,
       { publicName, updatedAt: serverTimestamp() },
@@ -93,65 +93,68 @@ export async function saveSampling(
     );
 
     if (value === undefined) {
-      if (existing.exists()) transaction.delete(samplingReference);
+      if (existing.exists()) transaction.delete(ratingReference);
       return;
     }
 
-    transaction.set(
-      samplingReference,
-      {
+    const ratingFields = {
+      rating: value,
+      lastRatedAt: value === null ? null : serverTimestamp(),
+    };
+    if (existing.exists()) {
+      transaction.update(ratingReference, ratingFields);
+    } else {
+      transaction.set(ratingReference, {
         userId,
         sodaOfferingId: soda.id,
         sodaName: soda.name,
         sodaBrand: soda.brand,
         sodaFlavor: soda.flavor,
-        rating: value,
-        ...(!existing.exists() ? { firstRecorded: serverTimestamp() } : {}),
-        lastRatedAt: value === null ? null : serverTimestamp(),
-      },
-      { merge: existing.exists() },
-    );
+        firstRecorded: serverTimestamp(),
+        ...ratingFields,
+      });
+    }
   });
 }
 
-/** Load a public profile and every sampled offering in its inventory. */
+/** Load a public profile and every rating record in its sampled inventory. */
 export async function loadInventory(db: Firestore, userId: string): Promise<InventoryLoad> {
   const profileReference = doc(db, COLLECTIONS.profiles, userId);
-  const [profileSnapshot, samplingSnapshot] = await Promise.all([
+  const [profileSnapshot, ratingSnapshot] = await Promise.all([
     getDoc(profileReference),
-    getDocs(collection(profileReference, COLLECTIONS.samplings)),
+    getDocs(collection(profileReference, COLLECTIONS.ratings)),
   ]);
   if (!profileSnapshot.exists()) return { status: "missing" };
 
   const parsedProfile = profileDocumentSchema.safeParse(profileSnapshot.data());
   if (!parsedProfile.success) return { status: "malformed" };
 
-  const samplings = samplingSnapshot.docs.map((item) => parseSampling(item.id, item.data()));
-  if (samplings.some((sampling) => sampling === undefined)) return { status: "malformed" };
+  const ratings = ratingSnapshot.docs.map((item) => parseRating(item.id, item.data()));
+  if (ratings.some((rating) => rating === undefined)) return { status: "malformed" };
 
   return {
     status: "found",
     profile: { id: profileSnapshot.id, ...parsedProfile.data },
-    samplings: samplings.filter((sampling): sampling is Sampling => sampling !== undefined),
+    ratings: ratings.filter((rating): rating is RatingRecord => rating !== undefined),
   };
 }
 
 const collator = new Intl.Collator(undefined, { sensitivity: "base" });
-const offeringLabel = (sampling: Sampling) =>
-  `${sampling.sodaBrand} ${sampling.sodaName} — ${sampling.sodaFlavor}`;
+export const sodaOfferingLabel = (rating: RatingRecord) =>
+  `${rating.sodaBrand} ${rating.sodaName} (${rating.sodaFlavor})`;
 const compareRecordIds = (left: string, right: string) =>
   left < right ? -1 : left > right ? 1 : 0;
 
 /** Default inventory order: offering label, then stable record ID. */
-export function compareAlphabetically(left: Sampling, right: Sampling): number {
+export function compareAlphabetically(left: RatingRecord, right: RatingRecord): number {
   return (
-    collator.compare(offeringLabel(left), offeringLabel(right)) ||
+    collator.compare(sodaOfferingLabel(left), sodaOfferingLabel(right)) ||
     compareRecordIds(left.id, right.id)
   );
 }
 
 /** Rated first by rating time, then unrated by first-recorded time. */
-export function compareRecentlyRated(left: Sampling, right: Sampling): number {
+export function compareRecentlyRated(left: RatingRecord, right: RatingRecord): number {
   if (left.rating !== null && right.rating === null) return -1;
   if (left.rating === null && right.rating !== null) return 1;
 

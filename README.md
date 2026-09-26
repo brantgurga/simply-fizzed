@@ -362,15 +362,17 @@ emulator seed script, and tests:
   records without attribution remain readable and are de-duplicated when listed.
 - **`profiles/{uid}`** – a public Firebase Auth UID profile containing the user's
   display name or masked email.
-- **`profiles/{uid}/samplings/{sodaId}`** – one sampled-offering record per user,
-  with denormalized soda fields, an optional 1–5 mug rating, and first-recorded
-  and last-rated timestamps.
+- **`profiles/{uid}/ratings/{sodaId}`** – one sampled-offering rating record per
+  user, with an optional 1–5 mug rating and first-recorded and last-rated
+  timestamps. Its denormalized soda fields are an immutable snapshot from when
+  the record was created; `sodaOfferingId` resolves to the current catalog entry
+  so corrections or merges can be presented alongside the historical label.
 
 Security rules in [`firestore.rules`](./firestore.rules) allow public reads.
 Signed-in users may create validated, attributed catalog contributions and may
-only maintain their own profile and sampling records. Sampling soda fields must
-match the catalog, while record ownership and first-recorded timestamps cannot
-be changed.
+only maintain their own profile and rating records. Rating soda fields must match
+catalog data when created, while their historical snapshot, record ownership,
+and first-recorded timestamp cannot be changed.
 
 [`firestore.indexes.json`](./firestore.indexes.json) is intentionally empty: the
 only non-trivial query is the geohash radius search, which uses a single-field

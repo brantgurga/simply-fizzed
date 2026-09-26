@@ -32,8 +32,8 @@ vi.mock("./location/LocationInput", () => ({
   ),
 }));
 vi.mock("./location/addLocation", () => ({ addLocation: auth.addLocation }));
-vi.mock("./sampling/sampling", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./sampling/sampling")>()),
+vi.mock("./rating/ratings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./rating/ratings")>()),
   savePublicProfile: auth.savePublicProfile,
 }));
 vi.mock("./location/AddLocationForm", () => ({

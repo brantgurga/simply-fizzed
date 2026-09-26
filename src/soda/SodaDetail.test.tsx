@@ -89,8 +89,8 @@ describe("SodaDetail", () => {
           status: "found",
           value: { id: "cola", brand: "Brand", name: "Cola", flavor: "Original" },
         })}
-        samplingLoader={vi.fn().mockResolvedValue({ status: "missing" })}
-        samplingSaver={vi.fn().mockRejectedValue(new Error("offline"))}
+        ratingLoader={vi.fn().mockResolvedValue({ status: "missing" })}
+        ratingSaver={vi.fn().mockRejectedValue(new Error("offline"))}
       />,
     );
 
@@ -111,8 +111,8 @@ describe("SodaDetail", () => {
           status: "found",
           value: { id: "cola", brand: "Brand", name: "Cola", flavor: "Original" },
         })}
-        samplingLoader={vi.fn().mockResolvedValue({ status: "missing" })}
-        samplingSaver={saver}
+        ratingLoader={vi.fn().mockResolvedValue({ status: "missing" })}
+        ratingSaver={saver}
       />,
     );
 

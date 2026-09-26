@@ -13,12 +13,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { publicContributorName, type ContributorIdentity } from "../contributor";
 import { db } from "../firebase";
-import {
-  loadSampling,
-  saveSampling,
-  type SamplingLoad,
-  type SamplingValue,
-} from "../sampling/sampling";
+import { loadRating, saveRating, type RatingLoad, type RatingValue } from "../rating/ratings";
 import { formatSodaUpdatedAt, loadSoda, type DocumentLoad, type SodaDocument } from "./sodas";
 
 interface SodaDetailProps {
@@ -26,12 +21,12 @@ interface SodaDetailProps {
   user?: ({ uid: string } & ContributorIdentity) | null;
   onSignIn?: () => void;
   loader?: (id: string) => Promise<DocumentLoad<SodaDocument>>;
-  samplingLoader?: (userId: string, sodaId: string) => Promise<SamplingLoad>;
-  samplingSaver?: (
+  ratingLoader?: (userId: string, sodaId: string) => Promise<RatingLoad>;
+  ratingSaver?: (
     userId: string,
     publicName: string,
     soda: SodaDocument,
-    value: SamplingValue,
+    value: RatingValue,
   ) => Promise<void>;
 }
 
@@ -52,25 +47,25 @@ function AttributionValue({ value }: { value: string | undefined }) {
   );
 }
 
-const defaultSamplingLoader = (userId: string, sodaId: string) => loadSampling(db, userId, sodaId);
+const defaultRatingLoader = (userId: string, sodaId: string) => loadRating(db, userId, sodaId);
 const noop = () => undefined;
-const defaultSamplingSaver = (
+const defaultRatingSaver = (
   userId: string,
   publicName: string,
   soda: SodaDocument,
-  value: SamplingValue,
-) => saveSampling(db, userId, publicName, soda, value);
+  value: RatingValue,
+) => saveRating(db, userId, publicName, soda, value);
 const ratingLabel = (value: number) => {
   const meanings = ["Disliked", "Below average", "Acceptable", "Really liked", "Loved"];
   return `${value} mug${value === 1 ? "" : "s"}: ${meanings[value - 1] ?? ""}`;
 };
 
-type SamplingState =
+type RatingState =
   | { status: "loading" }
-  | { status: "ready"; value: SamplingValue }
+  | { status: "ready"; value: RatingValue }
   | { status: "error" };
 
-function SamplingControls({
+function RatingControls({
   soda,
   user,
   onSignIn,
@@ -80,15 +75,15 @@ function SamplingControls({
   soda: SodaDocument;
   user: ({ uid: string } & ContributorIdentity) | null;
   onSignIn: () => void;
-  loader: (userId: string, sodaId: string) => Promise<SamplingLoad>;
+  loader: (userId: string, sodaId: string) => Promise<RatingLoad>;
   saver: (
     userId: string,
     publicName: string,
     soda: SodaDocument,
-    value: SamplingValue,
+    value: RatingValue,
   ) => Promise<void>;
 }) {
-  const [state, setState] = useState<SamplingState>(() =>
+  const [state, setState] = useState<RatingState>(() =>
     user === null ? { status: "ready", value: undefined } : { status: "loading" },
   );
   const [saving, setSaving] = useState(false);
@@ -139,7 +134,7 @@ function SamplingControls({
     return <Alert severity="error">Your sampling information could not be loaded.</Alert>;
   }
 
-  const persist = async (value: SamplingValue) => {
+  const persist = async (value: RatingValue) => {
     const previous = state.value;
     setState({ status: "ready", value });
     setSaving(true);
@@ -154,7 +149,7 @@ function SamplingControls({
     }
   };
   const sampled = state.value !== undefined;
-  const rating = typeof state.value === "number" ? state.value : null;
+  const rating = typeof state.value === "number" ? Math.round(state.value) : null;
 
   return (
     <Stack component="section" spacing={1} aria-labelledby="sampling-heading">
@@ -204,8 +199,8 @@ export default function SodaDetail({
   user = null,
   onSignIn = noop,
   loader = defaultLoader,
-  samplingLoader = defaultSamplingLoader,
-  samplingSaver = defaultSamplingSaver,
+  ratingLoader = defaultRatingLoader,
+  ratingSaver = defaultRatingSaver,
 }: SodaDetailProps) {
   const [state, setState] = useState<State>({ status: "loading" });
   const [request, setRequest] = useState({ sodaId, loader });
@@ -263,12 +258,12 @@ export default function SodaDetail({
       <Typography>
         <strong>Flavor:</strong> {soda.flavor}
       </Typography>
-      <SamplingControls
+      <RatingControls
         soda={soda}
         user={user}
         onSignIn={onSignIn}
-        loader={samplingLoader}
-        saver={samplingSaver}
+        loader={ratingLoader}
+        saver={ratingSaver}
       />
       <Typography color="text.secondary">
         Last updated:{" "}

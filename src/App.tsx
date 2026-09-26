@@ -32,7 +32,7 @@ import NearbySearch from "./nearby/NearbySearch";
 import { searchNearby } from "./nearby/nearby";
 import UserProfile from "./profile/UserProfile";
 import { profileRoute, useHashRoute } from "./routes";
-import { savePublicProfile } from "./sampling/sampling";
+import { savePublicProfile } from "./rating/ratings";
 import SodaDetail from "./soda/SodaDetail";
 
 type LoginScreenProps = {

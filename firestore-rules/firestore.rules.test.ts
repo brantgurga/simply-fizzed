@@ -106,7 +106,7 @@ function validProfile(overrides: Record<string, unknown> = {}): Record<string, u
   };
 }
 
-function validSampling(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function validRating(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     userId: USER_ID,
     sodaOfferingId: "existing-soda",
@@ -408,7 +408,7 @@ describe("soda creation and immutability", () => {
   });
 });
 
-describe("public profiles and sampling inventories", () => {
+describe("public profiles and rating inventories", () => {
   beforeEach(async () => {
     await testEnvironment.withSecurityRulesDisabled(async (context) => {
       const database = context.firestore();
@@ -419,8 +419,8 @@ describe("public profiles and sampling inventories", () => {
           publicName: "Rules Test Fan",
           updatedAt: Timestamp.now(),
         }),
-        setDoc(doc(database, "profiles", USER_ID, "samplings", "existing-soda"), {
-          ...validSampling(),
+        setDoc(doc(database, "profiles", USER_ID, "ratings", "existing-soda"), {
+          ...validRating(),
           firstRecorded: Timestamp.now(),
         }),
       ]);
@@ -431,7 +431,7 @@ describe("public profiles and sampling inventories", () => {
     const database = testEnvironment.unauthenticatedContext().firestore();
 
     await assertSucceeds(getDoc(doc(database, "profiles", USER_ID)));
-    await assertSucceeds(getDocs(collection(database, "profiles", USER_ID, "samplings")));
+    await assertSucceeds(getDocs(collection(database, "profiles", USER_ID, "ratings")));
     await assertFails(getDocs(collection(database, "profiles")));
   });
 
@@ -444,7 +444,7 @@ describe("public profiles and sampling inventories", () => {
     );
   });
 
-  it("allows unrated and rated sampling creation", async () => {
+  it("allows unrated and rated record creation", async () => {
     await testEnvironment.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), "sodas", "new-unrated"), validSoda);
       await setDoc(doc(context.firestore(), "sodas", "new-rated"), validSoda);
@@ -453,35 +453,35 @@ describe("public profiles and sampling inventories", () => {
 
     await assertSucceeds(
       setDoc(
-        doc(database, "profiles", USER_ID, "samplings", "new-unrated"),
-        validSampling({ sodaOfferingId: "new-unrated" }),
+        doc(database, "profiles", USER_ID, "ratings", "new-unrated"),
+        validRating({ sodaOfferingId: "new-unrated" }),
       ),
     );
     await assertSucceeds(
       setDoc(
-        doc(database, "profiles", USER_ID, "samplings", "new-rated"),
-        validSampling({
+        doc(database, "profiles", USER_ID, "ratings", "new-rated"),
+        validRating({
           sodaOfferingId: "new-rated",
-          rating: 4,
+          rating: 4.5,
           lastRatedAt: serverTimestamp(),
         }),
       ),
     );
   });
 
-  it("allows rating, clearing, and deleting an owned sampling", async () => {
+  it("allows rating, clearing, and deleting an owned rating record", async () => {
     const database = testEnvironment.authenticatedContext(USER_ID).firestore();
-    const reference = doc(database, "profiles", USER_ID, "samplings", "existing-soda");
+    const reference = doc(database, "profiles", USER_ID, "ratings", "existing-soda");
 
-    await assertSucceeds(updateDoc(reference, { rating: 5, lastRatedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(reference, { rating: 4.5, lastRatedAt: serverTimestamp() }));
     await assertSucceeds(updateDoc(reference, { rating: null, lastRatedAt: null }));
     await assertFails(updateDoc(reference, { firstRecorded: serverTimestamp() }));
+    await assertFails(updateDoc(reference, { sodaName: "Renamed" }));
     await assertSucceeds(deleteDoc(reference));
   });
 
   it.each([
     ["an out-of-range rating", { rating: 6, lastRatedAt: serverTimestamp() }],
-    ["a fractional rating", { rating: 2.5, lastRatedAt: serverTimestamp() }],
     ["a rating without its timestamp", { rating: 3, lastRatedAt: null }],
     ["a forged user", { userId: "another-user" }],
     ["a mismatched soda name", { sodaName: "Other" }],
@@ -492,20 +492,20 @@ describe("public profiles and sampling inventories", () => {
 
     await assertFails(
       setDoc(
-        doc(database, "profiles", USER_ID, "samplings", "validation-soda"),
-        validSampling({ sodaOfferingId: "validation-soda", ...overrides }),
+        doc(database, "profiles", USER_ID, "ratings", "validation-soda"),
+        validRating({ sodaOfferingId: "validation-soda", ...overrides }),
       ),
     );
   });
 
-  it("denies profile and sampling writes by another user", async () => {
+  it("denies profile and rating writes by another user", async () => {
     const database = testEnvironment.authenticatedContext("another-user").firestore();
 
     await assertFails(setDoc(doc(database, "profiles", USER_ID), validProfile()));
     await assertFails(
-      setDoc(doc(database, "profiles", USER_ID, "samplings", "existing-soda"), validSampling()),
+      setDoc(doc(database, "profiles", USER_ID, "ratings", "existing-soda"), validRating()),
     );
-    await assertFails(deleteDoc(doc(database, "profiles", USER_ID, "samplings", "existing-soda")));
+    await assertFails(deleteDoc(doc(database, "profiles", USER_ID, "ratings", "existing-soda")));
   });
 });
 

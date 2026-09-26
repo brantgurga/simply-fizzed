@@ -19,8 +19,9 @@ import {
   compareAlphabetically,
   compareRecentlyRated,
   loadInventory,
+  sodaOfferingLabel,
   type InventoryLoad,
-} from "../sampling/sampling";
+} from "../rating/ratings";
 
 interface UserProfileProps {
   userId: string;
@@ -57,10 +58,10 @@ export default function UserProfile({ userId, loader = defaultLoader }: UserProf
     };
   }, [loader, userId]);
 
-  const sortedSamplings = useMemo(() => {
+  const sortedRatings = useMemo(() => {
     if (state.status !== "found") return [];
     const comparator = sortOrder === "alphabetical" ? compareAlphabetically : compareRecentlyRated;
-    return state.samplings.toSorted(comparator);
+    return state.ratings.toSorted(comparator);
   }, [sortOrder, state]);
 
   if (state.status === "loading") {
@@ -102,36 +103,35 @@ export default function UserProfile({ userId, loader = defaultLoader }: UserProf
         </Select>
       </FormControl>
 
-      {sortedSamplings.length === 0 ? (
+      {sortedRatings.length === 0 ? (
         <Typography color="text.secondary">No sampled sodas yet.</Typography>
       ) : (
         <List disablePadding>
-          {sortedSamplings.map((sampling) => (
-            <ListItem key={sampling.id} divider disableGutters>
-              <ListItemText
-                primary={
-                  <Link href={sodaRoute(sampling.sodaOfferingId)}>
-                    {sampling.sodaBrand} {sampling.sodaName}
-                  </Link>
-                }
-                secondary={sampling.sodaFlavor}
-              />
-              {sampling.rating === null ? (
-                <Typography color="text.secondary">Unrated</Typography>
-              ) : (
-                <Rating
-                  aria-label={`${sampling.sodaBrand} ${sampling.sodaName}: ${ratingLabel(sampling.rating)}`}
-                  value={sampling.rating}
-                  max={5}
-                  precision={1}
-                  readOnly
-                  icon={<SportsBarIcon fontSize="inherit" />}
-                  emptyIcon={<SportsBarIcon fontSize="inherit" />}
-                  getLabelText={ratingLabel}
+          {sortedRatings.map((rating) => {
+            const displayRating = rating.rating === null ? null : Math.round(rating.rating);
+            const label = sodaOfferingLabel(rating);
+            return (
+              <ListItem key={rating.id} divider disableGutters>
+                <ListItemText
+                  primary={<Link href={sodaRoute(rating.sodaOfferingId)}>{label}</Link>}
                 />
-              )}
-            </ListItem>
-          ))}
+                {displayRating === null ? (
+                  <Typography color="text.secondary">Unrated</Typography>
+                ) : (
+                  <Rating
+                    aria-label={`${label}: ${ratingLabel(displayRating)}`}
+                    value={displayRating}
+                    max={5}
+                    precision={1}
+                    readOnly
+                    icon={<SportsBarIcon fontSize="inherit" />}
+                    emptyIcon={<SportsBarIcon fontSize="inherit" />}
+                    getLabelText={ratingLabel}
+                  />
+                )}
+              </ListItem>
+            );
+          })}
         </List>
       )}
     </Stack>

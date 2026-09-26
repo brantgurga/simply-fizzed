@@ -1,10 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { InventoryLoad, Sampling } from "../sampling/sampling";
+import type { InventoryLoad, RatingRecord } from "../rating/ratings";
 import UserProfile from "./UserProfile";
 
-function sampling(overrides: Partial<Sampling>): Sampling {
+function rating(overrides: Partial<RatingRecord>): RatingRecord {
   return {
     id: "sample",
     userId: "fan-123",
@@ -26,8 +26,8 @@ const inventory: InventoryLoad = {
     publicName: "fa…@example.com",
     updatedAt: new Date("2026-04-01T00:00:00Z"),
   },
-  samplings: [
-    sampling({
+  ratings: [
+    rating({
       id: "cola",
       sodaOfferingId: "cola",
       sodaName: "Cola",
@@ -35,12 +35,12 @@ const inventory: InventoryLoad = {
       rating: null,
       firstRecorded: new Date("2026-03-01T00:00:00Z"),
     }),
-    sampling({
+    rating({
       id: "root-beer",
       sodaOfferingId: "root-beer",
       sodaName: "Root Beer",
       sodaBrand: "Zulu",
-      rating: 5,
+      rating: 4.6,
       lastRatedAt: new Date("2026-02-01T00:00:00Z"),
     }),
   ],
@@ -51,29 +51,29 @@ describe("UserProfile", () => {
     render(<UserProfile userId="fan-123" loader={vi.fn().mockResolvedValue(inventory)} />);
 
     expect(await screen.findByRole("heading", { name: "fa…@example.com" })).toBeVisible();
-    expect(screen.getByRole("link", { name: "Alpha Cola" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Alpha Cola (Original)" })).toHaveAttribute(
       "href",
       "#/sodas/cola",
     );
     expect(screen.getByText("Unrated")).toBeVisible();
-    expect(screen.getByLabelText("Zulu Root Beer: 5 mugs")).toBeVisible();
+    expect(screen.getByLabelText("Zulu Root Beer (Original): 5 mugs")).toBeVisible();
   });
 
   it("supports the recently rated ordering", async () => {
     const user = userEvent.setup();
     render(<UserProfile userId="fan-123" loader={vi.fn().mockResolvedValue(inventory)} />);
 
-    expect(await screen.findByRole("link", { name: "Alpha Cola" })).toBeVisible();
+    expect(await screen.findByRole("link", { name: "Alpha Cola (Original)" })).toBeVisible();
     expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
-      expect.stringContaining("Alpha Cola"),
-      expect.stringContaining("Zulu Root Beer"),
+      expect.stringContaining("Alpha Cola (Original)"),
+      expect.stringContaining("Zulu Root Beer (Original)"),
     ]);
 
     await user.click(screen.getByRole("combobox", { name: "Sort by" }));
     await user.click(screen.getByRole("option", { name: "Recently rated" }));
     expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
-      expect.stringContaining("Zulu Root Beer"),
-      expect.stringContaining("Alpha Cola"),
+      expect.stringContaining("Zulu Root Beer (Original)"),
+      expect.stringContaining("Alpha Cola (Original)"),
     ]);
   });
 });
