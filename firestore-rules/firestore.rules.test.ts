@@ -414,6 +414,7 @@ describe("public profiles and sampling inventories", () => {
       const database = context.firestore();
       await Promise.all([
         setDoc(doc(database, "sodas", "existing-soda"), validSoda),
+        setDoc(doc(database, "sodas", "validation-soda"), validSoda),
         setDoc(doc(database, "profiles", USER_ID), {
           publicName: "Rules Test Fan",
           updatedAt: Timestamp.now(),
@@ -491,8 +492,8 @@ describe("public profiles and sampling inventories", () => {
 
     await assertFails(
       setDoc(
-        doc(database, "profiles", USER_ID, "samplings", "existing-soda"),
-        validSampling(overrides),
+        doc(database, "profiles", USER_ID, "samplings", "validation-soda"),
+        validSampling({ sodaOfferingId: "validation-soda", ...overrides }),
       ),
     );
   });
