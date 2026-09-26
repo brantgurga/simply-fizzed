@@ -16,6 +16,10 @@ service cloud.firestore {
       return value == "" || isNonEmptyString(value, 320);
     }
 
+    function isValidActionTime(value) {
+      return value is timestamp && value <= request.time + duration.value(5, "m");
+    }
+
     function isValidAddress(address) {
       return address is map
         && address.keys().hasOnly(["street", "city", "state", "postalCode"])
@@ -64,7 +68,7 @@ service cloud.firestore {
     function isValidAvailability(data) {
       return data.keys().hasOnly([
           "locationId", "sodaId", "form",
-          "sodaName", "sodaBrand", "sodaFlavor",
+          "sodaName", "sodaBrand", "sodaFlavor", "canSample", "canPurchase",
           "createdBy", "createdByName", "createdAt",
           "updatedBy", "updatedByName", "updatedAt"
         ])
@@ -74,18 +78,34 @@ service cloud.firestore {
         && isNonEmptyString(data.sodaName, 200)
         && isNonEmptyString(data.sodaBrand, 200)
         && isNonEmptyString(data.sodaFlavor, 200)
-        && data.createdBy == request.auth.uid
-        && isValidAttributionName(data.createdByName)
-        && data.createdAt == request.time
+        && data.canSample in ["yes", "no", "unknown"]
+        && data.canPurchase in ["yes", "no", "unknown"]
         && data.updatedBy == request.auth.uid
         && isValidAttributionName(data.updatedByName)
-        && data.updatedByName == data.createdByName
-        && data.updatedAt == request.time
+        && isValidActionTime(data.updatedAt)
         && exists(/databases/$(database)/documents/locations/$(data.locationId))
         && existsAfter(/databases/$(database)/documents/sodas/$(data.sodaId))
         && data.sodaName == getAfter(/databases/$(database)/documents/sodas/$(data.sodaId)).data.name
         && data.sodaBrand == getAfter(/databases/$(database)/documents/sodas/$(data.sodaId)).data.brand
         && data.sodaFlavor == getAfter(/databases/$(database)/documents/sodas/$(data.sodaId)).data.flavor;
+    }
+
+    function hasValidAvailabilityCreation(data) {
+      return data.keys().hasAll(["createdBy", "createdByName", "createdAt"])
+        && data.createdBy == request.auth.uid
+        && isValidAttributionName(data.createdByName)
+        && isValidActionTime(data.createdAt)
+        && data.updatedByName == data.createdByName
+        && data.updatedAt == data.createdAt;
+    }
+
+    function isValidVerification(data) {
+      return data.keys().hasOnly(["locationId", "verifiedBy", "verifiedByName", "verifiedAt"])
+        && isNonEmptyString(data.locationId, 1500)
+        && data.verifiedBy == request.auth.uid
+        && isValidAttributionName(data.verifiedByName)
+        && isValidActionTime(data.verifiedAt)
+        && exists(/databases/$(database)/documents/locations/$(data.locationId));
     }
 
     function isValidRating(data, userId, ratingId) {
@@ -142,7 +162,21 @@ service cloud.firestore {
         && availabilityId == request.resource.data.locationId
           + "$" + request.resource.data.sodaId
           + "$" + request.resource.data.form
-        && isValidAvailability(request.resource.data);
+        && isValidAvailability(request.resource.data)
+        && hasValidAvailabilityCreation(request.resource.data);
+      allow update: if request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "canSample", "canPurchase", "updatedBy", "updatedByName", "updatedAt"
+        ])
+        && isValidAvailability(request.resource.data)
+        && (!resource.data.keys().hasAny(["updatedAt"])
+          || request.resource.data.updatedAt > resource.data.updatedAt);
+      allow delete: if false;
+    }
+
+    match /verifications/{verificationId} {
+      allow read: if true;
+      allow create: if request.auth != null && isValidVerification(request.resource.data);
       allow update, delete: if false;
     }
 

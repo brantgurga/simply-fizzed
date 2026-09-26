@@ -27,6 +27,8 @@ function nearby(id: string, name: string, distanceMiles: number): NearbyLocation
         sodaName: "Root Beer",
         sodaBrand: "Big K",
         sodaFlavor: "root beer",
+        canSample: "unknown",
+        canPurchase: "unknown",
       },
     ],
   };

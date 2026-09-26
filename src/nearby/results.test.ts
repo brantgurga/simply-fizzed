@@ -23,6 +23,8 @@ const availabilityWithoutContributionAttribution: Availability = {
   sodaName: "Root Beer",
   sodaBrand: "Big K",
   sodaFlavor: "root beer",
+  canSample: "unknown",
+  canPurchase: "unknown",
 };
 
 describe("parseLocation", () => {
@@ -98,10 +100,27 @@ describe("parseLocation", () => {
 });
 
 describe("parseAvailability", () => {
-  it("parses a document created before contribution attribution was added", () => {
-    expect(parseAvailability(availabilityWithoutContributionAttribution)).toEqual(
-      availabilityWithoutContributionAttribution,
-    );
+  it("defaults legacy detail fields to unknown", () => {
+    const {
+      canSample: _canSample,
+      canPurchase: _canPurchase,
+      ...legacy
+    } = availabilityWithoutContributionAttribution;
+
+    expect(parseAvailability(legacy)).toEqual(availabilityWithoutContributionAttribution);
+  });
+
+  it("parses independent detail values and rejects unsupported values", () => {
+    expect(
+      parseAvailability({
+        ...availabilityWithoutContributionAttribution,
+        canSample: "yes",
+        canPurchase: "no",
+      }),
+    ).toMatchObject({ canSample: "yes", canPurchase: "no" });
+    expect(
+      parseAvailability({ ...availabilityWithoutContributionAttribution, canSample: "sometimes" }),
+    ).toBeUndefined();
   });
 
   it("parses complete contribution attribution", () => {

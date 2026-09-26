@@ -12,6 +12,8 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { db } from "../firebase";
 import type { Soda, SodaForm } from "../model/firestore";
+import { AvailabilityDetailFields } from "./AvailabilityDetails";
+import type { AvailabilityDetails } from "./addAvailability";
 import {
   formatSodaCatalogLabel,
   loadSodaCatalog,
@@ -20,7 +22,11 @@ import {
 } from "../soda/sodas";
 
 interface AvailabilityFormProps {
-  onAdd: (soda: SodaDocument | Soda, form: SodaForm) => Promise<SodaDocument | void>;
+  onAdd: (
+    soda: SodaDocument | Soda,
+    form: SodaForm,
+    details: AvailabilityDetails,
+  ) => Promise<SodaDocument | void>;
   loadCatalog?: () => Promise<SodaDocument[]>;
 }
 
@@ -36,6 +42,10 @@ export default function AvailabilityForm({
   const [sodaInput, setSodaInput] = useState("");
   const [newSoda, setNewSoda] = useState<Soda | null>(null);
   const [form, setForm] = useState<SodaForm>("can");
+  const [details, setDetails] = useState<AvailabilityDetails>({
+    canSample: "unknown",
+    canPurchase: "unknown",
+  });
   const [message, setMessage] = useState<{ severity: "error" | "success"; text: string }>();
   const [saving, setSaving] = useState(false);
 
@@ -80,7 +90,7 @@ export default function AvailabilityForm({
     }
     setSaving(true);
     try {
-      const addedSoda = await onAdd(sodaToAdd, form);
+      const addedSoda = await onAdd(sodaToAdd, form, details);
       if (addedSoda !== undefined) {
         setCatalog((current) =>
           current.some((item) => item.id === addedSoda.id) ? current : [...current, addedSoda],
@@ -219,6 +229,12 @@ export default function AvailabilityForm({
           <MenuItem value="bottle">Bottle</MenuItem>
         </Select>
       </FormControl>
+      <AvailabilityDetailFields
+        value={details}
+        onChange={setDetails}
+        disabled={saving}
+        idPrefix="new-availability"
+      />
       <Button type="submit" variant="contained" disabled={saving}>
         {saving ? "Adding…" : "Add soda"}
       </Button>

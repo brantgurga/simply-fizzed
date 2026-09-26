@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import AvailabilityForm from "./AvailabilityForm";
 
+const unknownDetails = { canSample: "unknown", canPurchase: "unknown" };
+
 const catalog = [
   {
     id: "coca-cola",
@@ -39,7 +41,7 @@ describe("AvailabilityForm", () => {
     await user.click(screen.getByRole("option", { name: "Bottle" }));
     await user.click(screen.getByRole("button", { name: "Add soda" }));
 
-    await waitFor(() => expect(onAdd).toHaveBeenCalledWith(catalog[1], "bottle"));
+    await waitFor(() => expect(onAdd).toHaveBeenCalledWith(catalog[1], "bottle", unknownDetails));
   });
 
   it("keeps exact IDs distinct when catalog labels are identical", async () => {
@@ -62,7 +64,9 @@ describe("AvailabilityForm", () => {
     await user.click(options[1]!);
     await user.click(screen.getByRole("button", { name: "Add soda" }));
 
-    await waitFor(() => expect(onAdd).toHaveBeenCalledWith(duplicateLabels[1], "can"));
+    await waitFor(() =>
+      expect(onAdd).toHaveBeenCalledWith(duplicateLabels[1], "can", unknownDetails),
+    );
   });
 
   it("rejects a stale selection after its displayed text is edited", async () => {
@@ -141,6 +145,7 @@ describe("AvailabilityForm", () => {
       expect(onAdd).toHaveBeenCalledWith(
         { brand: "Sprecher", name: "Root Beer", flavor: "Original" },
         "can",
+        unknownDetails,
       ),
     );
     await user.click(await screen.findByLabelText("Catalog soda"));
@@ -149,7 +154,28 @@ describe("AvailabilityForm", () => {
     await user.click(screen.getByRole("option", { name: "Bottle" }));
     await user.click(screen.getByRole("button", { name: "Add soda" }));
 
-    await waitFor(() => expect(onAdd).toHaveBeenLastCalledWith(created, "bottle"));
+    await waitFor(() => expect(onAdd).toHaveBeenLastCalledWith(created, "bottle", unknownDetails));
+  });
+
+  it("submits independent sample and purchase values", async () => {
+    const user = userEvent.setup();
+    const onAdd = vi.fn().mockResolvedValue(undefined);
+    render(<AvailabilityForm onAdd={onAdd} loadCatalog={vi.fn().mockResolvedValue(catalog)} />);
+
+    await user.click(await screen.findByLabelText("Catalog soda"));
+    await user.click((await screen.findAllByRole("option"))[0]!);
+    await user.click(screen.getByLabelText("Can sample"));
+    await user.click(screen.getByRole("option", { name: "Yes" }));
+    await user.click(screen.getByLabelText("Can purchase"));
+    await user.click(screen.getByRole("option", { name: "No" }));
+    await user.click(screen.getByRole("button", { name: "Add soda" }));
+
+    await waitFor(() =>
+      expect(onAdd).toHaveBeenCalledWith(catalog[0], "can", {
+        canSample: "yes",
+        canPurchase: "no",
+      }),
+    );
   });
 
   it("requires a catalog selection or new soda", async () => {

@@ -7,6 +7,7 @@ export const COLLECTIONS = {
   availability: "availability",
   profiles: "profiles",
   ratings: "ratings",
+  verifications: "verifications",
 } as const;
 
 const nonBlankString = z.string().check(z.refine((value) => value.trim().length > 0));
@@ -137,6 +138,10 @@ export type Soda = z.infer<typeof sodaSchema>;
 export const sodaFormSchema = z.enum(["draft", "can", "bottle"]);
 export type SodaForm = z.infer<typeof sodaFormSchema>;
 
+/** A known yes/no answer, or an explicit absence of knowledge. */
+export const availabilityValueSchema = z.enum(["yes", "no", "unknown"]);
+export type AvailabilityValue = z.infer<typeof availabilityValueSchema>;
+
 const availabilityFields = {
   locationId: z.string(),
   sodaId: z.string(),
@@ -146,28 +151,35 @@ const availabilityFields = {
   sodaFlavor: z.string(),
 };
 
-const AVAILABILITY_ATTRIBUTION_FIELDS = [
-  "createdBy",
-  "createdByName",
-  "createdAt",
-  "updatedBy",
-  "updatedByName",
-  "updatedAt",
-] as const;
+const CREATION_ATTRIBUTION_FIELDS = ["createdBy", "createdByName", "createdAt"] as const;
+const UPDATE_ATTRIBUTION_FIELDS = ["updatedBy", "updatedByName", "updatedAt"] as const;
+
+/**
+ * Reports whether an optional group of own properties is wholly absent or wholly defined.
+ * An empty field list is considered complete.
+ */
+function hasCompleteFieldGroup(value: object, fields: readonly string[]): boolean {
+  const present = fields.filter((field) => Object.hasOwn(value, field));
+  return (
+    present.length === 0 ||
+    (present.length === fields.length &&
+      fields.every((field) => Reflect.get(value, field) !== undefined))
+  );
+}
 
 const availabilityInputSchema = z.pipe(
-  z.unknown().check(
-    z.refine(
-      (value) => {
-        if (typeof value !== "object" || value === null) return true;
-        const count = AVAILABILITY_ATTRIBUTION_FIELDS.filter((field) =>
-          Object.hasOwn(value, field),
-        ).length;
-        return count === 0 || count === AVAILABILITY_ATTRIBUTION_FIELDS.length;
-      },
-      { error: "Availability attribution must be absent or complete." },
+  z
+    .unknown()
+    .check(
+      z.refine(
+        (value) =>
+          typeof value !== "object" ||
+          value === null ||
+          (hasCompleteFieldGroup(value, CREATION_ATTRIBUTION_FIELDS) &&
+            hasCompleteFieldGroup(value, UPDATE_ATTRIBUTION_FIELDS)),
+        { error: "Availability attribution groups must be absent or complete." },
+      ),
     ),
-  ),
   z.transform((value) =>
     typeof value === "object" && value !== null ? Object.fromEntries(Object.entries(value)) : value,
   ),
@@ -176,31 +188,24 @@ const availabilityInputSchema = z.pipe(
 /** Runtime schema for an untrusted `availability/{id}` document. */
 export const availabilityDocumentSchema = z.pipe(
   availabilityInputSchema,
-  z
-    .object({
+  z.pipe(
+    z.object({
       ...availabilityFields,
+      canSample: z.optional(availabilityValueSchema),
+      canPurchase: z.optional(availabilityValueSchema),
       createdBy: z.optional(nonBlankString),
       createdByName: z.optional(z.string()),
       createdAt: z.optional(firestoreTimestampSchema),
       updatedBy: z.optional(nonBlankString),
       updatedByName: z.optional(z.string()),
       updatedAt: z.optional(firestoreTimestampSchema),
-    })
-    .check(
-      z.refine(
-        (value) => {
-          const presentFields = AVAILABILITY_ATTRIBUTION_FIELDS.filter((field) =>
-            Object.hasOwn(value, field),
-          );
-          return (
-            presentFields.length === 0 ||
-            (presentFields.length === AVAILABILITY_ATTRIBUTION_FIELDS.length &&
-              AVAILABILITY_ATTRIBUTION_FIELDS.every((field) => value[field] !== undefined))
-          );
-        },
-        { error: "Availability attribution must be absent or complete." },
-      ),
-    ),
+    }),
+    z.transform((value) => ({
+      ...value,
+      canSample: value.canSample ?? "unknown",
+      canPurchase: value.canPurchase ?? "unknown",
+    })),
+  ),
 );
 
 /**
@@ -209,6 +214,9 @@ export const availabilityDocumentSchema = z.pipe(
  */
 export const availabilitySchema = z.object({
   ...availabilityFields,
+  documentId: z.optional(z.string()),
+  canSample: availabilityValueSchema,
+  canPurchase: availabilityValueSchema,
   createdBy: z.optional(z.string()),
   createdByName: z.optional(z.string()),
   createdAt: z.optional(z.date()),
@@ -217,6 +225,15 @@ export const availabilitySchema = z.object({
   updatedAt: z.optional(z.date()),
 });
 export type Availability = z.infer<typeof availabilitySchema>;
+
+/** One append-only event confirming a location's known availability information. */
+export const verificationDocumentSchema = z.object({
+  locationId: nonBlankString,
+  verifiedBy: nonBlankString,
+  verifiedByName: z.string(),
+  verifiedAt: firestoreTimestampSchema,
+});
+export type Verification = z.infer<typeof verificationDocumentSchema>;
 
 /** Application-owned location data validated before adding server timestamps. */
 export const locationWriteSchema = z.strictObject({
@@ -246,10 +263,29 @@ export const availabilityWriteSchema = z.strictObject({
   sodaName: boundedString(200),
   sodaBrand: boundedString(200),
   sodaFlavor: boundedString(200),
+  canSample: availabilityValueSchema,
+  canPurchase: availabilityValueSchema,
   createdBy: meaningfulString,
   createdByName: attributionNameSchema,
   updatedBy: meaningfulString,
   updatedByName: attributionNameSchema,
+});
+
+/** Editable availability fields and their attribution, validated before writing. */
+export const availabilityUpdateWriteSchema = z.strictObject({
+  canSample: availabilityValueSchema,
+  canPurchase: availabilityValueSchema,
+  updatedBy: meaningfulString,
+  updatedByName: attributionNameSchema,
+  updatedAt: z.date(),
+});
+
+/** Application-owned verification data validated before writing a client action time. */
+export const verificationWriteSchema = z.strictObject({
+  locationId: boundedString(1500),
+  verifiedBy: meaningfulString,
+  verifiedByName: attributionNameSchema,
+  verifiedAt: z.date(),
 });
 
 const canonicalSodaFields = {

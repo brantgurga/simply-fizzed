@@ -122,9 +122,9 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: github-deployer@simply-fizzed-prod.iam.gserviceaccount.com
 
-      - name: Deploy Firestore rules
+      - name: Deploy Firestore rules and indexes
         run: >-
-          ./node_modules/.bin/firebase deploy --only firestore:rules
+          ./node_modules/.bin/firebase deploy --only firestore:rules,firestore:indexes
           --project simply-fizzed-prod --non-interactive
 
       - name: Deploy staging channel
