@@ -77,9 +77,13 @@ describe("LocationDetail", () => {
       updatedByName: signedInUser.displayName,
       updatedAt: new Date("2026-09-26T13:00:00Z"),
     };
+    let finishAvailabilityCommit: (() => void) | undefined;
+    const availabilityCommit = new Promise<void>((resolve) => {
+      finishAvailabilityCommit = resolve;
+    });
     const availabilityUpdater = vi.fn().mockReturnValue({
       value: updated,
-      committed: Promise.resolve(),
+      committed: availabilityCommit,
     });
     const confirmed = {
       locationId: location.id,
@@ -119,12 +123,15 @@ describe("LocationDetail", () => {
       { canSample: "no", canPurchase: "yes" },
       signedInUser,
     );
-    expect(await screen.findByText("Can sample: No")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
     expect(verificationWriter).not.toHaveBeenCalled();
 
     await interaction.click(screen.getByRole("button", { name: "Confirm availability" }));
     expect(verificationWriter).toHaveBeenCalledWith(location.id, signedInUser);
     expect(await screen.findByText(/by Soda Fan/)).toBeVisible();
+    if (finishAvailabilityCommit === undefined) throw new Error("Missing commit resolver");
+    finishAvailabilityCommit();
+    expect(await screen.findByText("Can sample: No")).toBeVisible();
   });
 
   it("adds a new soda and immediately lists its availability", async () => {
@@ -136,6 +143,10 @@ describe("LocationDetail", () => {
       name: "Root Beer",
       flavor: "Original",
     };
+    let finishAvailabilityCommit: (() => void) | undefined;
+    const availabilityCommit = new Promise<void>((resolve) => {
+      finishAvailabilityCommit = resolve;
+    });
     const newSodaAvailabilityWriter = vi.fn().mockReturnValue({
       value: {
         soda,
@@ -151,7 +162,7 @@ describe("LocationDetail", () => {
           updatedAt: new Date("2026-09-26T12:00:00Z"),
         },
       },
-      committed: Promise.resolve(),
+      committed: availabilityCommit,
     });
     render(
       <LocationDetail
@@ -175,6 +186,7 @@ describe("LocationDetail", () => {
     expect(
       await screen.findByRole("link", { name: "Sprecher Root Beer (Original) in cans" }),
     ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Adding…" })).toBeDisabled();
     expect(newSodaAvailabilityWriter).toHaveBeenCalledWith(
       location.id,
       { brand: "Sprecher", name: "Root Beer", flavor: "Original" },
@@ -182,6 +194,9 @@ describe("LocationDetail", () => {
       { canSample: "unknown", canPurchase: "unknown" },
       signedInUser,
     );
+    if (finishAvailabilityCommit === undefined) throw new Error("Missing commit resolver");
+    finishAvailabilityCommit();
+    expect(await screen.findByText("Availability added.")).toBeVisible();
   });
 
   it.each([

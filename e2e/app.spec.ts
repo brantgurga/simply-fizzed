@@ -419,12 +419,13 @@ test.describe("App", () => {
       await row.getByLabel("Can purchase").click();
       await page.getByRole("option", { name: "No", exact: true }).click();
       await row.getByRole("button", { name: "Save details" }).click();
-      await expect(row.getByText("Can sample: Yes")).toBeVisible();
+      await expect(row.getByRole("button", { name: "Saving…" })).toBeDisabled();
       await page.getByRole("button", { name: "Confirm availability" }).click();
       await context.setOffline(false);
       await expect
         .poll(() => availabilitySyncState(availabilityId, KROGER.id))
         .toEqual({ canSample: "yes", canPurchase: "no", verificationCount: 2 });
+      await expect(row.getByText("Can sample: Yes")).toBeVisible();
 
       // Confirming an older cached view does not overwrite a remote availability edit.
       await context.setOffline(true);

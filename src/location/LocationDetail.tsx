@@ -185,10 +185,16 @@ export default function LocationDetail({
   }
 
   const location = state.location.value;
-  const trackCommit = (committed: Promise<void>) => {
-    void committed.catch(() => {
+  const awaitCommit = async (committed: Promise<void>) => {
+    try {
+      await committed;
+    } catch (error) {
       setWriteError("A saved change could not be synchronized. Please retry while online.");
-    });
+      throw error;
+    }
+  };
+  const trackCommit = (committed: Promise<void>) => {
+    void awaitCommit(committed).catch(() => undefined);
   };
 
   const add = async (soda: SodaDocument | Soda, form: SodaForm, details: AvailabilityDetails) => {
@@ -226,7 +232,7 @@ export default function LocationDetail({
           })()
         : current,
     );
-    trackCommit(queued.committed);
+    await awaitCommit(queued.committed);
     return catalogSoda;
   };
 
@@ -254,7 +260,7 @@ export default function LocationDetail({
           })()
         : current,
     );
-    trackCommit(queued.committed);
+    await awaitCommit(queued.committed);
   };
 
   const confirm = () => {
