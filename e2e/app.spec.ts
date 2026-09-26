@@ -259,8 +259,9 @@ test.describe("App", () => {
     await expect(page.getByText("Coke", { exact: true })).toBeVisible();
   });
 
-  test("rates a soda and exposes the public rating inventory", async ({
+  test("queues tried and rating changes offline, then exposes the public inventory", async ({
     page,
+    context,
     browserName,
   }, testInfo) => {
     test.skip(browserName !== "chromium", "The authenticated rating flow is exercised once.");
@@ -273,10 +274,19 @@ test.describe("App", () => {
     await page.getByLabel(/password/i).fill("emulator-password");
     await page.getByRole("button", { name: /create account/i }).click();
 
+    const sampled = page.getByRole("checkbox", { name: "I've had this" });
     const fourMugs = page.getByRole("radio", { name: "4 mugs: Really liked" });
     const fourMugsId = await fourMugs.getAttribute("id");
     if (fourMugsId === null) throw new Error("Missing rating input ID");
+
+    await context.setOffline(true);
+    await sampled.click();
+    await expect(sampled).toBeChecked();
     await page.locator(`label[for="${fourMugsId}"]`).click();
+    await expect(fourMugs).toBeChecked();
+    await expect(page.getByText("Saving…")).toBeVisible();
+    await context.setOffline(false);
+    await expect(page.getByText("Saving…")).toBeHidden();
     await expect(page.getByRole("button", { name: "Clear rating" })).toBeEnabled();
     await page.getByRole("link", { name: email }).click();
     await expect(page.getByRole("heading", { name: "ra…@example.com" })).toBeVisible();

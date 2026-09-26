@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import SportsBarIcon from "@mui/icons-material/SportsBar";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
@@ -27,6 +27,7 @@ interface SodaDetailProps {
     publicName: string,
     soda: SodaDocument,
     value: RatingValue,
+    create: boolean,
   ) => Promise<void>;
 }
 
@@ -54,7 +55,8 @@ const defaultRatingSaver = (
   publicName: string,
   soda: SodaDocument,
   value: RatingValue,
-) => saveRating(db, userId, publicName, soda, value);
+  create: boolean,
+) => saveRating(db, userId, publicName, soda, value, create);
 const ratingLabel = (value: number) => {
   const meanings = ["Disliked", "Below average", "Acceptable", "Really liked", "Loved"];
   return `${value} mug${value === 1 ? "" : "s"}: ${meanings[value - 1] ?? ""}`;
@@ -81,13 +83,15 @@ function RatingControls({
     publicName: string,
     soda: SodaDocument,
     value: RatingValue,
+    create: boolean,
   ) => Promise<void>;
 }) {
   const [state, setState] = useState<RatingState>(() =>
     user === null ? { status: "ready", value: undefined } : { status: "loading" },
   );
-  const [saving, setSaving] = useState(false);
+  const [pendingSaves, setPendingSaves] = useState(0);
   const [saveError, setSaveError] = useState(false);
+  const latestMutation = useRef(0);
   const [request, setRequest] = useState({ userId: user?.uid, sodaId: soda.id, loader });
 
   if (request.userId !== user?.uid || request.sodaId !== soda.id || request.loader !== loader) {
@@ -136,18 +140,28 @@ function RatingControls({
 
   const persist = async (value: RatingValue) => {
     const previous = state.value;
+    const mutation = ++latestMutation.current;
     setState({ status: "ready", value });
-    setSaving(true);
+    setPendingSaves((count) => count + 1);
     setSaveError(false);
     try {
-      await saver(user.uid, publicContributorName(user) ?? "", soda, value);
+      await saver(
+        user.uid,
+        publicContributorName(user) ?? "",
+        soda,
+        value,
+        previous === undefined && value !== undefined,
+      );
     } catch {
-      setState({ status: "ready", value: previous });
-      setSaveError(true);
+      if (latestMutation.current === mutation) {
+        setState({ status: "ready", value: previous });
+        setSaveError(true);
+      }
     } finally {
-      setSaving(false);
+      setPendingSaves((count) => count - 1);
     }
   };
+  const saving = pendingSaves > 0;
   const sampled = state.value !== undefined;
   const rating = typeof state.value === "number" ? Math.round(state.value) : null;
 
@@ -160,7 +174,6 @@ function RatingControls({
         control={
           <Checkbox
             checked={sampled}
-            disabled={saving}
             onChange={(_event, checked) => void persist(checked ? null : undefined)}
           />
         }
@@ -172,7 +185,6 @@ function RatingControls({
           value={rating}
           max={5}
           precision={1}
-          disabled={saving}
           icon={<SportsBarIcon fontSize="inherit" />}
           emptyIcon={<SportsBarIcon fontSize="inherit" />}
           getLabelText={ratingLabel}
@@ -182,7 +194,7 @@ function RatingControls({
             }
           }}
         />
-        <Button disabled={saving || rating === null} onClick={() => void persist(null)}>
+        <Button disabled={rating === null} onClick={() => void persist(null)}>
           Clear rating
         </Button>
       </Stack>

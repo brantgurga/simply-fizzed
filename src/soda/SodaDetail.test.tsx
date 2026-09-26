@@ -100,6 +100,33 @@ describe("SodaDetail", () => {
     expect(sampled).not.toBeChecked();
   });
 
+  it("accepts additional rating changes while offline writes are pending", async () => {
+    const saver = vi.fn(() => new Promise<void>(() => undefined));
+    const user = userEvent.setup();
+    render(
+      <SodaDetail
+        sodaId="cola"
+        user={{ uid: "fan-123", displayName: "Fan", email: "fan@example.com" }}
+        loader={vi.fn().mockResolvedValue({
+          status: "found",
+          value: { id: "cola", brand: "Brand", name: "Cola", flavor: "Original" },
+        })}
+        ratingLoader={vi.fn().mockResolvedValue({ status: "missing" })}
+        ratingSaver={saver}
+      />,
+    );
+
+    const sampled = await screen.findByRole("checkbox", { name: "I've had this" });
+    await user.click(sampled);
+    fireEvent.click(screen.getByRole("radio", { name: "4 mugs: Really liked" }));
+
+    expect(sampled).toBeChecked();
+    expect(screen.getByRole("radio", { name: "4 mugs: Really liked" })).toBeChecked();
+    expect(screen.getByText("Saving…")).toBeVisible();
+    expect(saver).toHaveBeenCalledTimes(2);
+    expect(saver.mock.calls.map((call) => call.at(-1))).toEqual([true, false]);
+  });
+
   it("marks, rates, clears, and removes a sampling", async () => {
     const saver = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
@@ -124,6 +151,7 @@ describe("SodaDetail", () => {
         "fa…@example.com",
         expect.objectContaining({ id: "cola" }),
         null,
+        true,
       ),
     );
 
@@ -134,6 +162,7 @@ describe("SodaDetail", () => {
         "fa…@example.com",
         expect.objectContaining({ id: "cola" }),
         4,
+        false,
       ),
     );
 
@@ -144,6 +173,7 @@ describe("SodaDetail", () => {
         "fa…@example.com",
         expect.objectContaining({ id: "cola" }),
         null,
+        false,
       ),
     );
 
@@ -154,6 +184,7 @@ describe("SodaDetail", () => {
         "fa…@example.com",
         expect.objectContaining({ id: "cola" }),
         undefined,
+        false,
       ),
     );
   });

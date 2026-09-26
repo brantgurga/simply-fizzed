@@ -3,9 +3,9 @@ import {
   doc,
   getDoc,
   getDocs,
-  runTransaction,
   serverTimestamp,
   setDoc,
+  writeBatch,
   type Firestore,
 } from "firebase/firestore";
 import {
@@ -71,7 +71,8 @@ export async function loadRating(
 }
 
 /**
- * Persist the complete rating state. Undefined removes it, null records an
+ * Queue the complete rating state as an atomic batch that Firestore's persistent
+ * local cache can sync after reconnecting. Undefined removes it, null records an
  * unrated sampled offering, and a number records its mug rating.
  */
 export async function saveRating(
@@ -80,31 +81,22 @@ export async function saveRating(
   publicName: string,
   soda: SodaDocument,
   value: RatingValue,
+  create: boolean,
 ): Promise<void> {
   const profileReference = doc(db, COLLECTIONS.profiles, userId);
   const ratingReference = doc(db, COLLECTIONS.profiles, userId, COLLECTIONS.ratings, soda.id);
+  const batch = writeBatch(db);
+  batch.set(profileReference, { publicName, updatedAt: serverTimestamp() }, { merge: true });
 
-  await runTransaction(db, async (transaction) => {
-    const existing = await transaction.get(ratingReference);
-    transaction.set(
-      profileReference,
-      { publicName, updatedAt: serverTimestamp() },
-      { merge: true },
-    );
-
-    if (value === undefined) {
-      if (existing.exists()) transaction.delete(ratingReference);
-      return;
-    }
-
+  if (value === undefined) {
+    batch.delete(ratingReference);
+  } else {
     const ratingFields = {
       rating: value,
       lastRatedAt: value === null ? null : serverTimestamp(),
     };
-    if (existing.exists()) {
-      transaction.update(ratingReference, ratingFields);
-    } else {
-      transaction.set(ratingReference, {
+    if (create) {
+      batch.set(ratingReference, {
         userId,
         sodaOfferingId: soda.id,
         sodaName: soda.name,
@@ -113,8 +105,12 @@ export async function saveRating(
         firstRecorded: serverTimestamp(),
         ...ratingFields,
       });
+    } else {
+      batch.update(ratingReference, ratingFields);
     }
-  });
+  }
+
+  await batch.commit();
 }
 
 /** Load a public profile and every rating record in its sampled inventory. */
