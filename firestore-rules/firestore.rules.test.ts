@@ -439,6 +439,14 @@ describe("availability detail updates", () => {
     await assertFails(updateDoc(reference, { updatedAt: Timestamp.fromMillis(500) }));
     await assertFails(
       updateDoc(reference, {
+        canSample: "yes",
+        updatedBy: USER_ID,
+        updatedByName: "Rules Test Fan",
+        updatedAt: Timestamp.fromMillis(1_000),
+      }),
+    );
+    await assertFails(
+      updateDoc(reference, {
         updatedAt: Timestamp.fromDate(new Date("9999-01-01T00:00:00Z")),
       }),
     );

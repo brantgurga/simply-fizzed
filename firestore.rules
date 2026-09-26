@@ -170,7 +170,7 @@ service cloud.firestore {
         ])
         && isValidAvailability(request.resource.data)
         && (!resource.data.keys().hasAny(["updatedAt"])
-          || request.resource.data.updatedAt >= resource.data.updatedAt);
+          || request.resource.data.updatedAt > resource.data.updatedAt);
       allow delete: if false;
     }
 

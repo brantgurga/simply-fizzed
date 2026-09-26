@@ -115,6 +115,18 @@ const defaultAvailabilityUpdater = (
 const defaultVerificationWriter = (locationId: string, user: ContributionUser) =>
   confirmLocationAvailability(db, locationId, contributorFor(user));
 
+function withAvailabilityItems(
+  availability: AvailabilityLoad,
+  items: Availability[],
+): AvailabilityLoad {
+  const latestUpdatedAt = latestAvailabilityUpdate(items);
+  return {
+    items,
+    malformedCount: availability.malformedCount,
+    ...(latestUpdatedAt === undefined ? {} : { latestUpdatedAt }),
+  };
+}
+
 export default function LocationDetail({
   locationId,
   user,
@@ -129,8 +141,11 @@ export default function LocationDetail({
   verificationWriter = defaultVerificationWriter,
 }: LocationDetailProps) {
   const [state, setState] = useState<State>({ status: "loading" });
-  const [writeError, setWriteError] = useState<string>();
-  const [confirmationMessage, setConfirmationMessage] = useState<string>();
+  const [writeError, setWriteError] = useState<{ locationId: string; message: string }>();
+  const [confirmationMessage, setConfirmationMessage] = useState<{
+    locationId: string;
+    message: string;
+  }>();
   const [request, setRequest] = useState({
     locationId,
     locationLoader,
@@ -185,16 +200,20 @@ export default function LocationDetail({
   }
 
   const location = state.location.value;
+  const commitLocationId = locationId;
   const awaitCommit = async (committed: Promise<void>) => {
     try {
       await committed;
     } catch (error) {
-      setWriteError("A saved change could not be synchronized. Please retry while online.");
+      setWriteError({
+        locationId: commitLocationId,
+        message: "A saved change could not be synchronized. Please retry while online.",
+      });
       throw error;
     }
   };
-  const trackCommit = (committed: Promise<void>) => {
-    void awaitCommit(committed).catch(() => undefined);
+  const trackCommit = (committed: Promise<void>, onRejected: () => void) => {
+    void awaitCommit(committed).catch(onRejected);
   };
 
   const add = async (soda: SodaDocument | Soda, form: SodaForm, details: AvailabilityDetails) => {
@@ -218,22 +237,33 @@ export default function LocationDetail({
       current.status === "ready" &&
       current.location.status === "found" &&
       current.location.value.id === locationId
-        ? (() => {
-            const items = [...current.availability.items, queued.value];
-            const latestUpdatedAt = latestAvailabilityUpdate(items);
-            return {
-              ...current,
-              availability: {
-                ...current.availability,
-                items,
-                ...(latestUpdatedAt === undefined ? {} : { latestUpdatedAt }),
-              },
-            };
-          })()
+        ? {
+            ...current,
+            availability: withAvailabilityItems(current.availability, [
+              ...current.availability.items,
+              queued.value,
+            ]),
+          }
         : current,
     );
-    await awaitCommit(queued.committed);
-    return catalogSoda;
+    try {
+      await awaitCommit(queued.committed);
+      return catalogSoda;
+    } catch (error) {
+      setState((current) => {
+        if (current.status !== "ready" || !current.availability.items.includes(queued.value)) {
+          return current;
+        }
+        return {
+          ...current,
+          availability: withAvailabilityItems(
+            current.availability,
+            current.availability.items.filter((candidate) => candidate !== queued.value),
+          ),
+        };
+      });
+      throw error;
+    }
   };
 
   const saveDetails = async (item: Availability, details: AvailabilityDetails) => {
@@ -242,40 +272,73 @@ export default function LocationDetail({
     setWriteError(undefined);
     setState((current) =>
       current.status === "ready"
-        ? (() => {
-            const items = current.availability.items.map((candidate) =>
-              candidate.sodaId === item.sodaId && candidate.form === item.form
-                ? queued.value
-                : candidate,
-            );
-            const latestUpdatedAt = latestAvailabilityUpdate(items);
-            return {
-              ...current,
-              availability: {
-                ...current.availability,
-                items,
-                ...(latestUpdatedAt === undefined ? {} : { latestUpdatedAt }),
-              },
-            };
-          })()
+        ? {
+            ...current,
+            availability: withAvailabilityItems(
+              current.availability,
+              current.availability.items.map((candidate) =>
+                candidate.sodaId === item.sodaId && candidate.form === item.form
+                  ? queued.value
+                  : candidate,
+              ),
+            ),
+          }
         : current,
     );
-    await awaitCommit(queued.committed);
+    try {
+      await awaitCommit(queued.committed);
+    } catch (error) {
+      setState((current) => {
+        if (current.status !== "ready" || !current.availability.items.includes(queued.value)) {
+          return current;
+        }
+        return {
+          ...current,
+          availability: withAvailabilityItems(
+            current.availability,
+            current.availability.items.map((candidate) =>
+              candidate === queued.value ? item : candidate,
+            ),
+          ),
+        };
+      });
+      throw error;
+    }
   };
 
   const confirm = () => {
     if (user === null) return;
     const queued = verificationWriter(locationId, user);
+    const previous = state.verification.latest;
     setWriteError(undefined);
-    setConfirmationMessage("Availability confirmation saved on this device.");
+    setConfirmationMessage({
+      locationId,
+      message: "Availability confirmation saved on this device.",
+    });
     setState((current) => {
       if (current.status !== "ready") return current;
-      const previous = current.verification.latest;
-      return previous === undefined || compareVerifications(queued.value, previous) < 0
+      const latest = current.verification.latest;
+      return latest === undefined || compareVerifications(queued.value, latest) < 0
         ? { ...current, verification: { ...current.verification, latest: queued.value } }
         : current;
     });
-    trackCommit(queued.committed);
+    trackCommit(queued.committed, () => {
+      setState((current) => {
+        if (current.status !== "ready" || current.verification.latest !== queued.value) {
+          return current;
+        }
+        return {
+          ...current,
+          verification: {
+            malformedCount: current.verification.malformedCount,
+            ...(previous === undefined ? {} : { latest: previous }),
+          },
+        };
+      });
+      setConfirmationMessage((current) =>
+        current?.locationId === commitLocationId ? undefined : current,
+      );
+    });
   };
 
   const latestVerification = state.verification.latest;
@@ -292,7 +355,9 @@ export default function LocationDetail({
         {location.name}
       </Typography>
       <Typography color="text.secondary">{formatAddress(location.address)}</Typography>
-      {writeError !== undefined && <Alert severity="error">{writeError}</Alert>}
+      {writeError?.locationId === locationId && (
+        <Alert severity="error">{writeError.message}</Alert>
+      )}
       <Typography variant="h5" component="h3">
         Availability freshness
       </Typography>
@@ -314,7 +379,9 @@ export default function LocationDetail({
       {state.verification.malformedCount > 0 && (
         <Alert severity="warning">Some malformed verification entries were not shown.</Alert>
       )}
-      {confirmationMessage !== undefined && <Alert severity="success">{confirmationMessage}</Alert>}
+      {confirmationMessage?.locationId === locationId && (
+        <Alert severity="success">{confirmationMessage.message}</Alert>
+      )}
       {user !== null && (
         <Button variant="outlined" sx={{ alignSelf: "flex-start" }} onClick={confirm}>
           Confirm availability
