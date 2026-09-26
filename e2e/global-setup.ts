@@ -78,6 +78,8 @@ export default async function globalSetup(): Promise<void> {
         sodaName: item.sodaName,
         sodaBrand: item.sodaBrand,
         sodaFlavor: item.sodaFlavor,
+        canSample: item.canSample,
+        canPurchase: item.canPurchase,
       });
     }
 

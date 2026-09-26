@@ -7,6 +7,17 @@ import type { DocumentLoad } from "../soda/sodas";
 export interface AvailabilityLoad {
   items: Availability[];
   malformedCount: number;
+  latestUpdatedAt?: Date;
+}
+
+export function latestAvailabilityUpdate(items: readonly Availability[]): Date | undefined {
+  let latest: Date | undefined;
+  for (const item of items) {
+    if (item.updatedAt !== undefined && (latest === undefined || item.updatedAt > latest)) {
+      latest = item.updatedAt;
+    }
+  }
+  return latest;
 }
 
 export async function loadLocation(db: Firestore, id: string): Promise<DocumentLoad<LocationDoc>> {
@@ -28,10 +39,13 @@ export async function loadLocationAvailability(
   for (const item of snapshot.docs) {
     const availability = parseAvailability(item.data());
     if (availability === undefined) malformedCount += 1;
-    else items.push(availability);
+    else items.push({ ...availability, documentId: item.id });
   }
+  const locationItems = groupAvailabilityByLocation(items).get(locationId) ?? [];
+  const latestUpdatedAt = latestAvailabilityUpdate(locationItems);
   return {
-    items: groupAvailabilityByLocation(items).get(locationId) ?? [],
+    items: locationItems,
     malformedCount,
+    ...(latestUpdatedAt === undefined ? {} : { latestUpdatedAt }),
   };
 }

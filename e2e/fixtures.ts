@@ -42,6 +42,8 @@ export interface SeedAvailability {
   sodaName: string;
   sodaBrand: string;
   sodaFlavor: string;
+  canSample: "yes" | "no" | "unknown";
+  canPurchase: "yes" | "no" | "unknown";
 }
 
 // Browser geolocation granted for the test: downtown Indianapolis. Kroger sits
@@ -93,6 +95,8 @@ export const AVAILABILITY: readonly SeedAvailability[] = [
     sodaName: "Root Beer",
     sodaBrand: "Big K",
     sodaFlavor: "root beer",
+    canSample: "no",
+    canPurchase: "yes",
   },
   {
     id: `${KROGER.id}$coca-cola$can`,
@@ -102,6 +106,8 @@ export const AVAILABILITY: readonly SeedAvailability[] = [
     sodaName: "Cola",
     sodaBrand: "Coca-Cola",
     sodaFlavor: "Original",
+    canSample: "unknown",
+    canPurchase: "yes",
   },
   {
     id: `${TIMS_BREWERY.id}$tims-root-beer$draft`,
@@ -111,6 +117,8 @@ export const AVAILABILITY: readonly SeedAvailability[] = [
     sodaName: "Root Beer",
     sodaBrand: "Tim's",
     sodaFlavor: "root beer",
+    canSample: "yes",
+    canPurchase: "no",
   },
 ];
 

@@ -356,10 +356,13 @@ emulator seed script, and tests:
   plus optional search `aliases`.
 - **`availability/{availabilityId}`** – a join record tying a soda to a location
   in a given `form` (`draft`, `can`, or `bottle`), with exact catalog display
-  fields (`sodaName`, `sodaBrand`, `sodaFlavor`) and creator/updater attribution
-  denormalized for rendering and moderation. New IDs join `locationId`, `sodaId`,
+  fields (`sodaName`, `sodaBrand`, `sodaFlavor`), independent sample/purchase
+  details, and creator/updater attribution. New IDs join `locationId`, `sodaId`,
   and `form` with a reserved `$` separator to enforce one exact tuple; legacy
-  records without attribution remain readable and are de-duplicated when listed.
+  records remain readable and are de-duplicated when listed.
+- **`verifications/{verificationId}`** – append-only location availability
+  confirmations with the verifier and client action time, retaining history while
+  a timestamp/UID query selects the latest event deterministically.
 - **`profiles/{uid}`** – a public Firebase Auth UID profile containing the user's
   display name or masked email.
 - **`profiles/{uid}/ratings/{sodaId}`** – one sampled-offering rating record per
@@ -374,11 +377,9 @@ only maintain their own profile and rating records. Rating soda fields must matc
 catalog data when created, while their historical snapshot, record ownership,
 and first-recorded timestamp cannot be changed.
 
-[`firestore.indexes.json`](./firestore.indexes.json) is intentionally empty: the
-only non-trivial query is the geohash radius search, which uses a single-field
-`orderBy(geohash)` range and therefore needs no composite index. Firestore
-provides single-field indexes automatically, so no `fieldOverrides` are required
-either.
+[`firestore.indexes.json`](./firestore.indexes.json) defines the composite index
+used to select a location's latest verification by action time and UID. The
+geohash radius search continues to use Firestore's automatic single-field index.
 
 ## User interface
 

@@ -2,11 +2,16 @@ import {
   collection,
   doc,
   type Firestore,
-  runTransaction,
   serverTimestamp,
+  setDoc,
+  Timestamp,
+  updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import {
   type Availability,
+  type AvailabilityValue,
+  availabilityUpdateWriteSchema,
   availabilityWriteSchema,
   canonicalSodaSchema,
   COLLECTIONS,
@@ -14,11 +19,21 @@ import {
   sodaWriteSchema,
   type SodaForm,
 } from "../model/firestore";
-import { isAvailabilityReferenceId, parseSoda, type SodaDocument } from "../soda/sodas";
+import { isAvailabilityReferenceId, type SodaDocument } from "../soda/sodas";
 
 export interface AvailabilityContributor {
   id: string;
   name?: string;
+}
+
+export interface AvailabilityDetails {
+  canSample: AvailabilityValue;
+  canPurchase: AvailabilityValue;
+}
+
+export interface QueuedWrite<T> {
+  value: T;
+  committed: Promise<void>;
 }
 
 export class DuplicateAvailabilityError extends Error {
@@ -45,26 +60,32 @@ function canonicalSoda(soda: Soda): Soda {
   return parsed.data;
 }
 
+function contributorName(contributor: AvailabilityContributor): string {
+  return contributor.name?.trim() || "";
+}
+
 function availabilityData(
   locationId: string,
-  sodaId: string,
-  soda: Soda,
+  soda: SodaDocument,
   form: SodaForm,
+  details: AvailabilityDetails,
   contributor: AvailabilityContributor,
+  actionTime: Date,
 ): Availability {
-  const contributorName = contributor.name?.trim() || "";
-  return availabilityWriteSchema.parse({
+  const data = availabilityWriteSchema.parse({
     locationId,
-    sodaId,
+    sodaId: soda.id,
     form,
     sodaName: soda.name,
     sodaBrand: soda.brand,
     sodaFlavor: soda.flavor,
+    ...details,
     createdBy: contributor.id,
-    createdByName: contributorName,
+    createdByName: contributorName(contributor),
     updatedBy: contributor.id,
-    updatedByName: contributorName,
+    updatedByName: contributorName(contributor),
   });
+  return { ...data, createdAt: actionTime, updatedAt: actionTime };
 }
 
 /** Build the canonical ID enforced by Firestore rules for one exact availability tuple. */
@@ -75,89 +96,102 @@ export function availabilityDocumentId(locationId: string, sodaId: string, form:
   return `${locationId}$${sodaId}$${form}`;
 }
 
-export async function addAvailability(
+/** Queue an existing catalog soda for addition, including while offline. */
+export function addAvailability(
   db: Firestore,
   locationId: string,
-  sodaId: string,
+  soda: SodaDocument,
   form: SodaForm,
+  details: AvailabilityDetails,
   contributor: AvailabilityContributor,
-): Promise<Availability> {
-  const locationRef = doc(db, COLLECTIONS.locations, locationId);
-  const sodaRef = doc(db, COLLECTIONS.sodas, sodaId);
-  const availabilityRef = doc(
+  actionTime = new Date(),
+): QueuedWrite<Availability> {
+  const availability = availabilityData(locationId, soda, form, details, contributor, actionTime);
+  const reference = doc(
     db,
     COLLECTIONS.availability,
-    availabilityDocumentId(locationId, sodaId, form),
+    availabilityDocumentId(locationId, soda.id, form),
   );
-
-  return runTransaction(db, async (transaction) => {
-    const [locationSnapshot, sodaSnapshot, existingSnapshot] = await Promise.all([
-      transaction.get(locationRef),
-      transaction.get(sodaRef),
-      transaction.get(availabilityRef),
-    ]);
-    if (!locationSnapshot.exists()) throw new Error("The location no longer exists.");
-    if (!sodaSnapshot.exists()) throw new Error("The selected soda no longer exists.");
-    const soda = parseSoda(sodaSnapshot.id, sodaSnapshot.data());
-    if (soda === undefined) throw new Error("The selected soda is malformed.");
-    if (existingSnapshot.exists()) throw new DuplicateAvailabilityError();
-
-    const availability = availabilityData(locationId, sodaId, soda, form, contributor);
-    const timestamp = serverTimestamp();
-    transaction.set(availabilityRef, {
+  const timestamp = Timestamp.fromDate(actionTime);
+  return {
+    value: availability,
+    committed: setDoc(reference, {
       ...availability,
       createdAt: timestamp,
       updatedAt: timestamp,
-    });
-    return availability;
-  });
+    }),
+  };
 }
 
-/** Atomically add a new catalog soda and its first availability record. */
-export async function addNewSodaAvailability(
+/** Atomically queue a new catalog soda and its first availability, including while offline. */
+export function addNewSodaAvailability(
   db: Firestore,
   locationId: string,
   sodaInput: Soda,
   form: SodaForm,
+  details: AvailabilityDetails,
   contributor: AvailabilityContributor,
-): Promise<NewSodaAvailability> {
+  actionTime = new Date(),
+): QueuedWrite<NewSodaAvailability> {
   const soda = canonicalSoda(sodaInput);
-  const sodaRef = doc(collection(db, COLLECTIONS.sodas));
-  const availabilityId = availabilityDocumentId(locationId, sodaRef.id, form);
-  const availabilityRef = doc(db, COLLECTIONS.availability, availabilityId);
-  const locationRef = doc(db, COLLECTIONS.locations, locationId);
-
-  return runTransaction(db, async (transaction) => {
-    const [locationSnapshot, sodaSnapshot, existingSnapshot] = await Promise.all([
-      transaction.get(locationRef),
-      transaction.get(sodaRef),
-      transaction.get(availabilityRef),
-    ]);
-    if (!locationSnapshot.exists()) throw new Error("The location no longer exists.");
-    if (sodaSnapshot.exists()) throw new Error("The new soda ID is already in use.");
-    if (existingSnapshot.exists()) throw new DuplicateAvailabilityError();
-
-    const contributorName = contributor.name?.trim() || "";
-    const sodaWrite = sodaWriteSchema.parse({
-      ...soda,
-      initialAvailabilityId: availabilityId,
-      createdBy: contributor.id,
-      createdByName: contributorName,
-      updatedBy: contributor.id,
-      updatedByName: contributorName,
-    });
-    const availability = availabilityData(locationId, sodaRef.id, soda, form, contributor);
-    const timestamp = serverTimestamp();
-    transaction.set(sodaRef, {
-      ...sodaWrite,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    });
-    transaction.set(availabilityRef, {
-      ...availability,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    });
-    return { availability, soda: { id: sodaRef.id, ...soda } };
+  const sodaReference = doc(collection(db, COLLECTIONS.sodas));
+  const sodaDocument: SodaDocument = { id: sodaReference.id, ...soda };
+  const availabilityId = availabilityDocumentId(locationId, sodaReference.id, form);
+  const availability = availabilityData(
+    locationId,
+    sodaDocument,
+    form,
+    details,
+    contributor,
+    actionTime,
+  );
+  const name = contributorName(contributor);
+  const sodaWrite = sodaWriteSchema.parse({
+    ...soda,
+    initialAvailabilityId: availabilityId,
+    createdBy: contributor.id,
+    createdByName: name,
+    updatedBy: contributor.id,
+    updatedByName: name,
   });
+  const actionTimestamp = Timestamp.fromDate(actionTime);
+  const serverTime = serverTimestamp();
+  const batch = writeBatch(db);
+  batch.set(sodaReference, { ...sodaWrite, createdAt: serverTime, updatedAt: serverTime });
+  batch.set(doc(db, COLLECTIONS.availability, availabilityId), {
+    ...availability,
+    createdAt: actionTimestamp,
+    updatedAt: actionTimestamp,
+  });
+  return {
+    value: { availability, soda: sodaDocument },
+    committed: batch.commit(),
+  };
+}
+
+/** Queue an attributed availability detail edit using the time of the user's action. */
+export function updateAvailabilityDetails(
+  db: Firestore,
+  availability: Availability,
+  details: AvailabilityDetails,
+  contributor: AvailabilityContributor,
+  actionTime = new Date(),
+): QueuedWrite<Availability> {
+  const update = availabilityUpdateWriteSchema.parse({
+    ...details,
+    updatedBy: contributor.id,
+    updatedByName: contributorName(contributor),
+    updatedAt: actionTime,
+  });
+  const value = { ...availability, ...update };
+  const reference = doc(
+    db,
+    COLLECTIONS.availability,
+    availability.documentId ??
+      availabilityDocumentId(availability.locationId, availability.sodaId, availability.form),
+  );
+  return {
+    value,
+    committed: updateDoc(reference, { ...update, updatedAt: Timestamp.fromDate(actionTime) }),
+  };
 }

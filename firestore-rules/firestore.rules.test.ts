@@ -77,6 +77,8 @@ function validAvailability(overrides: Record<string, unknown> = {}): Record<stri
     sodaName: validSoda.name,
     sodaBrand: validSoda.brand,
     sodaFlavor: validSoda.flavor,
+    canSample: "unknown",
+    canPurchase: "unknown",
     createdBy: USER_ID,
     createdByName: "Rules Test Fan",
     createdAt: serverTimestamp(),
@@ -96,6 +98,16 @@ function canonicalAvailabilityId(availability: Record<string, unknown>): string 
     typeof availability["sodaId"] === "string" ? availability["sodaId"] : "invalid-soda";
   const form = typeof availability["form"] === "string" ? availability["form"] : "invalid-form";
   return `${locationId}$${sodaId}$${form}`;
+}
+
+function validVerification(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    locationId: "existing-location",
+    verifiedBy: USER_ID,
+    verifiedByName: "Rules Test Fan",
+    verifiedAt: Timestamp.fromMillis(1_000),
+    ...overrides,
+  };
 }
 
 function validProfile(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -146,7 +158,7 @@ afterAll(async () => {
 });
 
 describe("public reads", () => {
-  it.each(["locations", "sodas", "availability"])(
+  it.each(["locations", "sodas", "availability", "verifications"])(
     "allows reads from %s",
     async (collectionName) => {
       const database = testEnvironment.unauthenticatedContext().firestore();
@@ -272,13 +284,25 @@ describe("immutable locations", () => {
 describe("availability creation", () => {
   beforeEach(seedAvailabilityReferences);
 
-  it("allows an authenticated exact, attributed, server-timestamped record", async () => {
+  it("allows an authenticated exact, attributed record with independent details", async () => {
     const database = testEnvironment.authenticatedContext(USER_ID).firestore();
 
     await assertSucceeds(
       setDoc(
         doc(database, "availability", "existing-location$existing-soda$can"),
         validAvailability(),
+      ),
+    );
+  });
+
+  it("accepts the client action time used by offline-capable writes", async () => {
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const actionTime = Timestamp.fromMillis(1_000);
+
+    await assertSucceeds(
+      setDoc(
+        doc(database, "availability", "existing-location$existing-soda$can"),
+        validAvailability({ createdAt: actionTime, updatedAt: actionTime }),
       ),
     );
   });
@@ -338,7 +362,15 @@ describe("availability creation", () => {
     ["forged updater attribution", { updatedBy: "another-user" }],
     ["mismatched attribution names", { updatedByName: "Another Fan" }],
     ["a blank attribution name", { createdByName: "   \t" }],
-    ["a client timestamp", { createdAt: Timestamp.fromMillis(0) }],
+    ["an invalid sample value", { canSample: "sometimes" }],
+    ["a missing purchase value", { canPurchase: undefined }],
+    [
+      "a far-future action time",
+      {
+        createdAt: Timestamp.fromDate(new Date("9999-01-01T00:00:00Z")),
+        updatedAt: Timestamp.fromDate(new Date("9999-01-01T00:00:00Z")),
+      },
+    ],
     ["a missing timestamp", { updatedAt: undefined }],
     ["an unexpected field", { notes: "sale" }],
     ["a mismatched soda name", { sodaName: "Diet Cola" }],
@@ -371,6 +403,148 @@ describe("availability creation", () => {
       operation === "update" ? updateDoc(reference, { form: "bottle" }) : deleteDoc(reference);
 
     await assertFails(request);
+  });
+});
+
+describe("availability detail updates", () => {
+  beforeEach(async () => {
+    await seedAvailabilityReferences();
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const timestamp = Timestamp.fromMillis(1_000);
+      await setDoc(
+        doc(context.firestore(), "availability", "existing-location$existing-soda$can"),
+        validAvailability({ createdAt: timestamp, updatedAt: timestamp }),
+      );
+    });
+  });
+
+  it("allows independent attributed detail updates with a meaningful action time", async () => {
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+
+    await assertSucceeds(
+      updateDoc(doc(database, "availability", "existing-location$existing-soda$can"), {
+        canSample: "yes",
+        canPurchase: "no",
+        updatedBy: USER_ID,
+        updatedByName: "Rules Test Fan",
+        updatedAt: Timestamp.fromMillis(2_000),
+      }),
+    );
+  });
+
+  it("rejects stale, forged, and immutable-field updates", async () => {
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const reference = doc(database, "availability", "existing-location$existing-soda$can");
+
+    await assertFails(updateDoc(reference, { updatedAt: Timestamp.fromMillis(500) }));
+    await assertFails(
+      updateDoc(reference, {
+        updatedAt: Timestamp.fromDate(new Date("9999-01-01T00:00:00Z")),
+      }),
+    );
+    await assertFails(
+      updateDoc(reference, {
+        canSample: "yes",
+        canPurchase: "no",
+        updatedBy: "another-user",
+        updatedByName: "Other",
+        updatedAt: Timestamp.fromMillis(2_000),
+      }),
+    );
+    await assertFails(updateDoc(reference, { sodaId: "another-soda" }));
+  });
+
+  it("allows legacy availability to gain details and update attribution", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "availability", "legacy"), {
+        locationId: "existing-location",
+        sodaId: "existing-soda",
+        form: "can",
+        sodaName: validSoda.name,
+        sodaBrand: validSoda.brand,
+        sodaFlavor: validSoda.flavor,
+        canSample: "no",
+        canPurchase: "yes",
+      });
+    });
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+
+    await assertSucceeds(
+      updateDoc(doc(database, "availability", "legacy"), {
+        canSample: "unknown",
+        canPurchase: "no",
+        updatedBy: USER_ID,
+        updatedByName: "of…@example.com",
+        updatedAt: Timestamp.fromMillis(2_000),
+      }),
+    );
+  });
+});
+
+describe("availability verification", () => {
+  beforeEach(seedAvailabilityReferences);
+
+  it("allows public history reads and authenticated append-only events", async () => {
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    await assertSucceeds(
+      setDoc(doc(database, "verifications", "verification-one"), validVerification()),
+    );
+
+    const publicDatabase = testEnvironment.unauthenticatedContext().firestore();
+    await assertSucceeds(getDocs(collection(publicDatabase, "verifications")));
+  });
+
+  it("accepts action times independent of synchronization time and equal times", async () => {
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const actionTime = Timestamp.fromMillis(1_000);
+
+    await assertSucceeds(
+      setDoc(
+        doc(database, "verifications", "offline-one"),
+        validVerification({ verifiedAt: actionTime }),
+      ),
+    );
+    await assertSucceeds(
+      setDoc(
+        doc(database, "verifications", "offline-two"),
+        validVerification({ verifiedAt: actionTime }),
+      ),
+    );
+  });
+
+  it("rejects unauthenticated, forged, missing-location, and mutable events", async () => {
+    const unauthenticated = testEnvironment.unauthenticatedContext().firestore();
+    await assertFails(
+      setDoc(doc(unauthenticated, "verifications", "anonymous"), validVerification()),
+    );
+
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    await assertFails(
+      setDoc(
+        doc(database, "verifications", "forged"),
+        validVerification({ verifiedBy: "another-user" }),
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(database, "verifications", "missing-location"),
+        validVerification({ locationId: "missing" }),
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(database, "verifications", "far-future"),
+        validVerification({
+          verifiedAt: Timestamp.fromDate(new Date("9999-01-01T00:00:00Z")),
+        }),
+      ),
+    );
+    await assertSucceeds(setDoc(doc(database, "verifications", "immutable"), validVerification()));
+    await assertFails(
+      updateDoc(doc(database, "verifications", "immutable"), {
+        verifiedAt: Timestamp.fromMillis(2_000),
+      }),
+    );
   });
 });
 

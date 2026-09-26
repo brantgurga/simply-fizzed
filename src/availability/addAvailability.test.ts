@@ -2,235 +2,155 @@ import type { Firestore } from "firebase/firestore";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const firebase = vi.hoisted(() => {
-  const generatedSodaReference = {
-    id: "generated-soda",
-    toString: () => "sodas/generated-soda",
-  };
+  const generatedSodaReference = { id: "generated-soda" };
+  const batch = { set: vi.fn(), commit: vi.fn(() => Promise.resolve()) };
   return {
+    batch,
     generatedSodaReference,
     collection: vi.fn(() => "sodas"),
     doc: vi.fn((...parts: unknown[]) =>
       parts.length === 1 ? generatedSodaReference : parts.slice(1).join("/"),
     ),
-    getDoc: vi.fn(),
-    getDocs: vi.fn(),
-    runTransaction: vi.fn(),
     serverTimestamp: vi.fn(() => "server-time"),
+    setDoc: vi.fn(() => Promise.resolve()),
+    timestampFromDate: vi.fn((date: Date) => ({ date })),
+    updateDoc: vi.fn(() => Promise.resolve()),
+    writeBatch: vi.fn(() => batch),
   };
 });
 
 vi.mock("firebase/firestore", () => ({
   collection: firebase.collection,
   doc: firebase.doc,
-  getDoc: firebase.getDoc,
-  getDocs: firebase.getDocs,
-  runTransaction: firebase.runTransaction,
   serverTimestamp: firebase.serverTimestamp,
+  setDoc: firebase.setDoc,
+  Timestamp: { fromDate: firebase.timestampFromDate },
+  updateDoc: firebase.updateDoc,
+  writeBatch: firebase.writeBatch,
 }));
 
 import {
   addAvailability,
   addNewSodaAvailability,
   availabilityDocumentId,
-  DuplicateAvailabilityError,
+  updateAvailabilityDetails,
 } from "./addAvailability";
 
 const db = vi.fn<() => Firestore>()();
+const details = { canSample: "yes", canPurchase: "no" } as const;
+const soda = {
+  id: "soda-one",
+  name: "Zero Sugar",
+  brand: "Coca-Cola",
+  flavor: "Cola",
+};
+const actionTime = new Date("2026-09-26T12:00:00Z");
 
-function snapshot(exists: boolean, id = "", data: unknown = {}): object {
-  return { exists: () => exists, id, data: () => data };
-}
+describe("availability writes", () => {
+  beforeEach(() => vi.clearAllMocks());
 
-describe("availabilityDocumentId", () => {
   it("deterministically encodes all identity fields", () => {
     expect(availabilityDocumentId("location-one", "soda-one", "bottle")).toBe(
       "location-one$soda-one$bottle",
     );
-    expect(availabilityDocumentId("location", "soda", "can")).not.toBe(
-      availabilityDocumentId("location", "soda", "draft"),
-    );
-  });
-
-  it("rejects the reserved separator in referenced IDs", () => {
     expect(() => availabilityDocumentId("location$one", "soda", "can")).toThrow(
       "cannot contain '$'",
     );
-    expect(() => availabilityDocumentId("location", "soda$one", "can")).toThrow(
-      "cannot contain '$'",
-    );
-  });
-});
-
-describe("addAvailability", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
   });
 
-  it("transactionally creates exact denormalized and attributed data", async () => {
-    const set = vi.fn();
-    const get = vi.fn(async (reference: unknown) => {
-      const path = String(reference);
-      if (path === "locations/location-one") return snapshot(true);
-      if (path === "sodas/soda-one") {
-        return snapshot(true, "soda-one", {
-          name: "Zero Sugar",
-          brand: "Coca-Cola",
-          flavor: "Cola",
-          aliases: ["Coke Zero"],
-        });
-      }
-      return snapshot(false);
-    });
-    firebase.runTransaction.mockImplementation(
-      async (
-        _database: unknown,
-        update: (transaction: { get: typeof get; set: typeof set }) => Promise<unknown>,
-      ) => update({ get, set }),
+  it("queues exact details, attribution, and the local action time without reads", async () => {
+    const queued = addAvailability(
+      db,
+      "location-one",
+      soda,
+      "bottle",
+      details,
+      { id: "fan-123", name: " Soda Fan " },
+      actionTime,
     );
 
-    await expect(
-      addAvailability(db, "location-one", "soda-one", "bottle", {
-        id: "fan-123",
-        name: " Soda Fan ",
-      }),
-    ).resolves.toMatchObject({
+    expect(queued.value).toMatchObject({
       sodaId: "soda-one",
-      form: "bottle",
-      sodaName: "Zero Sugar",
-      sodaBrand: "Coca-Cola",
-      sodaFlavor: "Cola",
-      createdBy: "fan-123",
-      updatedBy: "fan-123",
+      canSample: "yes",
+      canPurchase: "no",
+      createdByName: "Soda Fan",
+      updatedAt: actionTime,
     });
-    expect(set).toHaveBeenCalledWith(
+    expect(firebase.setDoc).toHaveBeenCalledWith(
       "availability/location-one$soda-one$bottle",
       expect.objectContaining({
-        createdByName: "Soda Fan",
-        updatedByName: "Soda Fan",
-        createdAt: "server-time",
-        updatedAt: "server-time",
+        canSample: "yes",
+        createdAt: { date: actionTime },
+        updatedAt: { date: actionTime },
       }),
     );
+    await expect(queued.committed).resolves.toBeUndefined();
   });
 
-  it("atomically creates a canonical soda and its first availability", async () => {
-    const set = vi.fn();
-    const get = vi.fn(async (reference: unknown) =>
-      String(reference) === "locations/location-one" ? snapshot(true) : snapshot(false),
-    );
-    firebase.runTransaction.mockImplementation(
-      async (
-        _database: unknown,
-        update: (transaction: { get: typeof get; set: typeof set }) => Promise<unknown>,
-      ) => update({ get, set }),
+  it("queues a canonical soda and first availability in one batch", async () => {
+    const queued = addNewSodaAvailability(
+      db,
+      "location-one",
+      { brand: " Sprecher ", name: " Root Beer ", flavor: " Original " },
+      "draft",
+      { canSample: "unknown", canPurchase: "yes" },
+      { id: "fan-123", name: " Soda Fan " },
+      actionTime,
     );
 
-    await expect(
-      addNewSodaAvailability(
-        db,
-        "location-one",
-        { brand: " Sprecher ", name: " Root Beer ", flavor: " Original " },
-        "draft",
-        { id: "fan-123", name: " Soda Fan " },
-      ),
-    ).resolves.toEqual({
-      soda: {
-        id: "generated-soda",
-        brand: "Sprecher",
-        name: "Root Beer",
-        flavor: "Original",
-      },
-      availability: expect.objectContaining({
-        sodaId: "generated-soda",
-        form: "draft",
-        createdBy: "fan-123",
-      }),
+    expect(queued.value.soda).toEqual({
+      id: "generated-soda",
+      brand: "Sprecher",
+      name: "Root Beer",
+      flavor: "Original",
     });
-    expect(set).toHaveBeenNthCalledWith(
+    expect(firebase.batch.set).toHaveBeenNthCalledWith(
       1,
       firebase.generatedSodaReference,
-      expect.objectContaining({
-        initialAvailabilityId: "location-one$generated-soda$draft",
-        createdByName: "Soda Fan",
-        createdAt: "server-time",
-      }),
+      expect.objectContaining({ createdAt: "server-time" }),
     );
-    expect(set).toHaveBeenNthCalledWith(
+    expect(firebase.batch.set).toHaveBeenNthCalledWith(
       2,
       "availability/location-one$generated-soda$draft",
-      expect.objectContaining({ sodaBrand: "Sprecher", updatedAt: "server-time" }),
+      expect.objectContaining({ canPurchase: "yes", updatedAt: { date: actionTime } }),
     );
+    await expect(queued.committed).resolves.toBeUndefined();
   });
 
-  it("validates every new-soda payload before staging writes", async () => {
-    const set = vi.fn();
-    const get = vi.fn(async (reference: unknown) =>
-      String(reference) === "locations/location-one" ? snapshot(true) : snapshot(false),
-    );
-    firebase.runTransaction.mockImplementation(
-      async (
-        _database: unknown,
-        update: (transaction: { get: typeof get; set: typeof set }) => Promise<unknown>,
-      ) => update({ get, set }),
-    );
-
-    await expect(
-      Reflect.apply(addNewSodaAvailability, undefined, [
+  it("updates only editable details and local update attribution", async () => {
+    const existing = {
+      ...addAvailability(
         db,
         "location-one",
-        { brand: "Sprecher", name: "Root Beer", flavor: "Original" },
-        "keg",
-        { id: "fan-123" },
-      ]),
-    ).rejects.toThrow();
-    expect(set).not.toHaveBeenCalled();
-    expect(firebase.serverTimestamp).not.toHaveBeenCalled();
-  });
-
-  it("rejects a duplicate before writing", async () => {
-    const set = vi.fn();
-    const get = vi.fn(async (reference: unknown) => {
-      const path = String(reference);
-      if (path.startsWith("locations/")) return snapshot(true);
-      if (path.startsWith("sodas/")) {
-        return snapshot(true, "soda-one", { name: "Cola", brand: "Brand", flavor: "Cola" });
-      }
-      return snapshot(true);
-    });
-    firebase.runTransaction.mockImplementation(
-      async (
-        _database: unknown,
-        update: (transaction: { get: typeof get; set: typeof set }) => Promise<unknown>,
-      ) => update({ get, set }),
+        soda,
+        "can",
+        { canSample: "unknown", canPurchase: "unknown" },
+        { id: "creator" },
+        new Date("2026-01-01T00:00:00Z"),
+      ).value,
+      documentId: "legacy-record-id",
+    };
+    const queued = updateAvailabilityDetails(
+      db,
+      existing,
+      details,
+      { id: "fan-123", name: "Soda Fan" },
+      actionTime,
     );
 
-    await expect(
-      addAvailability(db, "location-one", "soda-one", "can", { id: "fan-123" }),
-    ).rejects.toBeInstanceOf(DuplicateAvailabilityError);
-    expect(set).not.toHaveBeenCalled();
+    expect(queued.value).toMatchObject({ ...details, updatedBy: "fan-123", updatedAt: actionTime });
+    expect(firebase.updateDoc).toHaveBeenCalledWith("availability/legacy-record-id", {
+      ...details,
+      updatedBy: "fan-123",
+      updatedByName: "Soda Fan",
+      updatedAt: { date: actionTime },
+    });
   });
 
-  it("rejects malformed attribution before writing", async () => {
-    const set = vi.fn();
-    const get = vi.fn(async (reference: unknown) => {
-      const path = String(reference);
-      if (path.startsWith("locations/")) return snapshot(true);
-      if (path.startsWith("sodas/")) {
-        return snapshot(true, "soda-one", { name: "Cola", brand: "Brand", flavor: "Cola" });
-      }
-      return snapshot(false);
-    });
-    firebase.runTransaction.mockImplementation(
-      async (
-        _database: unknown,
-        update: (transaction: { get: typeof get; set: typeof set }) => Promise<unknown>,
-      ) => update({ get, set }),
-    );
-
-    await expect(
-      addAvailability(db, "location-one", "soda-one", "can", { id: "   " }),
-    ).rejects.toThrow();
-    expect(set).not.toHaveBeenCalled();
-    expect(firebase.serverTimestamp).not.toHaveBeenCalled();
+  it("validates before queueing a malformed write", () => {
+    expect(() =>
+      addAvailability(db, "location-one", soda, "can", details, { id: "   " }, actionTime),
+    ).toThrow();
+    expect(firebase.setDoc).not.toHaveBeenCalled();
   });
 });

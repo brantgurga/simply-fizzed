@@ -21,10 +21,15 @@ const availabilityLoader = vi.fn().mockResolvedValue({
       sodaName: "Cola",
       sodaBrand: "Coca-Cola",
       sodaFlavor: "Original",
+      canSample: "yes",
+      canPurchase: "no",
+      updatedAt: new Date("2026-09-26T12:00:00Z"),
     },
   ],
   malformedCount: 0,
+  latestUpdatedAt: new Date("2026-09-26T12:00:00Z"),
 });
+const verificationLoader = vi.fn().mockResolvedValue({ malformedCount: 0 });
 
 describe("LocationDetail", () => {
   it("loads independently, links exact sodas, and prompts guests to sign in", async () => {
@@ -37,6 +42,7 @@ describe("LocationDetail", () => {
         onSignIn={onSignIn}
         locationLoader={locationLoader}
         availabilityLoader={availabilityLoader}
+        verificationLoader={verificationLoader}
       />,
     );
 
@@ -45,10 +51,80 @@ describe("LocationDetail", () => {
       "href",
       "#/sodas/cola%2Fexact",
     );
+    expect(screen.getByText("Can sample: Yes")).toBeVisible();
+    expect(screen.getByText("Can purchase: No")).toBeVisible();
+    expect(screen.getByText(/Last verified:\s*Never/)).toBeVisible();
     expect(locationLoader).toHaveBeenCalledWith(location.id);
     expect(availabilityLoader).toHaveBeenCalledWith(location.id);
     await user.click(screen.getByRole("button", { name: "Sign in" }));
     expect(onSignIn).toHaveBeenCalledOnce();
+  });
+
+  it("edits details and explicitly confirms without coupling the actions", async () => {
+    const interaction = userEvent.setup();
+    const signedInUser = { uid: "fan-123", displayName: "Soda Fan", email: null };
+    const verification = {
+      locationId: location.id,
+      verifiedBy: "older-fan",
+      verifiedByName: "Earlier Fan",
+      verifiedAt: new Date("2026-09-25T12:00:00Z"),
+    };
+    const updated = {
+      ...(await availabilityLoader(location.id)).items[0]!,
+      canSample: "no" as const,
+      canPurchase: "yes" as const,
+      updatedBy: signedInUser.uid,
+      updatedByName: signedInUser.displayName,
+      updatedAt: new Date("2026-09-26T13:00:00Z"),
+    };
+    const availabilityUpdater = vi.fn().mockReturnValue({
+      value: updated,
+      committed: Promise.resolve(),
+    });
+    const confirmed = {
+      locationId: location.id,
+      verifiedBy: signedInUser.uid,
+      verifiedByName: signedInUser.displayName,
+      verifiedAt: new Date("2026-09-26T14:00:00Z"),
+    };
+    const verificationWriter = vi.fn().mockReturnValue({
+      value: confirmed,
+      committed: Promise.resolve(),
+    });
+    render(
+      <LocationDetail
+        locationId={location.id}
+        user={signedInUser}
+        onSignIn={vi.fn()}
+        locationLoader={locationLoader}
+        availabilityLoader={availabilityLoader}
+        verificationLoader={vi.fn().mockResolvedValue({ latest: verification, malformedCount: 0 })}
+        catalogLoader={vi.fn().mockResolvedValue([])}
+        availabilityUpdater={availabilityUpdater}
+        verificationWriter={verificationWriter}
+      />,
+    );
+
+    expect(await screen.findByText(/by Earlier Fan/)).toBeVisible();
+    expect(screen.getByText("Availability has changed since it was last verified.")).toBeVisible();
+    await interaction.click(screen.getByRole("button", { name: "Edit availability details" }));
+    await interaction.click(screen.getAllByLabelText("Can sample")[0]!);
+    await interaction.click(screen.getByRole("option", { name: "No" }));
+    await interaction.click(screen.getAllByLabelText("Can purchase")[0]!);
+    await interaction.click(screen.getByRole("option", { name: "Yes" }));
+    await interaction.click(screen.getByRole("button", { name: "Save details" }));
+
+    expect(availabilityUpdater).toHaveBeenCalledWith(
+      expect.objectContaining({ sodaId: "cola/exact" }),
+      { canSample: "no", canPurchase: "yes" },
+      signedInUser,
+    );
+    expect(await screen.findByText("Can sample: No")).toBeVisible();
+    expect(verificationWriter).not.toHaveBeenCalled();
+
+    await interaction.click(screen.getByRole("button", { name: "Confirm availability" }));
+    expect(verificationWriter).toHaveBeenCalledWith(location.id, signedInUser);
+    expect(await screen.findByText(/by Soda Fan/)).toBeVisible();
   });
 
   it("adds a new soda and immediately lists its availability", async () => {
@@ -60,16 +136,22 @@ describe("LocationDetail", () => {
       name: "Root Beer",
       flavor: "Original",
     };
-    const newSodaAvailabilityWriter = vi.fn().mockResolvedValue({
-      soda,
-      availability: {
-        locationId: location.id,
-        sodaId: soda.id,
-        form: "can",
-        sodaName: soda.name,
-        sodaBrand: soda.brand,
-        sodaFlavor: soda.flavor,
+    const newSodaAvailabilityWriter = vi.fn().mockReturnValue({
+      value: {
+        soda,
+        availability: {
+          locationId: location.id,
+          sodaId: soda.id,
+          form: "can",
+          sodaName: soda.name,
+          sodaBrand: soda.brand,
+          sodaFlavor: soda.flavor,
+          canSample: "unknown",
+          canPurchase: "unknown",
+          updatedAt: new Date("2026-09-26T12:00:00Z"),
+        },
       },
+      committed: Promise.resolve(),
     });
     render(
       <LocationDetail
@@ -78,6 +160,7 @@ describe("LocationDetail", () => {
         onSignIn={vi.fn()}
         locationLoader={locationLoader}
         availabilityLoader={vi.fn().mockResolvedValue({ items: [], malformedCount: 0 })}
+        verificationLoader={verificationLoader}
         catalogLoader={vi.fn().mockResolvedValue([])}
         newSodaAvailabilityWriter={newSodaAvailabilityWriter}
       />,
@@ -96,6 +179,7 @@ describe("LocationDetail", () => {
       location.id,
       { brand: "Sprecher", name: "Root Beer", flavor: "Original" },
       "can",
+      { canSample: "unknown", canPurchase: "unknown" },
       signedInUser,
     );
   });
@@ -111,6 +195,7 @@ describe("LocationDetail", () => {
         onSignIn={vi.fn()}
         locationLoader={vi.fn().mockResolvedValue({ status })}
         availabilityLoader={vi.fn().mockResolvedValue({ items: [], malformedCount: 0 })}
+        verificationLoader={verificationLoader}
       />,
     );
 
@@ -125,6 +210,7 @@ describe("LocationDetail", () => {
         onSignIn={vi.fn()}
         locationLoader={vi.fn().mockRejectedValue(new Error("offline"))}
         availabilityLoader={vi.fn().mockResolvedValue({ items: [], malformedCount: 0 })}
+        verificationLoader={verificationLoader}
       />,
     );
 

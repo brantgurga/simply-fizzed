@@ -13,7 +13,7 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
-import { INDIANAPOLIS, KROGER, SODAS, TIMS_BREWERY } from "./fixtures.ts";
+import { AVAILABILITY, INDIANAPOLIS, KROGER, SODAS, TIMS_BREWERY } from "./fixtures.ts";
 
 const PROJECT_ID = "demo-simply-fizzed";
 let cleanupAppNumber = 0;
@@ -48,6 +48,86 @@ async function deleteAvailability(id: string): Promise<void> {
   cleanupAppNumber += 1;
   try {
     await getAdminFirestore(app).collection("availability").doc(id).delete();
+  } finally {
+    await deleteAdminApp(app);
+  }
+}
+
+async function availabilitySyncState(id: string, locationId: string) {
+  process.env["FIRESTORE_EMULATOR_HOST"] = "127.0.0.1:8080";
+  const app = initializeAdminApp(
+    { projectId: PROJECT_ID },
+    `availability-state-${cleanupAppNumber.toString()}`,
+  );
+  cleanupAppNumber += 1;
+  try {
+    const database = getAdminFirestore(app);
+    const [availability, verifications] = await Promise.all([
+      database.collection("availability").doc(id).get(),
+      database.collection("verifications").where("locationId", "==", locationId).get(),
+    ]);
+    return {
+      canSample: availability.get("canSample") as unknown,
+      canPurchase: availability.get("canPurchase") as unknown,
+      verificationCount: verifications.size,
+    };
+  } finally {
+    await deleteAdminApp(app);
+  }
+}
+
+async function setAvailabilityDetails(
+  id: string,
+  canSample: "yes" | "no" | "unknown",
+  canPurchase: "yes" | "no" | "unknown",
+): Promise<void> {
+  process.env["FIRESTORE_EMULATOR_HOST"] = "127.0.0.1:8080";
+  const app = initializeAdminApp(
+    { projectId: PROJECT_ID },
+    `availability-update-${cleanupAppNumber.toString()}`,
+  );
+  cleanupAppNumber += 1;
+  try {
+    await getAdminFirestore(app).collection("availability").doc(id).update({
+      canSample,
+      canPurchase,
+      updatedBy: "remote-fan",
+      updatedByName: "Remote Fan",
+      updatedAt: new Date(),
+    });
+  } finally {
+    await deleteAdminApp(app);
+  }
+}
+
+async function resetAvailabilitySyncState(id: string, locationId: string): Promise<void> {
+  const fixture = AVAILABILITY.find((item) => item.id === id);
+  if (fixture === undefined) throw new Error(`Missing availability fixture ${id}`);
+  process.env["FIRESTORE_EMULATOR_HOST"] = "127.0.0.1:8080";
+  const app = initializeAdminApp(
+    { projectId: PROJECT_ID },
+    `availability-reset-${cleanupAppNumber.toString()}`,
+  );
+  cleanupAppNumber += 1;
+  try {
+    const database = getAdminFirestore(app);
+    const verifications = await database
+      .collection("verifications")
+      .where("locationId", "==", locationId)
+      .get();
+    await Promise.all([
+      database.collection("availability").doc(id).set({
+        locationId: fixture.locationId,
+        sodaId: fixture.sodaId,
+        form: fixture.form,
+        sodaName: fixture.sodaName,
+        sodaBrand: fixture.sodaBrand,
+        sodaFlavor: fixture.sodaFlavor,
+        canSample: fixture.canSample,
+        canPurchase: fixture.canPurchase,
+      }),
+      ...verifications.docs.map((item) => item.ref.delete()),
+    ]);
   } finally {
     await deleteAdminApp(app);
   }
@@ -299,6 +379,67 @@ test.describe("App", () => {
     await expect(page.getByRole("heading", { name: "ra…@example.com" })).toBeVisible();
   });
 
+  test("synchronizes offline availability edits and confirmations independently", async ({
+    page,
+    context,
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== "chromium", "Offline contribution is exercised once.");
+    const availabilityId = `${KROGER.id}$big-k-root-beer$can`;
+    await resetAvailabilitySyncState(availabilityId, KROGER.id);
+    await page.goto(`/#/locations/${KROGER.id}`);
+    await page.getByRole("button", { name: "Sign in" }).last().click();
+    await page.getByRole("button", { name: /sign up/i }).click();
+    await page
+      .getByLabel(/email address/i)
+      .fill(`offline-availability-${testInfo.retry.toString()}@example.com`);
+    await page.getByLabel(/password/i).fill("emulator-password");
+    await page.getByRole("button", { name: /create account/i }).click();
+
+    try {
+      await expect(page.getByRole("button", { name: "Confirm availability" })).toBeVisible();
+
+      // Confirmation queues offline without requiring an availability edit.
+      await context.setOffline(true);
+      await page.getByRole("button", { name: "Confirm availability" }).click();
+      await expect(page.getByText("Availability confirmation saved on this device.")).toBeVisible();
+      await context.setOffline(false);
+      await expect
+        .poll(() => availabilitySyncState(availabilityId, KROGER.id))
+        .toMatchObject({ verificationCount: 1 });
+
+      // An offline edit followed by confirmation retains both local action times.
+      await context.setOffline(true);
+      const row = page
+        .getByRole("listitem")
+        .filter({ has: page.getByRole("link", { name: "Big K Root Beer in cans" }) });
+      await row.getByRole("button", { name: "Edit availability details" }).click();
+      await row.getByLabel("Can sample").click();
+      await page.getByRole("option", { name: "Yes" }).click();
+      await row.getByLabel("Can purchase").click();
+      await page.getByRole("option", { name: "No", exact: true }).click();
+      await row.getByRole("button", { name: "Save details" }).click();
+      await expect(row.getByText("Can sample: Yes")).toBeVisible();
+      await page.getByRole("button", { name: "Confirm availability" }).click();
+      await context.setOffline(false);
+      await expect
+        .poll(() => availabilitySyncState(availabilityId, KROGER.id))
+        .toEqual({ canSample: "yes", canPurchase: "no", verificationCount: 2 });
+
+      // Confirming an older cached view does not overwrite a remote availability edit.
+      await context.setOffline(true);
+      await setAvailabilityDetails(availabilityId, "no", "no");
+      await page.getByRole("button", { name: "Confirm availability" }).click();
+      await context.setOffline(false);
+      await expect
+        .poll(() => availabilitySyncState(availabilityId, KROGER.id))
+        .toEqual({ canSample: "no", canPurchase: "no", verificationCount: 3 });
+    } finally {
+      await context.setOffline(false);
+      await resetAvailabilitySyncState(availabilityId, KROGER.id);
+    }
+  });
+
   test("requires an exact ambiguous soda selection before contributing", async ({
     page,
     browserName,
@@ -309,7 +450,7 @@ test.describe("App", () => {
     const availabilityId = `${encodeURIComponent(KROGER.id)}$${encodeURIComponent(pepsi.id)}$bottle`;
 
     await page.goto(`/#/locations/${KROGER.id}`);
-    await expect(page.getByText("Sign in to contribute soda availability.")).toBeVisible();
+    await expect(page.getByText("Sign in to edit or confirm soda availability.")).toBeVisible();
     await page.getByRole("button", { name: "Sign in" }).last().click();
     await page.getByRole("button", { name: /sign up/i }).click();
     await page
