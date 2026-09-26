@@ -5,6 +5,8 @@ export const COLLECTIONS = {
   locations: "locations",
   sodas: "sodas",
   availability: "availability",
+  profiles: "profiles",
+  ratings: "ratings",
 } as const;
 
 const nonBlankString = z.string().check(z.refine((value) => value.trim().length > 0));
@@ -268,3 +270,37 @@ export const sodaWriteSchema = z.strictObject({
   updatedBy: meaningfulString,
   updatedByName: attributionNameSchema,
 });
+
+/** A 1–5 mug rating; current controls enter and display rounded whole mugs. */
+export const mugRatingSchema = z.number().check(z.minimum(1), z.maximum(5));
+export type MugRating = z.infer<typeof mugRatingSchema>;
+
+/** Public display information stored for a Firebase Auth user. */
+export const profileDocumentSchema = z.object({
+  publicName: attributionNameSchema,
+  updatedAt: firestoreTimestampSchema,
+});
+export type ProfileDocument = z.infer<typeof profileDocumentSchema>;
+
+/**
+ * One user's rating record for a soda offering. The soda fields are an immutable
+ * catalog snapshot from when the record was created; sodaOfferingId resolves to
+ * the current catalog entry.
+ */
+export const ratingDocumentSchema = z
+  .object({
+    userId: nonBlankString,
+    sodaOfferingId: nonBlankString,
+    sodaName: nonBlankString,
+    sodaBrand: nonBlankString,
+    sodaFlavor: nonBlankString,
+    rating: z.nullable(mugRatingSchema),
+    firstRecorded: firestoreTimestampSchema,
+    lastRatedAt: z.nullable(firestoreTimestampSchema),
+  })
+  .check(
+    z.refine(({ rating, lastRatedAt }) => (rating === null) === (lastRatedAt === null), {
+      error: "A rating and its timestamp must either both be present or both be absent.",
+    }),
+  );
+export type RatingDocument = z.infer<typeof ratingDocumentSchema>;

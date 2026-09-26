@@ -30,7 +30,9 @@ import { createGeocoder } from "./location/geocoder";
 import { loadLastSearchCenter, saveLastSearchCenter } from "./location/lastSearchCenter";
 import NearbySearch from "./nearby/NearbySearch";
 import { searchNearby } from "./nearby/nearby";
-import { useHashRoute } from "./routes";
+import UserProfile from "./profile/UserProfile";
+import { profileRoute, useHashRoute } from "./routes";
+import { savePublicProfile } from "./rating/ratings";
 import SodaDetail from "./soda/SodaDetail";
 
 type LoginScreenProps = {
@@ -111,6 +113,7 @@ function App() {
   const geocoder = useMemo(() => createGeocoder(), []);
   const [location, setLocation] = useState<GeoPoint | undefined>(loadLastSearchCenter);
   const [user, setUser] = useState<User | null>(null);
+  const [profileReady, setProfileReady] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [loginMode, setLoginMode] = useState<"signIn" | "signUp">("signIn");
   const pendingLocation = useRef(false);
@@ -163,18 +166,30 @@ function App() {
     setContributionMessage(`Thanks — ${name} was added.`);
   }, []);
 
-  useEffect(
-    () =>
-      onAuthStateChanged(auth, (nextUser) => {
-        setUser(nextUser);
-        if (nextUser !== null && pendingLocation.current) {
-          pendingLocation.current = false;
-          setShowLogin(false);
-          setAddingLocation(true);
-        }
-      }),
-    [],
-  );
+  useEffect(() => {
+    let profileRequest = 0;
+    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+      const currentRequest = ++profileRequest;
+      setUser(nextUser);
+      setProfileReady(false);
+      if (nextUser !== null) {
+        void savePublicProfile(db, nextUser.uid, publicContributorName(nextUser) ?? "")
+          .then(() => {
+            if (profileRequest === currentRequest) setProfileReady(true);
+          })
+          .catch(() => undefined);
+      }
+      if (nextUser !== null && pendingLocation.current) {
+        pendingLocation.current = false;
+        setShowLogin(false);
+        setAddingLocation(true);
+      }
+    });
+    return () => {
+      profileRequest += 1;
+      unsubscribe();
+    };
+  }, []);
 
   return (
     <>
@@ -191,9 +206,15 @@ function App() {
             </Button>
           ) : (
             <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-              <Typography variant="body2">
-                {user.displayName ?? user.email ?? "Signed in"}
-              </Typography>
+              {profileReady ? (
+                <Link href={profileRoute(user.uid)} color="inherit" variant="body2">
+                  {user.displayName ?? user.email ?? "Signed in"}
+                </Link>
+              ) : (
+                <Typography variant="body2">
+                  {user.displayName ?? user.email ?? "Signed in"}
+                </Typography>
+              )}
               <Button color="inherit" onClick={handleSignOut}>
                 Sign out
               </Button>
@@ -217,7 +238,9 @@ function App() {
           {route.page === "location" ? (
             <LocationDetail locationId={route.id} user={user} onSignIn={requestSignIn} />
           ) : route.page === "soda" ? (
-            <SodaDetail sodaId={route.id} />
+            <SodaDetail sodaId={route.id} user={user} onSignIn={requestSignIn} />
+          ) : route.page === "profile" ? (
+            <UserProfile userId={route.id} />
           ) : route.page === "notFound" ? (
             <Stack spacing={2}>
               <Alert severity="warning">This page could not be found.</Alert>

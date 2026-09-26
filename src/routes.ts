@@ -4,6 +4,7 @@ export type AppRoute =
   | { page: "home" }
   | { page: "location"; id: string }
   | { page: "soda"; id: string }
+  | { page: "profile"; id: string }
   | { page: "notFound" };
 
 function decodeId(value: string): string | undefined {
@@ -19,11 +20,13 @@ function decodeId(value: string): string | undefined {
 export function parseHashRoute(hash: string): AppRoute {
   if (hash === "" || hash === "#" || hash === "#/") return { page: "home" };
 
-  const match = /^#\/(locations|sodas)\/([^/]+)$/.exec(hash);
+  const match = /^#\/(locations|sodas|profiles)\/([^/]+)$/.exec(hash);
   if (match === null) return { page: "notFound" };
   const id = decodeId(match[2] ?? "");
   if (id === undefined) return { page: "notFound" };
-  return match[1] === "locations" ? { page: "location", id } : { page: "soda", id };
+  if (match[1] === "locations") return { page: "location", id };
+  if (match[1] === "sodas") return { page: "soda", id };
+  return { page: "profile", id };
 }
 
 export function locationRoute(id: string): string {
@@ -32,6 +35,10 @@ export function locationRoute(id: string): string {
 
 export function sodaRoute(id: string): string {
   return `#/sodas/${encodeURIComponent(id)}`;
+}
+
+export function profileRoute(id: string): string {
+  return `#/profiles/${encodeURIComponent(id)}`;
 }
 
 /** Keep React in sync with browser back/forward navigation between hash routes. */

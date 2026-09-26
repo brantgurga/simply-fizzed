@@ -259,6 +259,46 @@ test.describe("App", () => {
     await expect(page.getByText("Coke", { exact: true })).toBeVisible();
   });
 
+  test("queues tried and rating changes offline, then exposes the public inventory", async ({
+    page,
+    context,
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== "chromium", "The authenticated rating flow is exercised once.");
+    const email = `rating-${testInfo.retry.toString()}@example.com`;
+    await page.goto("/#/sodas/coca-cola");
+
+    await page.getByRole("button", { name: "Sign in to track this soda" }).click();
+    await page.getByRole("button", { name: /sign up/i }).click();
+    await page.getByLabel(/email address/i).fill(email);
+    await page.getByLabel(/password/i).fill("emulator-password");
+    await page.getByRole("button", { name: /create account/i }).click();
+
+    const sampled = page.getByRole("checkbox", { name: "I've had this" });
+    const fourMugs = page.getByRole("radio", { name: "4 mugs: Really liked" });
+    const fourMugsId = await fourMugs.getAttribute("id");
+    if (fourMugsId === null) throw new Error("Missing rating input ID");
+
+    await context.setOffline(true);
+    await sampled.click();
+    await expect(sampled).toBeChecked();
+    await page.locator(`label[for="${fourMugsId}"]`).click();
+    await expect(fourMugs).toBeChecked();
+    await expect(page.getByText("Saving…")).toBeVisible();
+    await context.setOffline(false);
+    await expect(page.getByText("Saving…")).toBeHidden();
+    await expect(page.getByRole("button", { name: "Clear rating" })).toBeEnabled();
+    await page.getByRole("link", { name: email }).click();
+    await expect(page.getByRole("heading", { name: "ra…@example.com" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Coca-Cola Cola (Original)" })).toBeVisible();
+    await expect(page.getByLabel("Coca-Cola Cola (Original): 4 mugs")).toBeVisible();
+
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "ra…@example.com" })).toBeVisible();
+  });
+
   test("requires an exact ambiguous soda selection before contributing", async ({
     page,
     browserName,

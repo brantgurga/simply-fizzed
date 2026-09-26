@@ -14,6 +14,7 @@ const auth = vi.hoisted(() => ({
   } | null,
   signOut: vi.fn(),
   addLocation: vi.fn(),
+  savePublicProfile: vi.fn(),
 }));
 
 vi.mock("./firebase", () => ({ app: {}, auth: {}, db: {} }));
@@ -31,6 +32,10 @@ vi.mock("./location/LocationInput", () => ({
   ),
 }));
 vi.mock("./location/addLocation", () => ({ addLocation: auth.addLocation }));
+vi.mock("./rating/ratings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./rating/ratings")>()),
+  savePublicProfile: auth.savePublicProfile,
+}));
 vi.mock("./location/AddLocationForm", () => ({
   default: ({
     onSave,
@@ -100,6 +105,8 @@ describe("App", () => {
     auth.signOut.mockReset();
     auth.addLocation.mockReset();
     auth.addLocation.mockResolvedValue(undefined);
+    auth.savePublicProfile.mockReset();
+    auth.savePublicProfile.mockResolvedValue(undefined);
     window.localStorage.clear();
     window.history.replaceState(null, "", "#/");
   });
@@ -217,12 +224,32 @@ describe("App", () => {
     expect(await screen.findByText("Thanks — Corner Shop was added.")).toBeVisible();
   });
 
+  it("waits for public profile provisioning before linking to it", async () => {
+    auth.currentUser = { uid: "fan-123", displayName: null, email: "fan@example.com" };
+    let finishProfile: (() => void) | undefined;
+    auth.savePublicProfile.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishProfile = resolve;
+        }),
+    );
+    render(<App />);
+
+    expect(screen.queryByRole("link", { name: "fan@example.com" })).not.toBeInTheDocument();
+    finishProfile?.();
+    expect(await screen.findByRole("link", { name: "fan@example.com" })).toHaveAttribute(
+      "href",
+      "#/profiles/fan-123",
+    );
+  });
+
   it("shows the authenticated user and allows sign-out", async () => {
     auth.currentUser = { uid: "fan-123", displayName: null, email: "fan@example.com" };
     const user = userEvent.setup();
     render(<App />);
 
     expect(screen.getByText("fan@example.com")).toBeVisible();
+    expect(auth.savePublicProfile).toHaveBeenCalledWith({}, "fan-123", "fa…@example.com");
     await user.click(screen.getByRole("button", { name: "Sign out" }));
     expect(auth.signOut).toHaveBeenCalledOnce();
   });

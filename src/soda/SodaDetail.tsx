@@ -1,17 +1,34 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import SportsBarIcon from "@mui/icons-material/SportsBar";
 import Alert from "@mui/material/Alert";
+import Button from "@mui/material/Button";
+import Checkbox from "@mui/material/Checkbox";
 import CircularProgress from "@mui/material/CircularProgress";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import Link from "@mui/material/Link";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
+import Rating from "@mui/material/Rating";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
+import { publicContributorName, type ContributorIdentity } from "../contributor";
 import { db } from "../firebase";
+import { loadRating, saveRating, type RatingLoad, type RatingValue } from "../rating/ratings";
 import { formatSodaUpdatedAt, loadSoda, type DocumentLoad, type SodaDocument } from "./sodas";
 
 interface SodaDetailProps {
   sodaId: string;
+  user?: ({ uid: string } & ContributorIdentity) | null;
+  onSignIn?: () => void;
   loader?: (id: string) => Promise<DocumentLoad<SodaDocument>>;
+  ratingLoader?: (userId: string, sodaId: string) => Promise<RatingLoad>;
+  ratingSaver?: (
+    userId: string,
+    publicName: string,
+    soda: SodaDocument,
+    value: RatingValue,
+    create: boolean,
+  ) => Promise<void>;
 }
 
 type State = { status: "loading" } | { status: "error" } | DocumentLoad<SodaDocument>;
@@ -31,7 +48,172 @@ function AttributionValue({ value }: { value: string | undefined }) {
   );
 }
 
-export default function SodaDetail({ sodaId, loader = defaultLoader }: SodaDetailProps) {
+const defaultRatingLoader = (userId: string, sodaId: string) => loadRating(db, userId, sodaId);
+const noop = () => undefined;
+const defaultRatingSaver = (
+  userId: string,
+  publicName: string,
+  soda: SodaDocument,
+  value: RatingValue,
+  create: boolean,
+) => saveRating(db, userId, publicName, soda, value, create);
+const ratingLabel = (value: number) => {
+  const meanings = ["Disliked", "Below average", "Acceptable", "Really liked", "Loved"];
+  return `${value} mug${value === 1 ? "" : "s"}: ${meanings[value - 1] ?? ""}`;
+};
+
+type RatingState =
+  | { status: "loading" }
+  | { status: "ready"; value: RatingValue }
+  | { status: "error" };
+
+function RatingControls({
+  soda,
+  user,
+  onSignIn,
+  loader,
+  saver,
+}: {
+  soda: SodaDocument;
+  user: ({ uid: string } & ContributorIdentity) | null;
+  onSignIn: () => void;
+  loader: (userId: string, sodaId: string) => Promise<RatingLoad>;
+  saver: (
+    userId: string,
+    publicName: string,
+    soda: SodaDocument,
+    value: RatingValue,
+    create: boolean,
+  ) => Promise<void>;
+}) {
+  const [state, setState] = useState<RatingState>(() =>
+    user === null ? { status: "ready", value: undefined } : { status: "loading" },
+  );
+  const [pendingSaves, setPendingSaves] = useState(0);
+  const [saveError, setSaveError] = useState(false);
+  const latestMutation = useRef(0);
+  const [request, setRequest] = useState({ userId: user?.uid, sodaId: soda.id, loader });
+
+  if (request.userId !== user?.uid || request.sodaId !== soda.id || request.loader !== loader) {
+    setRequest({ userId: user?.uid, sodaId: soda.id, loader });
+    setState(user === null ? { status: "ready", value: undefined } : { status: "loading" });
+  }
+
+  useEffect(() => {
+    if (user === null) return undefined;
+
+    let active = true;
+    loader(user.uid, soda.id)
+      .then((result) => {
+        if (!active) return;
+        if (result.status === "missing") setState({ status: "ready", value: undefined });
+        else if (result.status === "found")
+          setState({ status: "ready", value: result.value.rating });
+        else setState({ status: "error" });
+      })
+      .catch(() => {
+        if (active) setState({ status: "error" });
+      });
+    return () => {
+      active = false;
+    };
+  }, [loader, soda.id, user]);
+
+  if (user === null) {
+    return (
+      <Stack component="section" spacing={1} aria-labelledby="sampling-heading">
+        <Typography id="sampling-heading" variant="h6" component="h3">
+          Your sampling
+        </Typography>
+        <Typography color="text.secondary">Sign in to track and rate sodas you've had.</Typography>
+        <Button variant="outlined" onClick={onSignIn} sx={{ alignSelf: "flex-start" }}>
+          Sign in to track this soda
+        </Button>
+      </Stack>
+    );
+  }
+  if (state.status === "loading")
+    return <CircularProgress size={20} aria-label="Loading sampling" />;
+  if (state.status === "error") {
+    return <Alert severity="error">Your sampling information could not be loaded.</Alert>;
+  }
+
+  const persist = async (value: RatingValue) => {
+    const previous = state.value;
+    const mutation = ++latestMutation.current;
+    setState({ status: "ready", value });
+    setPendingSaves((count) => count + 1);
+    setSaveError(false);
+    try {
+      await saver(
+        user.uid,
+        publicContributorName(user) ?? "",
+        soda,
+        value,
+        previous === undefined && value !== undefined,
+      );
+    } catch {
+      if (latestMutation.current === mutation) {
+        setState({ status: "ready", value: previous });
+        setSaveError(true);
+      }
+    } finally {
+      setPendingSaves((count) => count - 1);
+    }
+  };
+  const saving = pendingSaves > 0;
+  const sampled = state.value !== undefined;
+  const rating = typeof state.value === "number" ? Math.round(state.value) : null;
+
+  return (
+    <Stack component="section" spacing={1} aria-labelledby="sampling-heading">
+      <Typography id="sampling-heading" variant="h6" component="h3">
+        Your sampling
+      </Typography>
+      <FormControlLabel
+        control={
+          <Checkbox
+            checked={sampled}
+            onChange={(_event, checked) => void persist(checked ? null : undefined)}
+          />
+        }
+        label="I've had this"
+      />
+      <Stack direction="row" spacing={2} sx={{ alignItems: "center", flexWrap: "wrap" }}>
+        <Rating
+          aria-label="Your mug rating"
+          value={rating}
+          max={5}
+          precision={1}
+          icon={<SportsBarIcon fontSize="inherit" />}
+          emptyIcon={<SportsBarIcon fontSize="inherit" />}
+          getLabelText={ratingLabel}
+          onChange={(_event, value) => {
+            if (value !== null && Number.isInteger(value) && value >= 1 && value <= 5) {
+              void persist(value);
+            }
+          }}
+        />
+        <Button disabled={rating === null} onClick={() => void persist(null)}>
+          Clear rating
+        </Button>
+      </Stack>
+      {saving && <Typography color="text.secondary">Saving…</Typography>}
+      {saveError && (
+        <Alert severity="error">Your sampling could not be saved. Please try again.</Alert>
+      )}
+    </Stack>
+  );
+}
+
+export default function SodaDetail({
+  sodaId,
+  user = null,
+  onSignIn = noop,
+  loader = defaultLoader,
+  ratingLoader = defaultRatingLoader,
+  ratingSaver = defaultRatingSaver,
+}: SodaDetailProps) {
   const [state, setState] = useState<State>({ status: "loading" });
   const [request, setRequest] = useState({ sodaId, loader });
 
@@ -88,6 +270,13 @@ export default function SodaDetail({ sodaId, loader = defaultLoader }: SodaDetai
       <Typography>
         <strong>Flavor:</strong> {soda.flavor}
       </Typography>
+      <RatingControls
+        soda={soda}
+        user={user}
+        onSignIn={onSignIn}
+        loader={ratingLoader}
+        saver={ratingSaver}
+      />
       <Typography color="text.secondary">
         Last updated:{" "}
         <AttributionValue

@@ -88,6 +88,22 @@ service cloud.firestore {
         && data.sodaFlavor == getAfter(/databases/$(database)/documents/sodas/$(data.sodaId)).data.flavor;
     }
 
+    function isValidRating(data, userId, ratingId) {
+      return data.keys().hasOnly([
+          "userId", "sodaOfferingId", "sodaName", "sodaBrand", "sodaFlavor",
+          "rating", "firstRecorded", "lastRatedAt"
+        ])
+        && data.userId == userId
+        && data.sodaOfferingId == ratingId
+        && isNonEmptyString(data.sodaOfferingId, 1500)
+        && isNonEmptyString(data.sodaName, 200)
+        && isNonEmptyString(data.sodaBrand, 200)
+        && isNonEmptyString(data.sodaFlavor, 200)
+        && (data.rating == null || (data.rating is number && data.rating >= 1 && data.rating <= 5))
+        && ((data.rating == null && data.lastRatedAt == null)
+          || (data.rating != null && data.lastRatedAt == request.time));
+    }
+
     match /locations/{locationId} {
       allow read: if true;
       allow create: if request.auth != null
@@ -128,6 +144,39 @@ service cloud.firestore {
           + "$" + request.resource.data.form
         && isValidAvailability(request.resource.data);
       allow update, delete: if false;
+    }
+
+    match /profiles/{userId} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(["publicName", "updatedAt"])
+        && isValidAttributionName(request.resource.data.publicName)
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+
+      match /ratings/{ratingId} {
+        allow read: if true;
+        allow create: if request.auth != null
+          && request.auth.uid == userId
+          && request.resource.data.firstRecorded == request.time
+          && isValidRating(request.resource.data, userId, ratingId)
+          && exists(/databases/$(database)/documents/sodas/$(request.resource.data.sodaOfferingId))
+          && request.resource.data.sodaName
+            == get(/databases/$(database)/documents/sodas/$(request.resource.data.sodaOfferingId)).data.name
+          && request.resource.data.sodaBrand
+            == get(/databases/$(database)/documents/sodas/$(request.resource.data.sodaOfferingId)).data.brand
+          && request.resource.data.sodaFlavor
+            == get(/databases/$(database)/documents/sodas/$(request.resource.data.sodaOfferingId)).data.flavor;
+        allow update: if request.auth != null
+          && request.auth.uid == userId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "rating", "lastRatedAt"
+          ])
+          && isValidRating(request.resource.data, userId, ratingId);
+        allow delete: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     match /{document=**} {

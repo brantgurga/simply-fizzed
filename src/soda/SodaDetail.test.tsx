@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import SodaDetail from "./SodaDetail";
 
@@ -58,5 +59,133 @@ describe("SodaDetail", () => {
     render(<SodaDetail sodaId="bad" loader={vi.fn().mockRejectedValue(new Error("offline"))} />);
 
     expect(await screen.findByText(/could not be loaded/i)).toBeVisible();
+  });
+
+  it("asks guests to sign in before tracking a soda", async () => {
+    const onSignIn = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <SodaDetail
+        sodaId="cola"
+        loader={vi.fn().mockResolvedValue({
+          status: "found",
+          value: { id: "cola", brand: "Brand", name: "Cola", flavor: "Original" },
+        })}
+        onSignIn={onSignIn}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /sign in to track/i }));
+    expect(onSignIn).toHaveBeenCalledOnce();
+  });
+
+  it("reports a failed sampling save and restores the prior state", async () => {
+    const user = userEvent.setup();
+    render(
+      <SodaDetail
+        sodaId="cola"
+        user={{ uid: "fan-123", displayName: "Fan", email: "fan@example.com" }}
+        loader={vi.fn().mockResolvedValue({
+          status: "found",
+          value: { id: "cola", brand: "Brand", name: "Cola", flavor: "Original" },
+        })}
+        ratingLoader={vi.fn().mockResolvedValue({ status: "missing" })}
+        ratingSaver={vi.fn().mockRejectedValue(new Error("offline"))}
+      />,
+    );
+
+    const sampled = await screen.findByRole("checkbox", { name: "I've had this" });
+    await user.click(sampled);
+    expect(await screen.findByText(/could not be saved/i)).toBeVisible();
+    expect(sampled).not.toBeChecked();
+  });
+
+  it("accepts additional rating changes while offline writes are pending", async () => {
+    const saver = vi.fn(() => new Promise<void>(() => undefined));
+    const user = userEvent.setup();
+    render(
+      <SodaDetail
+        sodaId="cola"
+        user={{ uid: "fan-123", displayName: "Fan", email: "fan@example.com" }}
+        loader={vi.fn().mockResolvedValue({
+          status: "found",
+          value: { id: "cola", brand: "Brand", name: "Cola", flavor: "Original" },
+        })}
+        ratingLoader={vi.fn().mockResolvedValue({ status: "missing" })}
+        ratingSaver={saver}
+      />,
+    );
+
+    const sampled = await screen.findByRole("checkbox", { name: "I've had this" });
+    await user.click(sampled);
+    fireEvent.click(screen.getByRole("radio", { name: "4 mugs: Really liked" }));
+
+    expect(sampled).toBeChecked();
+    expect(screen.getByRole("radio", { name: "4 mugs: Really liked" })).toBeChecked();
+    expect(screen.getByText("Saving…")).toBeVisible();
+    expect(saver).toHaveBeenCalledTimes(2);
+    expect(saver.mock.calls.map((call) => call.at(-1))).toEqual([true, false]);
+  });
+
+  it("marks, rates, clears, and removes a sampling", async () => {
+    const saver = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(
+      <SodaDetail
+        sodaId="cola"
+        user={{ uid: "fan-123", displayName: null, email: "fan@example.com" }}
+        loader={vi.fn().mockResolvedValue({
+          status: "found",
+          value: { id: "cola", brand: "Brand", name: "Cola", flavor: "Original" },
+        })}
+        ratingLoader={vi.fn().mockResolvedValue({ status: "missing" })}
+        ratingSaver={saver}
+      />,
+    );
+
+    const sampled = await screen.findByRole("checkbox", { name: "I've had this" });
+    await user.click(sampled);
+    await waitFor(() =>
+      expect(saver).toHaveBeenLastCalledWith(
+        "fan-123",
+        "fa…@example.com",
+        expect.objectContaining({ id: "cola" }),
+        null,
+        true,
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("radio", { name: "4 mugs: Really liked" }));
+    await waitFor(() =>
+      expect(saver).toHaveBeenLastCalledWith(
+        "fan-123",
+        "fa…@example.com",
+        expect.objectContaining({ id: "cola" }),
+        4,
+        false,
+      ),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Clear rating" }));
+    await waitFor(() =>
+      expect(saver).toHaveBeenLastCalledWith(
+        "fan-123",
+        "fa…@example.com",
+        expect.objectContaining({ id: "cola" }),
+        null,
+        false,
+      ),
+    );
+
+    await user.click(sampled);
+    await waitFor(() =>
+      expect(saver).toHaveBeenLastCalledWith(
+        "fan-123",
+        "fa…@example.com",
+        expect.objectContaining({ id: "cola" }),
+        undefined,
+        false,
+      ),
+    );
   });
 });
