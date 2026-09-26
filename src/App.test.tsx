@@ -224,6 +224,25 @@ describe("App", () => {
     expect(await screen.findByText("Thanks — Corner Shop was added.")).toBeVisible();
   });
 
+  it("waits for public profile provisioning before linking to it", async () => {
+    auth.currentUser = { uid: "fan-123", displayName: null, email: "fan@example.com" };
+    let finishProfile: (() => void) | undefined;
+    auth.savePublicProfile.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishProfile = resolve;
+        }),
+    );
+    render(<App />);
+
+    expect(screen.queryByRole("link", { name: "fan@example.com" })).not.toBeInTheDocument();
+    finishProfile?.();
+    expect(await screen.findByRole("link", { name: "fan@example.com" })).toHaveAttribute(
+      "href",
+      "#/profiles/fan-123",
+    );
+  });
+
   it("shows the authenticated user and allows sign-out", async () => {
     auth.currentUser = { uid: "fan-123", displayName: null, email: "fan@example.com" };
     const user = userEvent.setup();

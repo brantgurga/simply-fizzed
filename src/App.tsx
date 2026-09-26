@@ -113,6 +113,7 @@ function App() {
   const geocoder = useMemo(() => createGeocoder(), []);
   const [location, setLocation] = useState<GeoPoint | undefined>(loadLastSearchCenter);
   const [user, setUser] = useState<User | null>(null);
+  const [profileReady, setProfileReady] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [loginMode, setLoginMode] = useState<"signIn" | "signUp">("signIn");
   const pendingLocation = useRef(false);
@@ -165,23 +166,30 @@ function App() {
     setContributionMessage(`Thanks — ${name} was added.`);
   }, []);
 
-  useEffect(
-    () =>
-      onAuthStateChanged(auth, (nextUser) => {
-        setUser(nextUser);
-        if (nextUser !== null) {
-          void savePublicProfile(db, nextUser.uid, publicContributorName(nextUser) ?? "").catch(
-            () => undefined,
-          );
-        }
-        if (nextUser !== null && pendingLocation.current) {
-          pendingLocation.current = false;
-          setShowLogin(false);
-          setAddingLocation(true);
-        }
-      }),
-    [],
-  );
+  useEffect(() => {
+    let profileRequest = 0;
+    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+      const currentRequest = ++profileRequest;
+      setUser(nextUser);
+      setProfileReady(false);
+      if (nextUser !== null) {
+        void savePublicProfile(db, nextUser.uid, publicContributorName(nextUser) ?? "")
+          .then(() => {
+            if (profileRequest === currentRequest) setProfileReady(true);
+          })
+          .catch(() => undefined);
+      }
+      if (nextUser !== null && pendingLocation.current) {
+        pendingLocation.current = false;
+        setShowLogin(false);
+        setAddingLocation(true);
+      }
+    });
+    return () => {
+      profileRequest += 1;
+      unsubscribe();
+    };
+  }, []);
 
   return (
     <>
@@ -198,9 +206,15 @@ function App() {
             </Button>
           ) : (
             <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-              <Link href={profileRoute(user.uid)} color="inherit" variant="body2">
-                {user.displayName ?? user.email ?? "Signed in"}
-              </Link>
+              {profileReady ? (
+                <Link href={profileRoute(user.uid)} color="inherit" variant="body2">
+                  {user.displayName ?? user.email ?? "Signed in"}
+                </Link>
+              ) : (
+                <Typography variant="body2">
+                  {user.displayName ?? user.email ?? "Signed in"}
+                </Typography>
+              )}
               <Button color="inherit" onClick={handleSignOut}>
                 Sign out
               </Button>

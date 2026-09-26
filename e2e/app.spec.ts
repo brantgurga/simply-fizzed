@@ -284,6 +284,8 @@ test.describe("App", () => {
     await expect(page.getByLabel("Coca-Cola Cola: 4 mugs")).toBeVisible();
 
     await page.getByRole("button", { name: "Sign out" }).click();
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "sa…@example.com" })).toBeVisible();
   });
 
