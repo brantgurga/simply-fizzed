@@ -14,6 +14,7 @@ const auth = vi.hoisted(() => ({
   } | null,
   signOut: vi.fn(),
   addLocation: vi.fn(),
+  savePublicProfile: vi.fn(),
 }));
 
 vi.mock("./firebase", () => ({ app: {}, auth: {}, db: {} }));
@@ -31,6 +32,10 @@ vi.mock("./location/LocationInput", () => ({
   ),
 }));
 vi.mock("./location/addLocation", () => ({ addLocation: auth.addLocation }));
+vi.mock("./sampling/sampling", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./sampling/sampling")>()),
+  savePublicProfile: auth.savePublicProfile,
+}));
 vi.mock("./location/AddLocationForm", () => ({
   default: ({
     onSave,
@@ -100,6 +105,8 @@ describe("App", () => {
     auth.signOut.mockReset();
     auth.addLocation.mockReset();
     auth.addLocation.mockResolvedValue(undefined);
+    auth.savePublicProfile.mockReset();
+    auth.savePublicProfile.mockResolvedValue(undefined);
     window.localStorage.clear();
     window.history.replaceState(null, "", "#/");
   });
@@ -223,6 +230,7 @@ describe("App", () => {
     render(<App />);
 
     expect(screen.getByText("fan@example.com")).toBeVisible();
+    expect(auth.savePublicProfile).toHaveBeenCalledWith({}, "fan-123", "fa…@example.com");
     await user.click(screen.getByRole("button", { name: "Sign out" }));
     expect(auth.signOut).toHaveBeenCalledOnce();
   });

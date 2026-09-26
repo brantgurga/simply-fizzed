@@ -98,6 +98,28 @@ function canonicalAvailabilityId(availability: Record<string, unknown>): string 
   return `${locationId}$${sodaId}$${form}`;
 }
 
+function validProfile(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    publicName: "Rules Test Fan",
+    updatedAt: serverTimestamp(),
+    ...overrides,
+  };
+}
+
+function validSampling(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    userId: USER_ID,
+    sodaOfferingId: "existing-soda",
+    sodaName: validSoda.name,
+    sodaBrand: validSoda.brand,
+    sodaFlavor: validSoda.flavor,
+    rating: null,
+    firstRecorded: serverTimestamp(),
+    lastRatedAt: null,
+    ...overrides,
+  };
+}
+
 async function seedAvailabilityReferences(): Promise<void> {
   await testEnvironment.withSecurityRulesDisabled(async (context) => {
     const database = context.firestore();
@@ -383,6 +405,106 @@ describe("soda creation and immutability", () => {
       operation === "update" ? updateDoc(reference, { flavor: "Cherry" }) : deleteDoc(reference);
 
     await assertFails(request);
+  });
+});
+
+describe("public profiles and sampling inventories", () => {
+  beforeEach(async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const database = context.firestore();
+      await Promise.all([
+        setDoc(doc(database, "sodas", "existing-soda"), validSoda),
+        setDoc(doc(database, "profiles", USER_ID), {
+          publicName: "Rules Test Fan",
+          updatedAt: Timestamp.now(),
+        }),
+        setDoc(doc(database, "profiles", USER_ID, "samplings", "existing-soda"), {
+          ...validSampling(),
+          firstRecorded: Timestamp.now(),
+        }),
+      ]);
+    });
+  });
+
+  it("allows unauthenticated profile and inventory reads without enumerating profiles", async () => {
+    const database = testEnvironment.unauthenticatedContext().firestore();
+
+    await assertSucceeds(getDoc(doc(database, "profiles", USER_ID)));
+    await assertSucceeds(getDocs(collection(database, "profiles", USER_ID, "samplings")));
+    await assertFails(getDocs(collection(database, "profiles")));
+  });
+
+  it("allows owners to maintain their profile", async () => {
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+
+    await assertSucceeds(setDoc(doc(database, "profiles", USER_ID), validProfile()));
+    await assertSucceeds(
+      updateDoc(doc(database, "profiles", USER_ID), validProfile({ publicName: "Updated Fan" })),
+    );
+  });
+
+  it("allows unrated and rated sampling creation", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "sodas", "new-unrated"), validSoda);
+      await setDoc(doc(context.firestore(), "sodas", "new-rated"), validSoda);
+    });
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+
+    await assertSucceeds(
+      setDoc(
+        doc(database, "profiles", USER_ID, "samplings", "new-unrated"),
+        validSampling({ sodaOfferingId: "new-unrated" }),
+      ),
+    );
+    await assertSucceeds(
+      setDoc(
+        doc(database, "profiles", USER_ID, "samplings", "new-rated"),
+        validSampling({
+          sodaOfferingId: "new-rated",
+          rating: 4,
+          lastRatedAt: serverTimestamp(),
+        }),
+      ),
+    );
+  });
+
+  it("allows rating, clearing, and deleting an owned sampling", async () => {
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const reference = doc(database, "profiles", USER_ID, "samplings", "existing-soda");
+
+    await assertSucceeds(updateDoc(reference, { rating: 5, lastRatedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(reference, { rating: null, lastRatedAt: null }));
+    await assertFails(updateDoc(reference, { firstRecorded: serverTimestamp() }));
+    await assertSucceeds(deleteDoc(reference));
+  });
+
+  it.each([
+    ["an out-of-range rating", { rating: 6, lastRatedAt: serverTimestamp() }],
+    ["a fractional rating", { rating: 2.5, lastRatedAt: serverTimestamp() }],
+    ["a rating without its timestamp", { rating: 3, lastRatedAt: null }],
+    ["a forged user", { userId: "another-user" }],
+    ["a mismatched soda name", { sodaName: "Other" }],
+    ["a client first-recorded timestamp", { firstRecorded: Timestamp.fromMillis(0) }],
+    ["an unexpected field", { review: "Great" }],
+  ])("denies %s", async (_description, overrides) => {
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+
+    await assertFails(
+      setDoc(
+        doc(database, "profiles", USER_ID, "samplings", "existing-soda"),
+        validSampling(overrides),
+      ),
+    );
+  });
+
+  it("denies profile and sampling writes by another user", async () => {
+    const database = testEnvironment.authenticatedContext("another-user").firestore();
+
+    await assertFails(setDoc(doc(database, "profiles", USER_ID), validProfile()));
+    await assertFails(
+      setDoc(doc(database, "profiles", USER_ID, "samplings", "existing-soda"), validSampling()),
+    );
+    await assertFails(deleteDoc(doc(database, "profiles", USER_ID, "samplings", "existing-soda")));
   });
 });
 

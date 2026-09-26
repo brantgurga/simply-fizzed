@@ -30,7 +30,9 @@ import { createGeocoder } from "./location/geocoder";
 import { loadLastSearchCenter, saveLastSearchCenter } from "./location/lastSearchCenter";
 import NearbySearch from "./nearby/NearbySearch";
 import { searchNearby } from "./nearby/nearby";
-import { useHashRoute } from "./routes";
+import UserProfile from "./profile/UserProfile";
+import { profileRoute, useHashRoute } from "./routes";
+import { savePublicProfile } from "./sampling/sampling";
 import SodaDetail from "./soda/SodaDetail";
 
 type LoginScreenProps = {
@@ -167,6 +169,11 @@ function App() {
     () =>
       onAuthStateChanged(auth, (nextUser) => {
         setUser(nextUser);
+        if (nextUser !== null) {
+          void savePublicProfile(db, nextUser.uid, publicContributorName(nextUser) ?? "").catch(
+            () => undefined,
+          );
+        }
         if (nextUser !== null && pendingLocation.current) {
           pendingLocation.current = false;
           setShowLogin(false);
@@ -191,9 +198,9 @@ function App() {
             </Button>
           ) : (
             <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-              <Typography variant="body2">
+              <Link href={profileRoute(user.uid)} color="inherit" variant="body2">
                 {user.displayName ?? user.email ?? "Signed in"}
-              </Typography>
+              </Link>
               <Button color="inherit" onClick={handleSignOut}>
                 Sign out
               </Button>
@@ -217,7 +224,9 @@ function App() {
           {route.page === "location" ? (
             <LocationDetail locationId={route.id} user={user} onSignIn={requestSignIn} />
           ) : route.page === "soda" ? (
-            <SodaDetail sodaId={route.id} />
+            <SodaDetail sodaId={route.id} user={user} onSignIn={requestSignIn} />
+          ) : route.page === "profile" ? (
+            <UserProfile userId={route.id} />
           ) : route.page === "notFound" ? (
             <Stack spacing={2}>
               <Alert severity="warning">This page could not be found.</Alert>

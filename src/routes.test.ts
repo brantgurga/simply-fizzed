@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { locationRoute, parseHashRoute, sodaRoute } from "./routes";
+import { locationRoute, parseHashRoute, profileRoute, sodaRoute } from "./routes";
 
 describe("hash routes", () => {
   it("preserves the browse home", () => {
@@ -10,9 +10,11 @@ describe("hash routes", () => {
   it("round-trips safely encoded exact document ids", () => {
     const locationId = "store/one $ downtown";
     const sodaId = "brand/zero & lime";
+    const userId = "firebase/user id";
 
     expect(parseHashRoute(locationRoute(locationId))).toEqual({ page: "location", id: locationId });
     expect(parseHashRoute(sodaRoute(sodaId))).toEqual({ page: "soda", id: sodaId });
+    expect(parseHashRoute(profileRoute(userId))).toEqual({ page: "profile", id: userId });
   });
 
   it("rejects unknown, incomplete, and malformed routes", () => {

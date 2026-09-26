@@ -259,6 +259,34 @@ test.describe("App", () => {
     await expect(page.getByText("Coke", { exact: true })).toBeVisible();
   });
 
+  test("rates a soda and exposes the public sampling inventory", async ({
+    page,
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== "chromium", "The authenticated sampling flow is exercised once.");
+    const email = `sampling-${testInfo.retry.toString()}@example.com`;
+    await page.goto("/#/sodas/coca-cola");
+
+    await page.getByRole("button", { name: "Sign in to track this soda" }).click();
+    await page.getByRole("button", { name: /sign up/i }).click();
+    await page.getByLabel(/email address/i).fill(email);
+    await page.getByLabel(/password/i).fill("emulator-password");
+    await page.getByRole("button", { name: /create account/i }).click();
+
+    const fourMugs = page.getByRole("radio", { name: "4 mugs: Really liked" });
+    const fourMugsId = await fourMugs.getAttribute("id");
+    if (fourMugsId === null) throw new Error("Missing rating input ID");
+    await page.locator(`label[for="${fourMugsId}"]`).click();
+    await expect(page.getByRole("button", { name: "Clear rating" })).toBeEnabled();
+    await page.getByRole("link", { name: email }).click();
+    await expect(page.getByRole("heading", { name: "sa…@example.com" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Coca-Cola Cola" })).toBeVisible();
+    await expect(page.getByLabel("Coca-Cola Cola: 4 mugs")).toBeVisible();
+
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page.getByRole("heading", { name: "sa…@example.com" })).toBeVisible();
+  });
+
   test("requires an exact ambiguous soda selection before contributing", async ({
     page,
     browserName,

@@ -342,8 +342,8 @@ the provider to repository ID
 
 ### Firestore data model
 
-Location-based soda discovery is backed by three collections, whose document
-shapes are defined as TypeScript types in
+Soda discovery and sampling inventories use the following collections. Their
+document shapes are defined as TypeScript types in
 [`src/model/firestore.ts`](./src/model/firestore.ts) and shared by the app, the
 emulator seed script, and tests:
 
@@ -360,12 +360,17 @@ emulator seed script, and tests:
   denormalized for rendering and moderation. New IDs join `locationId`, `sodaId`,
   and `form` with a reserved `$` separator to enforce one exact tuple; legacy
   records without attribution remain readable and are de-duplicated when listed.
+- **`profiles/{uid}`** – a public Firebase Auth UID profile containing the user's
+  display name or masked email.
+- **`profiles/{uid}/samplings/{sodaId}`** – one sampled-offering record per user,
+  with denormalized soda fields, an optional 1–5 mug rating, and first-recorded
+  and last-rated timestamps.
 
-Security rules in [`firestore.rules`](./firestore.rules) allow public `read` on
-all three collections. Signed-in users may create validated, attributed
-`locations`, `sodas`, and `availability` documents. A new soda and its first
-availability are written atomically; availability fields must exactly match the
-referenced soda. Client updates, deletes, and all unmatched paths remain denied.
+Security rules in [`firestore.rules`](./firestore.rules) allow public reads.
+Signed-in users may create validated, attributed catalog contributions and may
+only maintain their own profile and sampling records. Sampling soda fields must
+match the catalog, while record ownership and first-recorded timestamps cannot
+be changed.
 
 [`firestore.indexes.json`](./firestore.indexes.json) is intentionally empty: the
 only non-trivial query is the geohash radius search, which uses a single-field
