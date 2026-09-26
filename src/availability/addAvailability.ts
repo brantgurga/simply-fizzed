@@ -60,6 +60,7 @@ function canonicalSoda(soda: Soda): Soda {
   return parsed.data;
 }
 
+/** Returns trimmed public attribution, or an empty string when no name is available. */
 function contributorName(contributor: AvailabilityContributor): string {
   return contributor.name?.trim() || "";
 }
@@ -169,7 +170,14 @@ export function addNewSodaAvailability(
   };
 }
 
-/** Queue an attributed availability detail edit using the time of the user's action. */
+/**
+ * Queues an attributed availability detail edit using the user's action time.
+ *
+ * The returned value is suitable for optimistic display. Await `committed` to know when Firestore
+ * has accepted the offline-capable write.
+ *
+ * @throws When details, attribution, the action time, or a derived document ID is invalid.
+ */
 export function updateAvailabilityDetails(
   db: Firestore,
   availability: Availability,

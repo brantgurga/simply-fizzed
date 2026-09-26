@@ -154,6 +154,10 @@ const availabilityFields = {
 const CREATION_ATTRIBUTION_FIELDS = ["createdBy", "createdByName", "createdAt"] as const;
 const UPDATE_ATTRIBUTION_FIELDS = ["updatedBy", "updatedByName", "updatedAt"] as const;
 
+/**
+ * Reports whether an optional group of own properties is wholly absent or wholly defined.
+ * An empty field list is considered complete.
+ */
 function hasCompleteFieldGroup(value: object, fields: readonly string[]): boolean {
   const present = fields.filter((field) => Object.hasOwn(value, field));
   return (

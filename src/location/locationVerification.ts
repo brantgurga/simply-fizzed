@@ -27,12 +27,19 @@ export interface VerificationLoad {
   malformedCount: number;
 }
 
+/**
+ * Parses untrusted Firestore verification data.
+ * Returns `undefined` instead of throwing when the document is malformed.
+ */
 export function parseVerification(data: unknown): Verification | undefined {
   const parsed = verificationDocumentSchema.safeParse(data);
   return parsed.success ? parsed.data : undefined;
 }
 
-/** Sort newest action time first, then lower UID first for equal timestamps. */
+/**
+ * Compares verifications newest-first, using ascending contributor UID for equal action times.
+ * Suitable for `Array.prototype.sort` and `toSorted`.
+ */
 export function compareVerifications(left: Verification, right: Verification): number {
   const timeDifference = right.verifiedAt.getTime() - left.verifiedAt.getTime();
   if (timeDifference !== 0) return timeDifference;
@@ -40,6 +47,11 @@ export function compareVerifications(left: Verification, right: Verification): n
   return left.verifiedBy < right.verifiedBy ? -1 : 1;
 }
 
+/**
+ * Loads the latest valid verification for a location and counts malformed candidates.
+ *
+ * @throws When the Firestore query fails, including when its required index is unavailable.
+ */
 export async function loadLatestVerification(
   db: Firestore,
   locationId: string,
@@ -64,7 +76,14 @@ export async function loadLatestVerification(
   return { ...(valid[0] === undefined ? {} : { latest: valid[0] }), malformedCount };
 }
 
-/** Queue an append-only verification event using the time of the user's action. */
+/**
+ * Queues an append-only location verification using the user's action time.
+ *
+ * The returned value can be displayed optimistically; await `committed` for server acceptance.
+ * Contributor names are trimmed and omitted names become an empty public attribution.
+ *
+ * @throws When the location, attribution, or action time is invalid.
+ */
 export function confirmLocationAvailability(
   db: Firestore,
   locationId: string,

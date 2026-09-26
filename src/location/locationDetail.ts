@@ -10,6 +10,10 @@ export interface AvailabilityLoad {
   latestUpdatedAt?: Date;
 }
 
+/**
+ * Returns the newest known availability action time, ignoring undated legacy records.
+ * Returns `undefined` when no item has an update timestamp.
+ */
 export function latestAvailabilityUpdate(items: readonly Availability[]): Date | undefined {
   let latest: Date | undefined;
   for (const item of items) {

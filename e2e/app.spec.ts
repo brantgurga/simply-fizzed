@@ -53,6 +53,11 @@ async function deleteAvailability(id: string): Promise<void> {
   }
 }
 
+/**
+ * Reads synchronized availability details and verification count from the test emulator.
+ *
+ * @throws When either Firestore read or Admin app cleanup fails.
+ */
 async function availabilitySyncState(id: string, locationId: string) {
   process.env["FIRESTORE_EMULATOR_HOST"] = "127.0.0.1:8080";
   const app = initializeAdminApp(
@@ -76,6 +81,11 @@ async function availabilitySyncState(id: string, locationId: string) {
   }
 }
 
+/**
+ * Simulates a remote fan changing an emulator availability record at the current action time.
+ *
+ * @throws When the record does not exist, the update is rejected, or Admin app cleanup fails.
+ */
 async function setAvailabilityDetails(
   id: string,
   canSample: "yes" | "no" | "unknown",
@@ -100,6 +110,11 @@ async function setAvailabilityDetails(
   }
 }
 
+/**
+ * Restores one availability fixture and removes all verification history for its location.
+ *
+ * @throws When the fixture is missing or an emulator reset operation fails.
+ */
 async function resetAvailabilitySyncState(id: string, locationId: string): Promise<void> {
   const fixture = AVAILABILITY.find((item) => item.id === id);
   if (fixture === undefined) throw new Error(`Missing availability fixture ${id}`);

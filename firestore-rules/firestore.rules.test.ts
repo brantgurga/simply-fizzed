@@ -100,6 +100,7 @@ function canonicalAvailabilityId(availability: Record<string, unknown>): string 
   return `${locationId}$${sodaId}$${form}`;
 }
 
+/** Builds a valid verification record with optional shallow overrides for negative rule cases. */
 function validVerification(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     locationId: "existing-location",

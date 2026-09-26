@@ -22,6 +22,10 @@ interface AvailabilityDetailFieldsProps {
   idPrefix: string;
 }
 
+/**
+ * Renders controlled sample and purchase selectors and emits both values after every change.
+ * Set `disabled` while a parent write is pending.
+ */
 export function AvailabilityDetailFields({
   value,
   onChange,
@@ -70,6 +74,7 @@ interface AvailabilityDetailsDisplayProps {
   value: AvailabilityDetails;
 }
 
+/** Renders human-readable sample and purchase availability values. */
 export function AvailabilityDetailsDisplay({ value }: AvailabilityDetailsDisplayProps) {
   return (
     <Stack direction={{ xs: "column", sm: "row" }} spacing={{ xs: 0, sm: 2 }}>
@@ -85,6 +90,10 @@ interface AvailabilityDetailsEditorProps {
   onSave?: (value: AvailabilityDetails) => Promise<void>;
 }
 
+/**
+ * Displays availability details and, when `onSave` is provided, offers an inline editor.
+ * Controls stay disabled while saving; a rejected save leaves the editor open for retry.
+ */
 export function AvailabilityDetailsEditor({
   value,
   idPrefix,

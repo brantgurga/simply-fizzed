@@ -36,6 +36,7 @@ import {
 
 const db = vi.fn<() => Firestore>()();
 
+/** Creates Firestore-shaped verification input for parser and ordering tests. */
 function rawVerification(verifiedBy: string, verifiedAt: Date) {
   return {
     locationId: "location-one",

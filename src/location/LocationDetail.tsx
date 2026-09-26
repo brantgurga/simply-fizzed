@@ -83,6 +83,7 @@ type State =
 
 const defaultLocationLoader = (id: string) => loadLocation(db, id);
 const defaultAvailabilityLoader = (id: string) => loadLocationAvailability(db, id);
+/** Loads the latest location verification from the application's Firestore instance. */
 const defaultVerificationLoader = (id: string) => loadLatestVerification(db, id);
 const defaultCatalogLoader = () => loadSodaCatalog(db);
 const contributorFor = (user: ContributionUser) => {
@@ -106,15 +107,18 @@ const defaultNewSodaAvailabilityWriter = (
   user: ContributionUser,
 ) => addNewSodaAvailability(db, locationId, soda, form, details, contributorFor(user));
 
+/** Queues an attributed detail edit for the signed-in contributor. */
 const defaultAvailabilityUpdater = (
   availability: Availability,
   details: AvailabilityDetails,
   user: ContributionUser,
 ) => updateAvailabilityDetails(db, availability, details, contributorFor(user));
 
+/** Queues an append-only verification for the signed-in contributor. */
 const defaultVerificationWriter = (locationId: string, user: ContributionUser) =>
   confirmLocationAvailability(db, locationId, contributorFor(user));
 
+/** Replaces loaded availability and recomputes its latest known action time. */
 function withAvailabilityItems(
   availability: AvailabilityLoad,
   items: Availability[],
@@ -201,6 +205,7 @@ export default function LocationDetail({
 
   const location = state.location.value;
   const commitLocationId = locationId;
+  /** Records a location-scoped synchronization error and rethrows a rejected commit. */
   const awaitCommit = async (committed: Promise<void>) => {
     try {
       await committed;
@@ -212,6 +217,7 @@ export default function LocationDetail({
       throw error;
     }
   };
+  /** Observes a background commit and runs rollback behavior if synchronization fails. */
   const trackCommit = (committed: Promise<void>, onRejected: () => void) => {
     void awaitCommit(committed).catch(onRejected);
   };
@@ -266,6 +272,7 @@ export default function LocationDetail({
     }
   };
 
+  /** Optimistically saves details, rolling back only this edit when synchronization fails. */
   const saveDetails = async (item: Availability, details: AvailabilityDetails) => {
     if (user === null) throw new Error("Sign in to contribute.");
     const queued = availabilityUpdater(item, details, user);
@@ -306,6 +313,7 @@ export default function LocationDetail({
     }
   };
 
+  /** Queues an explicit confirmation and restores prior freshness state if it is rejected. */
   const confirm = () => {
     if (user === null) return;
     const queued = verificationWriter(locationId, user);
