@@ -137,7 +137,7 @@ function SignUpForm({ onSignInClick, onSignUp }: SignUpFormProps) {
           )}
         </Alert>
       )}
-      <TextField name="email" type="email" label="Email" autoComplete="email" required />
+      <TextField name="email" type="email" label="Email address" autoComplete="email" required />
       <TextField
         name="password"
         type="password"
