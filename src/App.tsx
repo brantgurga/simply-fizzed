@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type FormEvent,
   type ReactNode,
 } from "react";
 import Alert from "@mui/material/Alert";
@@ -16,9 +17,15 @@ import Button from "@mui/material/Button";
 import Container from "@mui/material/Container";
 import Link from "@mui/material/Link";
 import Stack from "@mui/material/Stack";
+import TextField from "@mui/material/TextField";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
-import { onAuthStateChanged, signOut, type User } from "firebase/auth";
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+  type User,
+} from "firebase/auth";
 import { publicContributorName } from "./contributor";
 import { app, auth, db } from "./firebase";
 import type { GeoPoint } from "./model/firestore";
@@ -46,6 +53,105 @@ type AuthFormProps = {
   emailAutocomplete: "email" | "username";
   passwordAutocomplete: "current-password" | "new-password";
 };
+
+type SignUpError = {
+  message: string;
+  reportIssue: boolean;
+};
+
+const issuesUrl = "https://github.com/brantgurga/simply-fizzed/issues";
+
+function friendlySignUpError(error: unknown): SignUpError {
+  const code =
+    typeof error === "object" && error !== null && "code" in error ? String(error.code) : undefined;
+
+  switch (code) {
+    case "auth/email-already-in-use":
+      return { message: "An account already exists for this email.", reportIssue: false };
+    case "auth/invalid-email":
+      return { message: "Enter a valid email address.", reportIssue: false };
+    case "auth/weak-password":
+      return { message: "Choose a stronger password and try again.", reportIssue: false };
+    case "auth/network-request-failed":
+      return {
+        message: "We couldn't connect. Check your internet connection and try again.",
+        reportIssue: false,
+      };
+    case "auth/too-many-requests":
+      return { message: "Too many attempts. Wait a moment and try again.", reportIssue: false };
+    default:
+      return {
+        message: "We couldn't create your account because something went wrong on our side.",
+        reportIssue: true,
+      };
+  }
+}
+
+type SignUpFormProps = {
+  onSignInClick: () => void;
+  onSignUp: () => void;
+};
+
+function SignUpForm({ onSignInClick, onSignUp }: SignUpFormProps) {
+  const [error, setError] = useState<SignUpError>();
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const email = data.get("email");
+    const password = data.get("password");
+    if (typeof email !== "string" || typeof password !== "string") return;
+
+    setError(undefined);
+    setSubmitting(true);
+
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+      onSignUp();
+    } catch (submitError) {
+      setError(friendlySignUpError(submitError));
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Stack
+      component="form"
+      aria-label="Sign up"
+      spacing={2}
+      onSubmit={(event) => void submit(event)}
+      sx={{ width: "100%", maxWidth: 360 }}
+    >
+      <Typography variant="h5" component="h2">
+        Create an account
+      </Typography>
+      {error !== undefined && (
+        <Alert severity="error">
+          {error.message}
+          {error.reportIssue && (
+            <>
+              {" "}
+              Please <Link href={issuesUrl}>report the problem</Link> so we can fix it.
+            </>
+          )}
+        </Alert>
+      )}
+      <TextField name="email" type="email" label="Email" autoComplete="email" required />
+      <TextField
+        name="password"
+        type="password"
+        label="Password"
+        autoComplete="new-password"
+        required
+      />
+      <Button type="submit" variant="contained" disabled={submitting}>
+        {submitting ? "Creating account…" : "Create account"}
+      </Button>
+      <Button onClick={onSignInClick}>Use an existing account</Button>
+    </Stack>
+  );
+}
 
 function AuthForm({ children, emailAutocomplete, passwordAutocomplete }: AuthFormProps) {
   const container = useRef<HTMLDivElement>(null);
@@ -76,7 +182,7 @@ const LoginScreen = lazy(async () => {
 
   function FirebaseLoginScreen({ initialMode, onCancel, onComplete }: LoginScreenProps) {
     const [creatingAccount, setCreatingAccount] = useState(initialMode === "signUp");
-    const { FirebaseUIProvider, SignInAuthScreen, SignUpAuthScreen } = firebaseUiReact;
+    const { FirebaseUIProvider, SignInAuthScreen } = firebaseUiReact;
 
     return (
       <FirebaseUIProvider ui={firebaseUi}>
@@ -84,10 +190,7 @@ const LoginScreen = lazy(async () => {
           <Stack spacing={3}>
             {creatingAccount ? (
               <AuthForm emailAutocomplete="email" passwordAutocomplete="new-password">
-                <SignUpAuthScreen
-                  onSignUp={onComplete}
-                  onSignInClick={() => setCreatingAccount(false)}
-                />
+                <SignUpForm onSignUp={onComplete} onSignInClick={() => setCreatingAccount(false)} />
               </AuthForm>
             ) : (
               <AuthForm emailAutocomplete="username" passwordAutocomplete="current-password">

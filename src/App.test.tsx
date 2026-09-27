@@ -13,6 +13,7 @@ const auth = vi.hoisted(() => ({
     email: string | null;
   } | null,
   signOut: vi.fn(),
+  createUser: vi.fn(),
   addLocation: vi.fn(),
   savePublicProfile: vi.fn(),
 }));
@@ -23,6 +24,7 @@ vi.mock("firebase/auth", () => ({
     listener(auth.currentUser);
     return vi.fn();
   }),
+  createUserWithEmailAndPassword: auth.createUser,
   signOut: auth.signOut,
 }));
 vi.mock("@firebase-oss/ui-core", () => ({ initializeUI: vi.fn(() => ({})) }));
@@ -83,26 +85,14 @@ vi.mock("@firebase-oss/ui-react", () => ({
       <button onClick={onSignUpClick}>Create an account</button>
     </section>
   ),
-  SignUpAuthScreen: ({ onSignInClick }: { onSignInClick: () => void }) => (
-    <section aria-label="FirebaseUI sign up">
-      <h2>Create an account</h2>
-      <label>
-        Email
-        <input type="email" />
-      </label>
-      <label>
-        Password
-        <input type="password" />
-      </label>
-      <button onClick={onSignInClick}>Use an existing account</button>
-    </section>
-  ),
 }));
 
 describe("App", () => {
   beforeEach(() => {
     auth.currentUser = null;
     auth.signOut.mockReset();
+    auth.createUser.mockReset();
+    auth.createUser.mockResolvedValue(undefined);
     auth.addLocation.mockReset();
     auth.addLocation.mockResolvedValue(undefined);
     auth.savePublicProfile.mockReset();
@@ -179,7 +169,7 @@ describe("App", () => {
 
     await user.click(screen.getByRole("button", { name: "Add a location" }));
 
-    expect(await screen.findByLabelText("FirebaseUI sign up")).toBeVisible();
+    expect(await screen.findByRole("form", { name: "Sign up" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Back to browsing" })).toBeVisible();
   });
 
@@ -200,10 +190,34 @@ describe("App", () => {
     expect(screen.getByLabelText("Password")).toHaveAttribute("autocomplete", "current-password");
 
     await user.click(screen.getByRole("button", { name: "Create an account" }));
-    expect(screen.getByLabelText("FirebaseUI sign up")).toBeVisible();
+    expect(screen.getByRole("form", { name: "Sign up" })).toBeVisible();
     expect(screen.getAllByRole("heading", { name: "Create an account" })).toHaveLength(1);
-    expect(screen.getByLabelText("Email")).toHaveAttribute("autocomplete", "email");
-    expect(screen.getByLabelText("Password")).toHaveAttribute("autocomplete", "new-password");
+    expect(screen.getByRole("textbox", { name: /email/i })).toHaveAttribute(
+      "autocomplete",
+      "email",
+    );
+    expect(screen.getByLabelText(/^Password/)).toHaveAttribute("autocomplete", "new-password");
+  });
+
+  it("replaces Firebase configuration errors with friendly sign-up guidance", async () => {
+    auth.createUser.mockRejectedValue({
+      code: "auth/api-key-expired",
+      message: "Firebase: Error (auth/api-key-expired.-please-renew-the-api-key.).",
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Add a location" }));
+    await user.type(await screen.findByRole("textbox", { name: /email/i }), "fan@example.com");
+    await user.type(screen.getByLabelText(/^Password/), "not-a-real-secret");
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+
+    expect(await screen.findByText(/something went wrong on our side/i)).toBeVisible();
+    expect(screen.queryByText(/api-key-expired/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "report the problem" })).toHaveAttribute(
+      "href",
+      "https://github.com/brantgurga/simply-fizzed/issues",
+    );
   });
 
   it("allows an authenticated fan to add an attributed location", async () => {
