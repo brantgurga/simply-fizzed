@@ -199,6 +199,22 @@ describe("App", () => {
     expect(screen.getByLabelText(/^Password/)).toHaveAttribute("autocomplete", "new-password");
   });
 
+  it("creates an account with the entered credentials and completes sign-up", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Add a location" }));
+    await user.type(await screen.findByRole("textbox", { name: /email/i }), "fan@example.com");
+    await user.type(screen.getByLabelText(/^Password/), "not-a-real-secret");
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+
+    expect(auth.createUser).toHaveBeenCalledWith({}, "fan@example.com", "not-a-real-secret");
+    expect(screen.queryByRole("form", { name: "Sign up" })).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Find soda near you. Set your location to start searching."),
+    ).toBeVisible();
+  });
+
   it("replaces Firebase configuration errors with friendly sign-up guidance", async () => {
     auth.createUser.mockRejectedValue({
       code: "auth/api-key-expired",
