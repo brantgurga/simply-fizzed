@@ -3,8 +3,6 @@ import {
   collection,
   type Firestore,
   getDocs,
-  limit,
-  orderBy,
   query,
   Timestamp,
   where,
@@ -50,20 +48,17 @@ export function compareVerifications(left: Verification, right: Verification): n
 /**
  * Loads the latest valid verification for a location and counts malformed candidates.
  *
- * @throws When the Firestore query fails, including when its required index is unavailable.
+ * The location-only query uses Firestore's built-in single-field index. Candidates are ordered
+ * locally so location pages do not depend on a newly deployed composite index becoming ready.
+ *
+ * @throws When the Firestore query fails.
  */
 export async function loadLatestVerification(
   db: Firestore,
   locationId: string,
 ): Promise<VerificationLoad> {
   const snapshot = await getDocs(
-    query(
-      collection(db, COLLECTIONS.verifications),
-      where("locationId", "==", locationId),
-      orderBy("verifiedAt", "desc"),
-      orderBy("verifiedBy", "asc"),
-      limit(20),
-    ),
+    query(collection(db, COLLECTIONS.verifications), where("locationId", "==", locationId)),
   );
   const valid: Verification[] = [];
   let malformedCount = 0;

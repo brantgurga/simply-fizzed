@@ -89,6 +89,24 @@ describe("location verification", () => {
     });
   });
 
+  it("loads location confirmations without requiring a composite index", async () => {
+    firebase.query.mockClear();
+    firebase.orderBy.mockClear();
+    firebase.limit.mockClear();
+    firebase.getDocs.mockResolvedValue({ docs: [] });
+
+    await expect(loadLatestVerification(db, "location-one")).resolves.toEqual({
+      malformedCount: 0,
+    });
+    expect(firebase.query).toHaveBeenCalledWith("verifications", {
+      field: "locationId",
+      operation: "==",
+      value: "location-one",
+    });
+    expect(firebase.orderBy).not.toHaveBeenCalled();
+    expect(firebase.limit).not.toHaveBeenCalled();
+  });
+
   it("queues append-only confirmation with its local action time", async () => {
     const actionTime = new Date("2026-09-26T12:00:00Z");
     const queued = confirmLocationAvailability(
