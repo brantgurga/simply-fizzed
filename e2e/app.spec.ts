@@ -300,6 +300,7 @@ test.describe("App", () => {
     const manifestResponse = await page.request.get("/manifest.webmanifest");
     expect(manifestResponse.ok()).toBe(true);
     expect(await manifestResponse.json()).toMatchObject({
+      background_color: "#FFF8E7",
       display: "standalone",
       id: "/",
       icons: expect.arrayContaining([
@@ -312,7 +313,15 @@ test.describe("App", () => {
         expect.objectContaining({ form_factor: "narrow", src: "/screenshot-narrow.png" }),
       ]),
       start_url: "/",
+      theme_color: "#6B3418",
     });
+    await expect(page.locator('meta[name="theme-color"]')).toHaveCount(2);
+    await expect(
+      page.locator('meta[name="theme-color"][media="(prefers-color-scheme: light)"]'),
+    ).toHaveAttribute("content", "#6B3418");
+    await expect(
+      page.locator('meta[name="theme-color"][media="(prefers-color-scheme: dark)"]'),
+    ).toHaveAttribute("content", "#1F100A");
 
     await expect(page.getByRole("heading", { name: KROGER.name })).toBeVisible();
     await page.evaluate("navigator.serviceWorker.ready");
