@@ -301,7 +301,16 @@ test.describe("App", () => {
     expect(manifestResponse.ok()).toBe(true);
     expect(await manifestResponse.json()).toMatchObject({
       display: "standalone",
+      id: "/",
+      icons: expect.arrayContaining([
+        expect.objectContaining({ purpose: "any", src: "/icon-512.png" }),
+        expect.objectContaining({ purpose: "maskable", src: "/icon-maskable-512.png" }),
+      ]),
       name: "Simply Fizzed",
+      screenshots: expect.arrayContaining([
+        expect.objectContaining({ form_factor: "wide", src: "/screenshot-wide.png" }),
+        expect.objectContaining({ form_factor: "narrow", src: "/screenshot-narrow.png" }),
+      ]),
       start_url: "/",
     });
 
