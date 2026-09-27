@@ -40,6 +40,25 @@ describe("LocationInput", () => {
     expect(screen.getByLabelText("City or postal code")).toBeInTheDocument();
   });
 
+  it("gives the location progress indicator an accessible name", () => {
+    const geolocation: GeolocationProvider = {
+      getCurrentPosition: vi.fn(),
+    };
+
+    render(
+      <LocationInput
+        geocoder={new FakeGeocoder()}
+        onResolve={vi.fn()}
+        onResolveError={vi.fn()}
+        geolocation={geolocation}
+      />,
+    );
+
+    expect(
+      screen.getByRole("progressbar", { name: "Detecting your location" }),
+    ).toBeInTheDocument();
+  });
+
   it("resolves automatically when geolocation is granted", async () => {
     const onResolve = vi.fn();
     const geolocation: GeolocationProvider = {

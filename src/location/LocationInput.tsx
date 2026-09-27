@@ -134,7 +134,7 @@ export default function LocationInput({
   if (locating) {
     return (
       <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
-        <CircularProgress size={20} />
+        <CircularProgress size={20} aria-label="Detecting your location" />
         <span>Detecting your location…</span>
       </Stack>
     );
