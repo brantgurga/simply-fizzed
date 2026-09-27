@@ -50,21 +50,37 @@ export function compareVerifications(left: Verification, right: Verification): n
 /**
  * Loads the latest valid verification for a location and counts malformed candidates.
  *
- * @throws When the Firestore query fails, including when its required index is unavailable.
+ * Returns no verification while the required composite index is unavailable, allowing the
+ * location's primary content to remain usable during index provisioning.
+ *
+ * @throws When the Firestore query fails for a reason other than an unavailable index.
  */
 export async function loadLatestVerification(
   db: Firestore,
   locationId: string,
 ): Promise<VerificationLoad> {
-  const snapshot = await getDocs(
-    query(
-      collection(db, COLLECTIONS.verifications),
-      where("locationId", "==", locationId),
-      orderBy("verifiedAt", "desc"),
-      orderBy("verifiedBy", "asc"),
-      limit(20),
-    ),
-  );
+  let snapshot;
+  try {
+    snapshot = await getDocs(
+      query(
+        collection(db, COLLECTIONS.verifications),
+        where("locationId", "==", locationId),
+        orderBy("verifiedAt", "desc"),
+        orderBy("verifiedBy", "asc"),
+        limit(20),
+      ),
+    );
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "failed-precondition"
+    ) {
+      return { malformedCount: 0 };
+    }
+    throw error;
+  }
   const valid: Verification[] = [];
   let malformedCount = 0;
   for (const item of snapshot.docs) {

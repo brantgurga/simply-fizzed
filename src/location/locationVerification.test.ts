@@ -89,6 +89,30 @@ describe("location verification", () => {
     });
   });
 
+  it("keeps the location usable while its composite index is unavailable", async () => {
+    firebase.getDocs.mockRejectedValueOnce(
+      Object.assign(new Error("The query requires an index"), { code: "failed-precondition" }),
+    );
+
+    await expect(loadLatestVerification(db, "location-one")).resolves.toEqual({
+      malformedCount: 0,
+    });
+    expect(firebase.query).toHaveBeenLastCalledWith(
+      "verifications",
+      { field: "locationId", operation: "==", value: "location-one" },
+      { field: "verifiedAt", direction: "desc" },
+      { field: "verifiedBy", direction: "asc" },
+      { limit: 20 },
+    );
+  });
+
+  it("reports verification query failures unrelated to index provisioning", async () => {
+    const denied = Object.assign(new Error("Permission denied"), { code: "permission-denied" });
+    firebase.getDocs.mockRejectedValueOnce(denied);
+
+    await expect(loadLatestVerification(db, "location-one")).rejects.toBe(denied);
+  });
+
   it("queues append-only confirmation with its local action time", async () => {
     const actionTime = new Date("2026-09-26T12:00:00Z");
     const queued = confirmLocationAvailability(
