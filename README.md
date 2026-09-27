@@ -217,6 +217,14 @@ current requirement; reconsider it only if those capabilities become necessary.
 After creating the database, deploy this repository's rules and indexes with
 `npx firebase deploy --only firestore --project prod`.
 
+Firestore index deployment is asynchronous: a successful Firebase CLI command means
+index creation was accepted, not necessarily that the index is ready to serve queries.
+When a new composite index supports an existing screen, keep its query bounded and
+handle the temporary `failed-precondition` without hiding that screen's primary content,
+or make the deployment pipeline verify index readiness before exposing the feature. Add
+a regression test for the fallback; do not replace the indexed query with an unbounded
+collection scan.
+
 ### Project aliases and deploy configuration
 
 Project aliases live in [`.firebaserc`](./.firebaserc). Both `default` and
