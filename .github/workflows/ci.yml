@@ -71,6 +71,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Cache Firebase emulator binaries
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            firebase-emulators-${{ runner.os }}-
+
       - name: Test Firestore security rules
         run: npm run test:rules
 
