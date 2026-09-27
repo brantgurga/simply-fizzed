@@ -21,7 +21,7 @@ export default defineConfig({
       manifest: {
         id: "/",
         name: "Simply Fizzed",
-        short_name: "Fizzed",
+        short_name: "SimFiz",
         description: "Find sodas and the places that serve them.",
         start_url: "/",
         scope: "/",

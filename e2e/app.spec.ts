@@ -307,6 +307,7 @@ test.describe("App", () => {
         expect.objectContaining({ purpose: "maskable", src: "/icon-maskable-512.png" }),
       ]),
       name: "Simply Fizzed",
+      short_name: "SimFiz",
       screenshots: expect.arrayContaining([
         expect.objectContaining({ form_factor: "wide", src: "/screenshot-wide.png" }),
         expect.objectContaining({ form_factor: "narrow", src: "/screenshot-narrow.png" }),
