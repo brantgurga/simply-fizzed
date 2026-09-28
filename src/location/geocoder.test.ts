@@ -123,6 +123,27 @@ describe("GoogleMapsGeocoder", () => {
     );
   });
 
+  itInBrowser("rejects when Maps reports an authentication failure", async () => {
+    const append = vi.spyOn(document.head, "append").mockImplementation((node) => {
+      if (!(node instanceof HTMLScriptElement)) throw new Error("Expected a script element");
+      queueMicrotask(() => window.gm_authFailure?.());
+    });
+
+    try {
+      const geocoder = new GoogleMapsGeocoder("browser-key");
+      await expect(geocoder.geocode("Indianapolis, IN")).rejects.toThrow(
+        "Google Maps authentication failed",
+      );
+      expect(window.gm_authFailure).toBeUndefined();
+      expect(window.simplyFizzedGoogleMapsLoaded).toBeUndefined();
+    } finally {
+      append.mockRestore();
+      delete window.gm_authFailure;
+      delete window.google;
+      delete window.simplyFizzedGoogleMapsLoaded;
+    }
+  });
+
   itInBrowser("loads Maps geocoding with the shared App Check token provider", async () => {
     const settings: {
       fetchAppCheckToken?: () => Promise<{ token: string }>;
@@ -166,6 +187,7 @@ describe("GoogleMapsGeocoder", () => {
       expect(firebase.getToken).toHaveBeenCalledWith(firebase.appCheck, false);
     } finally {
       append.mockRestore();
+      delete window.gm_authFailure;
       delete window.google;
       delete window.simplyFizzedGoogleMapsLoaded;
     }

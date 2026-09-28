@@ -44,6 +44,7 @@ interface GoogleMapsApi {
 
 declare global {
   interface Window {
+    gm_authFailure?: () => void;
     google?: unknown;
     simplyFizzedGoogleMapsLoaded?: () => void;
   }
@@ -73,6 +74,11 @@ function currentGoogleMapsApi(): GoogleMapsApi | undefined {
   return isGoogleMapsApi(window.google) ? window.google : undefined;
 }
 
+function clearGoogleMapsCallbacks(): void {
+  delete window.gm_authFailure;
+  delete window.simplyFizzedGoogleMapsLoaded;
+}
+
 async function loadGoogleMapsGeocoder(apiKey: string): Promise<GoogleMapsGeocoderConstructor> {
   let api = currentGoogleMapsApi();
   if (!api) {
@@ -89,8 +95,13 @@ async function loadGoogleMapsGeocoder(apiKey: string): Promise<GoogleMapsGeocode
       const script = document.createElement("script");
       script.async = true;
       script.src = url.toString();
+      window.gm_authFailure = () => {
+        clearGoogleMapsCallbacks();
+        script.remove();
+        reject(new Error("Google Maps authentication failed"));
+      };
       window.simplyFizzedGoogleMapsLoaded = () => {
-        delete window.simplyFizzedGoogleMapsLoaded;
+        clearGoogleMapsCallbacks();
         const loadedApi = currentGoogleMapsApi();
         if (loadedApi) resolve(loadedApi);
         else {
@@ -99,7 +110,7 @@ async function loadGoogleMapsGeocoder(apiKey: string): Promise<GoogleMapsGeocode
         }
       };
       script.addEventListener("error", () => {
-        delete window.simplyFizzedGoogleMapsLoaded;
+        clearGoogleMapsCallbacks();
         script.remove();
         reject(new Error("Google Maps failed to load"));
       });
@@ -155,6 +166,29 @@ export class GeocodingError extends Error {
     super(message);
     this.name = "GeocodingError";
     this.status = status;
+  }
+}
+
+export const GEOCODING_TIMEOUT_MS = 10_000;
+
+/** Rejects geocoding requests that never settle, such as when the Maps API is unavailable. */
+export async function geocodeWithTimeout(
+  geocoder: Geocoder,
+  query: string,
+  timeoutMs = GEOCODING_TIMEOUT_MS,
+): Promise<GeoPoint> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new GeocodingError("TIMEOUT", "Geocoding request timed out")),
+      timeoutMs,
+    );
+  });
+
+  try {
+    return await Promise.race([geocoder.geocode(query), timeout]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
   }
 }
 

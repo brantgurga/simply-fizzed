@@ -6,30 +6,13 @@ import CircularProgress from "@mui/material/CircularProgress";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import type { GeoPoint } from "../model/firestore";
-import { GeocodingError, type Geocoder } from "./geocoder";
+import { geocodeWithTimeout, type Geocoder } from "./geocoder";
 
 /** The `navigator.geolocation` surface this component depends on. */
 type GeolocationProvider = Pick<Geolocation, "getCurrentPosition">;
 
 const defaultGeolocation: GeolocationProvider | undefined =
   typeof navigator === "undefined" ? undefined : navigator.geolocation;
-const GEOCODING_TIMEOUT_MS = 10_000;
-
-async function geocodeWithTimeout(geocoder: Geocoder, query: string): Promise<GeoPoint> {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timeoutId = setTimeout(
-      () => reject(new GeocodingError("TIMEOUT", "Geocoding request timed out")),
-      GEOCODING_TIMEOUT_MS,
-    );
-  });
-
-  try {
-    return await Promise.race([geocoder.geocode(query), timeout]);
-  } finally {
-    if (timeoutId !== undefined) clearTimeout(timeoutId);
-  }
-}
 
 export interface LocationInputProps {
   /** Geocoder used for the manual city / postal-code fallback. */
