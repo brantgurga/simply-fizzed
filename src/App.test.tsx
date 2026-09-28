@@ -171,6 +171,10 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByText(/soda data is currently unavailable/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /report it/i })).toHaveAttribute(
+      "href",
+      "https://github.com/brantgurga/simply-fizzed/issues",
+    );
     expect(screen.queryByText(/no soda found/i)).not.toBeInTheDocument();
   });
 

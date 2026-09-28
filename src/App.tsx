@@ -251,7 +251,9 @@ function App() {
       {firestoreUnavailable && (
         <Container maxWidth="md" sx={{ pt: 4 }}>
           <Alert severity="error">
-            Something went wrong. Soda data is currently unavailable. Please try again later.
+            Something went wrong. Soda data is currently unavailable. Please try again later. If the
+            problem persists,{" "}
+            <Link href="https://github.com/brantgurga/simply-fizzed/issues">report it</Link>.
           </Alert>
         </Container>
       )}
