@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../firebase";
-import type { Geocoder } from "./geocoder";
+import { GEOCODING_TIMEOUT_MS, type Geocoder } from "./geocoder";
 import AddLocationForm from "./AddLocationForm";
 import { addLocation } from "./addLocation";
 
@@ -110,6 +110,34 @@ describe("addLocation", () => {
     expect(firebase.addDoc).not.toHaveBeenCalled();
     expect(firebase.serverTimestamp).not.toHaveBeenCalled();
   });
+
+  it("rejects a geocoding request that never settles", async () => {
+    vi.useFakeTimers();
+    const geocoder: Geocoder = { geocode: vi.fn(() => new Promise<never>(() => undefined)) };
+
+    try {
+      const result = expect(
+        addLocation(
+          db,
+          geocoder,
+          { id: "fan-123" },
+          {
+            name: "Corner Shop",
+            street: "1 Main St",
+            city: "Kansas City",
+            state: "MO",
+            postalCode: "64106",
+          },
+        ),
+      ).rejects.toThrow("Geocoding request timed out");
+
+      await vi.advanceTimersByTimeAsync(GEOCODING_TIMEOUT_MS);
+      await result;
+      expect(firebase.addDoc).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("AddLocationForm", () => {
@@ -145,5 +173,29 @@ describe("AddLocationForm", () => {
       state: "MO",
       postalCode: "64106",
     });
+  });
+
+  it("reports save failures and restores the submit button", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockRejectedValue(new Error("geocoding failed"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    render(<AddLocationForm onSave={onSave} onAdded={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByLabelText(/location name/i), "Corner Shop");
+    await user.type(screen.getByLabelText(/street address/i), "1 Main St");
+    await user.type(screen.getByLabelText(/^city/i), "Kansas City");
+    await user.type(screen.getByLabelText(/^state/i), "MO");
+    await user.type(screen.getByLabelText(/postal code/i), "64106");
+    await user.click(screen.getByRole("button", { name: "Add location" }));
+
+    expect(
+      await screen.findByText("Something went wrong while adding this location."),
+    ).toBeVisible();
+    expect(screen.getByRole("link", { name: "Report the problem." })).toHaveAttribute(
+      "href",
+      "https://github.com/brantgurga/simply-fizzed/issues",
+    );
+    expect(screen.getByRole("button", { name: "Add location" })).toBeEnabled();
+    consoleError.mockRestore();
   });
 });

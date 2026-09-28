@@ -158,6 +158,29 @@ export class GeocodingError extends Error {
   }
 }
 
+export const GEOCODING_TIMEOUT_MS = 10_000;
+
+/** Rejects geocoding requests that never settle, such as when the Maps API is unavailable. */
+export async function geocodeWithTimeout(
+  geocoder: Geocoder,
+  query: string,
+  timeoutMs = GEOCODING_TIMEOUT_MS,
+): Promise<GeoPoint> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new GeocodingError("TIMEOUT", "Geocoding request timed out")),
+      timeoutMs,
+    );
+  });
+
+  try {
+    return await Promise.race([geocoder.geocode(query), timeout]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+}
+
 /**
  * `Geocoder` backed by the browser-supported Google Maps JavaScript API. The
  * API key is supplied via `VITE_GOOGLE_MAPS_API_KEY` (see `.env.example`) and

@@ -1,7 +1,7 @@
 import { addDoc, collection, type Firestore, serverTimestamp } from "firebase/firestore";
 import { geohashForLocation } from "geofire-common";
 import { COLLECTIONS, locationWriteSchema } from "../model/firestore";
-import type { Geocoder } from "./geocoder";
+import { geocodeWithTimeout, type Geocoder } from "./geocoder";
 
 export interface NewLocationInput {
   name: string;
@@ -28,7 +28,8 @@ export async function addLocation(
     state: input.state.trim().toUpperCase(),
     postalCode: input.postalCode.trim(),
   };
-  const geo = await geocoder.geocode(
+  const geo = await geocodeWithTimeout(
+    geocoder,
     `${address.street}, ${address.city}, ${address.state} ${address.postalCode}`,
   );
 

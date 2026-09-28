@@ -2,9 +2,12 @@ import { type FormEvent, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import Link from "@mui/material/Link";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import type { NewLocationInput } from "./addLocation";
+
+const SAVE_ERROR = "Something went wrong while adding this location.";
 
 interface AddLocationFormProps {
   onSave: (input: NewLocationInput) => Promise<void>;
@@ -35,7 +38,7 @@ export default function AddLocationForm({ onSave, onAdded, onCancel }: AddLocati
       onAdded(name.trim());
     } catch (caught) {
       console.error("Adding a soda location failed", caught);
-      setError("We couldn't add this location. Check the address and try again.");
+      setError(SAVE_ERROR);
     } finally {
       setSaving(false);
     }
@@ -49,7 +52,16 @@ export default function AddLocationForm({ onSave, onAdded, onCancel }: AddLocati
   return (
     <Box component="form" onSubmit={handleSubmit} noValidate>
       <Stack spacing={2}>
-        {error !== undefined && <Alert severity="error">{error}</Alert>}
+        {error !== undefined && (
+          <Alert severity="error">
+            {error}{" "}
+            {error === SAVE_ERROR && (
+              <Link href="https://github.com/brantgurga/simply-fizzed/issues">
+                Report the problem.
+              </Link>
+            )}
+          </Alert>
+        )}
         <TextField
           label="Location name"
           value={name}
