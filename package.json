@@ -49,7 +49,7 @@
     "@tsconfig/recommended": "^1.0.13",
     "@tsconfig/strictest": "^2.0.8",
     "@tsconfig/vite-react": "^8.1.1",
-    "@types/node": "^26.6.2",
+    "@types/node": "^26.6.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/wait-on": "^5.3.4",
@@ -59,7 +59,7 @@
     "husky": "^9.1.7",
     "jsdom": "^30.1.1",
     "lint-staged": "^17.5.1",
-    "oxfmt": "0.70.0",
+    "oxfmt": "^0.70.0",
     "oxlint": "^1.85.0",
     "oxlint-tsgolint": "^7.0.2003",
     "typescript": "~7.0.2",
@@ -70,7 +70,6 @@
   },
   "overrides": {
     "@opentelemetry/core": "2.8.0",
-    "csv-parse": "7.0.2",
     "qs": "6.16.0",
     "uuid@<11.1.1": "11.1.1"
   },
@@ -80,7 +79,6 @@
   },
   "overrideNotes": {
     "qs": "Temporary security pin for GHSA-4mjr-xmp4-gh2g and GHSA-x5fp-wj9c-mxmx; remove when firebase-tools permits qs >=6.16.0.",
-    "csv-parse": "Temporary security pin for GHSA-8cw4-87c7-c6xx; remove when firebase-tools permits csv-parse >=7.0.2.",
     "@opentelemetry/core": "Temporary security pin for GHSA-8988-4f7v-96qf; remove when firebase-tools through @google-cloud/pubsub permits @opentelemetry/core >=2.8.0.",
     "uuid@<11.1.1": "Temporary security pin for GHSA-w5hq-g745-h8pq; remove when firebase-tools and its transitive dependencies no longer install uuid <11.1.1."
   }

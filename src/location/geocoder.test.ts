@@ -23,6 +23,34 @@ type GeocodeCallback = (
   status: string,
 ) => void;
 
+const malformedResponseLoader: GoogleMapsGeocoderLoader = async () =>
+  class {
+    geocode(_request: { address: string }, callback: GeocodeCallback) {
+      callback([], "OK");
+    }
+  };
+
+const throwingCoordinateLoader: GoogleMapsGeocoderLoader = async () =>
+  class {
+    geocode(_request: { address: string }, callback: GeocodeCallback) {
+      callback(
+        [
+          {
+            geometry: {
+              location: {
+                lat: () => {
+                  throw new Error("malformed coordinate");
+                },
+                lng: () => -86.1581,
+              },
+            },
+          },
+        ],
+        "OK",
+      );
+    }
+  };
+
 const itInBrowser = typeof document === "undefined" ? it.skip : it;
 
 describe("FakeGeocoder", () => {
@@ -82,13 +110,7 @@ describe("GoogleMapsGeocoder", () => {
   );
 
   it("rejects a malformed successful response", async () => {
-    const loader: GoogleMapsGeocoderLoader = async () =>
-      class {
-        geocode(_request: { address: string }, callback: GeocodeCallback) {
-          callback([], "OK");
-        }
-      };
-    const geocoder = new GoogleMapsGeocoder("browser-key", loader);
+    const geocoder = new GoogleMapsGeocoder("browser-key", malformedResponseLoader);
 
     await expect(geocoder.geocode("Indianapolis, IN")).rejects.toEqual(
       new GeocodingError("INVALID_RESPONSE"),
@@ -96,27 +118,7 @@ describe("GoogleMapsGeocoder", () => {
   });
 
   it("rejects when a malformed coordinate accessor throws", async () => {
-    const loader: GoogleMapsGeocoderLoader = async () =>
-      class {
-        geocode(_request: { address: string }, callback: GeocodeCallback) {
-          callback(
-            [
-              {
-                geometry: {
-                  location: {
-                    lat: () => {
-                      throw new Error("malformed coordinate");
-                    },
-                    lng: () => -86.1581,
-                  },
-                },
-              },
-            ],
-            "OK",
-          );
-        }
-      };
-    const geocoder = new GoogleMapsGeocoder("browser-key", loader);
+    const geocoder = new GoogleMapsGeocoder("browser-key", throwingCoordinateLoader);
 
     await expect(geocoder.geocode("Indianapolis, IN")).rejects.toEqual(
       new GeocodingError("INVALID_RESPONSE"),
