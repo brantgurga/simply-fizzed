@@ -10,11 +10,16 @@ import {
   initializeAuth,
 } from "firebase/auth";
 import {
+  collection,
   connectFirestoreEmulator,
+  type Firestore,
+  getDocsFromServer,
   getFirestore,
   initializeFirestore,
+  limit,
   persistentLocalCache,
   persistentMultipleTabManager,
+  query,
 } from "firebase/firestore";
 import {
   ensureInitialized,
@@ -24,6 +29,7 @@ import {
   isSupported,
 } from "firebase/remote-config";
 import { isHostnameEnabled } from "./availability";
+import { COLLECTIONS } from "./model/firestore";
 
 const ENABLED_HOSTNAMES_PARAMETER = "enabled_hostnames";
 const REMOTE_CONFIG_FETCH_INTERVAL_MILLIS = 5 * 60 * 1000;
@@ -94,6 +100,23 @@ export const db = existingApp
   : initializeFirestore(app, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
     });
+
+/**
+ * Confirm that Firestore can serve data from the backend, rather than allowing an
+ * empty persistent cache to masquerade as an empty database. An offline browser
+ * may continue using cached data and retries this check when it reconnects.
+ */
+export async function isFirestoreAvailable(
+  database: Firestore,
+  online = navigator.onLine,
+): Promise<boolean> {
+  try {
+    await getDocsFromServer(query(collection(database, COLLECTIONS.locations), limit(1)));
+    return true;
+  } catch {
+    return !online;
+  }
+}
 
 // A `demo-` project id marks an emulator-only configuration (local dev and e2e
 // both use `demo-simply-fizzed`). Production configs use real Firebase with no
