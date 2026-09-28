@@ -43,6 +43,7 @@ vi.mock("./rating/ratings", async (importOriginal) => ({
   savePublicProfile: auth.savePublicProfile,
 }));
 vi.mock("./location/AddLocationForm", () => ({
+  ISSUE_REPORT_URL: "https://github.com/brantgurga/simply-fizzed/issues",
   default: ({
     onSave,
     onAdded,

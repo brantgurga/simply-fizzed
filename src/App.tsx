@@ -22,7 +22,7 @@ import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { publicContributorName } from "./contributor";
 import { app, auth, db, isFirestoreAvailable } from "./firebase";
 import type { GeoPoint } from "./model/firestore";
-import AddLocationForm from "./location/AddLocationForm";
+import AddLocationForm, { ISSUE_REPORT_URL } from "./location/AddLocationForm";
 import { addLocation, type NewLocationInput } from "./location/addLocation";
 import LocationDetail from "./location/LocationDetail";
 import LocationInput from "./location/LocationInput";
@@ -252,8 +252,7 @@ function App() {
         <Container maxWidth="md" sx={{ pt: 4 }}>
           <Alert severity="error">
             Something went wrong. Soda data is currently unavailable. Please try again later. If the
-            problem persists,{" "}
-            <Link href="https://github.com/brantgurga/simply-fizzed/issues">report it</Link>.
+            problem persists, <Link href={ISSUE_REPORT_URL}>report it</Link>.
           </Alert>
         </Container>
       )}
