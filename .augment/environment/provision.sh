@@ -10,11 +10,25 @@
 # the loss only shows up as confusing tool failures in a later session.
 set -eu
 
-# Keep in sync with package.json.
-PLAYWRIGHT_VERSION=1.63.0
-FIREBASE_TOOLS_VERSION=15.30.2
-
 REPO=/workspace/brantgurga/simply-fizzed
+
+# Fallbacks, used only when the checkout is not available at provision time.
+# package.json declares caret ranges, so it is not the authority here: npm ci
+# installs whatever package-lock.json resolved to, and browser and emulator
+# artifacts must match that. Keep these in sync with package-lock.json.
+PLAYWRIGHT_FALLBACK_VERSION=1.63.0
+FIREBASE_TOOLS_FALLBACK_VERSION=15.30.2
+
+# Read the installed version of a package out of the lockfile.
+locked_version() {
+	node -p "require('$REPO/package-lock.json').packages['node_modules/$1'].version" 2>/dev/null || true
+}
+
+PLAYWRIGHT_VERSION=$(locked_version '@playwright/test')
+[ -n "$PLAYWRIGHT_VERSION" ] || PLAYWRIGHT_VERSION=$PLAYWRIGHT_FALLBACK_VERSION
+FIREBASE_TOOLS_VERSION=$(locked_version 'firebase-tools')
+[ -n "$FIREBASE_TOOLS_VERSION" ] || FIREBASE_TOOLS_VERSION=$FIREBASE_TOOLS_FALLBACK_VERSION
+echo "playwright=$PLAYWRIGHT_VERSION firebase-tools=$FIREBASE_TOOLS_VERSION"
 
 export DEBIAN_FRONTEND=noninteractive
 # Outside node_modules so the browsers survive a dependency reinstall. The same

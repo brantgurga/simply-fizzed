@@ -54,10 +54,16 @@ expected.
 
 ## Constraints to keep in mind
 
-- **Pinned versions.** `provision.sh` pins the Playwright and firebase-tools
-  versions used to fetch browsers and emulator artifacts. They must match the
-  versions in `package.json`; a dependency bump that leaves them behind
-  produces browsers the test runner refuses to use.
+- **Versions come from the lockfile.** `provision.sh` fetches browsers and
+  emulator artifacts for specific Playwright and firebase-tools versions, and
+  those must match what actually gets installed at runtime. `npm ci` installs
+  strictly from `package-lock.json` and never consults `package.json`, whose
+  caret ranges can resolve to a newer release without anyone editing them. So
+  the script reads the versions out of `package-lock.json` when the checkout is
+  available, and only falls back to the constants near the top of the file when
+  it is not. Those constants must be kept in sync with the lockfile, not with
+  `package.json`; a mismatch produces cached browsers the test runner refuses
+  to use.
 - **Browser location.** Browsers install to `/root/.cache/ms-playwright`,
   outside `node_modules`, so that reinstalling dependencies does not delete
   them. `playwright.config.ts` defaults `PLAYWRIGHT_BROWSERS_PATH` to `0`
