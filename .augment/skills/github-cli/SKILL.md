@@ -73,6 +73,16 @@ gh pr list --state open
 Always create and push the branch first, and link the PR to its issue by
 writing `Closes #<number>` in the PR body.
 
+### Dependabot pull requests
+
+Never commit or push fixes directly to a Dependabot-owned branch. Direct edits
+stop Dependabot from monitoring and rebasing that pull request.
+
+Create a separate branch from the Dependabot PR's base branch and open a
+separate PR for compatibility fixes, pin cleanup, or other repository changes.
+Leave the dependency update on Dependabot's branch; after the separate PR
+merges, let Dependabot rebase and reassess its original update.
+
 ### CI / status
 
 ```bash
