@@ -15,9 +15,15 @@ const auth = vi.hoisted(() => ({
   signOut: vi.fn(),
   addLocation: vi.fn(),
   savePublicProfile: vi.fn(),
+  isFirestoreAvailable: vi.fn(),
 }));
 
-vi.mock("./firebase", () => ({ app: {}, auth: {}, db: {} }));
+vi.mock("./firebase", () => ({
+  app: {},
+  auth: {},
+  db: {},
+  isFirestoreAvailable: auth.isFirestoreAvailable,
+}));
 vi.mock("firebase/auth", () => ({
   onAuthStateChanged: vi.fn((_auth, listener: (user: typeof auth.currentUser) => void) => {
     listener(auth.currentUser);
@@ -107,6 +113,8 @@ describe("App", () => {
     auth.addLocation.mockResolvedValue(undefined);
     auth.savePublicProfile.mockReset();
     auth.savePublicProfile.mockResolvedValue(undefined);
+    auth.isFirestoreAvailable.mockReset();
+    auth.isFirestoreAvailable.mockResolvedValue(true);
     window.localStorage.clear();
     window.history.replaceState(null, "", "#/");
   });
@@ -155,6 +163,15 @@ describe("App", () => {
       screen.getByText("Find soda near you. Set your location to start searching."),
     ).toBeVisible();
     expect(screen.getByRole("button", { name: "Sign in" })).toBeVisible();
+  });
+
+  it("surfaces an unavailable Firestore backend before a search starts", async () => {
+    auth.isFirestoreAvailable.mockResolvedValue(false);
+
+    render(<App />);
+
+    expect(await screen.findByText(/soda data is currently unavailable/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no soda found/i)).not.toBeInTheDocument();
   });
 
   it("hides a stale search center when location resolution fails", async () => {

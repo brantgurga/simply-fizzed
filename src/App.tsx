@@ -20,7 +20,7 @@ import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { publicContributorName } from "./contributor";
-import { app, auth, db } from "./firebase";
+import { app, auth, db, isFirestoreAvailable } from "./firebase";
 import type { GeoPoint } from "./model/firestore";
 import AddLocationForm from "./location/AddLocationForm";
 import { addLocation, type NewLocationInput } from "./location/addLocation";
@@ -114,6 +114,7 @@ function App() {
   const [location, setLocation] = useState<GeoPoint | undefined>(loadLastSearchCenter);
   const [user, setUser] = useState<User | null>(null);
   const [profileReady, setProfileReady] = useState(false);
+  const [firestoreUnavailable, setFirestoreUnavailable] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [loginMode, setLoginMode] = useState<"signIn" | "signUp">("signIn");
   const pendingLocation = useRef(false);
@@ -164,6 +165,24 @@ function App() {
   const handleLocationAdded = useCallback((name: string) => {
     setAddingLocation(false);
     setContributionMessage(`Thanks — ${name} was added.`);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    let request = 0;
+    const checkAvailability = () => {
+      const currentRequest = ++request;
+      void isFirestoreAvailable(db).then((available) => {
+        if (active && request === currentRequest) setFirestoreUnavailable(!available);
+      });
+    };
+
+    checkAvailability();
+    window.addEventListener("online", checkAvailability);
+    return () => {
+      active = false;
+      window.removeEventListener("online", checkAvailability);
+    };
   }, []);
 
   useEffect(() => {
@@ -222,6 +241,14 @@ function App() {
           )}
         </Toolbar>
       </AppBar>
+
+      {firestoreUnavailable && (
+        <Container maxWidth="md" sx={{ pt: 4 }}>
+          <Alert severity="error">
+            Something went wrong. Soda data is currently unavailable. Please try again later.
+          </Alert>
+        </Container>
+      )}
 
       {showLogin && user === null ? (
         <Suspense

@@ -6,6 +6,10 @@ const firebase = vi.hoisted(() => ({
   auth: { emulatorConfig: null },
   connectedAuth: { emulatorConfig: { host: "127.0.0.1", port: 9099 } },
   cache: { kind: "persistent" },
+  collection: vi.fn(),
+  firestoreQuery: vi.fn(),
+  getDocsFromServer: vi.fn(),
+  limit: vi.fn(),
   existingFirestore: { name: "existing-firestore" },
   localPersistence: { kind: "local" },
   remoteConfig: {
@@ -67,11 +71,15 @@ vi.mock("firebase/auth", () => ({
 }));
 
 vi.mock("firebase/firestore", () => ({
+  collection: firebase.collection,
   connectFirestoreEmulator: firebase.connectFirestoreEmulator,
+  getDocsFromServer: firebase.getDocsFromServer,
   getFirestore: firebase.getFirestore,
   initializeFirestore: firebase.initializeFirestore,
+  limit: firebase.limit,
   persistentLocalCache: firebase.persistentLocalCache,
   persistentMultipleTabManager: firebase.persistentMultipleTabManager,
+  query: firebase.firestoreQuery,
 }));
 
 describe("Firebase initialization", () => {
@@ -96,6 +104,10 @@ describe("Firebase initialization", () => {
     firebase.persistentMultipleTabManager.mockReturnValue(firebase.tabManager);
     firebase.persistentLocalCache.mockReturnValue(firebase.cache);
     firebase.initializeFirestore.mockReturnValue({ name: "test-firestore" });
+    firebase.collection.mockReturnValue({ name: "locations" });
+    firebase.limit.mockReturnValue({ count: 1 });
+    firebase.firestoreQuery.mockReturnValue({ name: "availability-query" });
+    firebase.getDocsFromServer.mockResolvedValue({ docs: [] });
   });
 
   afterEach(() => {
@@ -134,6 +146,23 @@ describe("Firebase initialization", () => {
     expect(firebase.getRemoteConfig).not.toHaveBeenCalled();
     expect(firebase.ensureInitialized).not.toHaveBeenCalled();
     expect(firebase.fetchAndActivate).not.toHaveBeenCalled();
+  });
+
+  it("checks Firestore availability against the server", async () => {
+    const { db, isFirestoreAvailable } = await import("./firebase");
+
+    await expect(isFirestoreAvailable(db, true)).resolves.toBe(true);
+    expect(firebase.collection).toHaveBeenCalledWith(db, "locations");
+    expect(firebase.limit).toHaveBeenCalledWith(1);
+    expect(firebase.getDocsFromServer).toHaveBeenCalledWith({ name: "availability-query" });
+  });
+
+  it("reports backend failures while preserving explicit offline use", async () => {
+    firebase.getDocsFromServer.mockRejectedValue(new Error("database missing"));
+    const { db, isFirestoreAvailable } = await import("./firebase");
+
+    await expect(isFirestoreAvailable(db, true)).resolves.toBe(false);
+    await expect(isFirestoreAvailable(db, false)).resolves.toBe(true);
   });
 
   it("reuses HMR instances without reconnecting configured Auth", async () => {
