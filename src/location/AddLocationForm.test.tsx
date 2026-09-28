@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../firebase";
 import { GEOCODING_TIMEOUT_MS, type Geocoder } from "./geocoder";
-import AddLocationForm from "./AddLocationForm";
+import AddLocationForm, { ISSUE_REPORT_URL } from "./AddLocationForm";
 import { addLocation } from "./addLocation";
 
 const firebase = vi.hoisted(() => ({
@@ -193,7 +193,7 @@ describe("AddLocationForm", () => {
     ).toBeVisible();
     expect(screen.getByRole("link", { name: "Report the problem." })).toHaveAttribute(
       "href",
-      "https://github.com/brantgurga/simply-fizzed/issues",
+      ISSUE_REPORT_URL,
     );
     expect(screen.getByRole("button", { name: "Add location" })).toBeEnabled();
     consoleError.mockRestore();

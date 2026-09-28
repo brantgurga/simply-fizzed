@@ -7,6 +7,7 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import type { NewLocationInput } from "./addLocation";
 
+export const ISSUE_REPORT_URL = "https://github.com/brantgurga/simply-fizzed/issues";
 const SAVE_ERROR = "Something went wrong while adding this location.";
 
 interface AddLocationFormProps {
@@ -55,11 +56,7 @@ export default function AddLocationForm({ onSave, onAdded, onCancel }: AddLocati
         {error !== undefined && (
           <Alert severity="error">
             {error}{" "}
-            {error === SAVE_ERROR && (
-              <Link href="https://github.com/brantgurga/simply-fizzed/issues">
-                Report the problem.
-              </Link>
-            )}
+            {error === SAVE_ERROR && <Link href={ISSUE_REPORT_URL}>Report the problem.</Link>}
           </Alert>
         )}
         <TextField
