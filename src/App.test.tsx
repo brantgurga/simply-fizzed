@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { getContrastRatio } from "@mui/material/styles";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -172,6 +172,18 @@ describe("App", () => {
 
     expect(await screen.findByText(/soda data is currently unavailable/i)).toBeInTheDocument();
     expect(screen.queryByText(/no soda found/i)).not.toBeInTheDocument();
+  });
+
+  it("removes the backend alert when cached offline browsing takes over", async () => {
+    auth.isFirestoreAvailable.mockResolvedValue(false);
+    render(<App />);
+    await screen.findByText(/soda data is currently unavailable/i);
+
+    act(() => {
+      window.dispatchEvent(new Event("offline"));
+    });
+
+    expect(screen.queryByText(/soda data is currently unavailable/i)).not.toBeInTheDocument();
   });
 
   it("hides a stale search center when location resolution fails", async () => {

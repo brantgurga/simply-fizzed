@@ -176,12 +176,18 @@ function App() {
         if (active && request === currentRequest) setFirestoreUnavailable(!available);
       });
     };
+    const useOfflineCache = () => {
+      request += 1;
+      setFirestoreUnavailable(false);
+    };
 
     checkAvailability();
     window.addEventListener("online", checkAvailability);
+    window.addEventListener("offline", useOfflineCache);
     return () => {
       active = false;
       window.removeEventListener("online", checkAvailability);
+      window.removeEventListener("offline", useOfflineCache);
     };
   }, []);
 
