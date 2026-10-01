@@ -76,7 +76,13 @@ vi.mock("./location/AddLocationForm", () => ({
 }));
 vi.mock("@firebase-oss/ui-react", () => ({
   FirebaseUIProvider: ({ children }: { children: ReactNode }) => children,
-  SignInAuthScreen: ({ onSignUpClick }: { onSignUpClick: () => void }) => (
+  SignInAuthScreen: ({
+    onForgotPasswordClick,
+    onSignUpClick,
+  }: {
+    onForgotPasswordClick: () => void;
+    onSignUpClick: () => void;
+  }) => (
     <section aria-label="FirebaseUI sign in">
       <h2>Sign in</h2>
       <label>
@@ -87,7 +93,18 @@ vi.mock("@firebase-oss/ui-react", () => ({
         Password
         <input type="password" />
       </label>
+      <button onClick={onForgotPasswordClick}>Forgot password?</button>
       <button onClick={onSignUpClick}>Create an account</button>
+    </section>
+  ),
+  ForgotPasswordAuthScreen: ({ onBackToSignInClick }: { onBackToSignInClick: () => void }) => (
+    <section aria-label="FirebaseUI forgot password">
+      <h2>Reset password</h2>
+      <label>
+        Email
+        <input type="email" />
+      </label>
+      <button onClick={onBackToSignInClick}>Back to sign in</button>
     </section>
   ),
   SignUpAuthScreen: ({ onSignInClick }: { onSignInClick: () => void }) => (
@@ -217,7 +234,7 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Back to browsing" })).toBeVisible();
   });
 
-  it("opens centered FirebaseUI and switches between sign-in and sign-up", async () => {
+  it("opens centered FirebaseUI and switches between authentication modes", async () => {
     const user = userEvent.setup();
     render(<App />);
 
@@ -232,6 +249,14 @@ describe("App", () => {
     expect(screen.getAllByRole("heading", { name: "Sign in" })).toHaveLength(1);
     expect(screen.getByLabelText("Email")).toHaveAttribute("autocomplete", "username");
     expect(screen.getByLabelText("Password")).toHaveAttribute("autocomplete", "current-password");
+
+    await user.click(screen.getByRole("button", { name: "Forgot password?" }));
+    expect(screen.getByLabelText("FirebaseUI forgot password")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Reset password" })).toBeVisible();
+    expect(screen.getByLabelText("Email")).toHaveAttribute("autocomplete", "email");
+
+    await user.click(screen.getByRole("button", { name: "Back to sign in" }));
+    expect(screen.getByLabelText("FirebaseUI sign in")).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "Create an account" }));
     expect(screen.getByLabelText("FirebaseUI sign up")).toBeVisible();

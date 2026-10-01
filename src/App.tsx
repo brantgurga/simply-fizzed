@@ -75,25 +75,28 @@ const LoginScreen = lazy(async () => {
   const firebaseUi = firebaseUiCore.initializeUI({ app, auth });
 
   function FirebaseLoginScreen({ initialMode, onCancel, onComplete }: LoginScreenProps) {
-    const [creatingAccount, setCreatingAccount] = useState(initialMode === "signUp");
-    const { FirebaseUIProvider, SignInAuthScreen, SignUpAuthScreen } = firebaseUiReact;
+    const [mode, setMode] = useState<"signIn" | "signUp" | "forgotPassword">(initialMode);
+    const { FirebaseUIProvider, ForgotPasswordAuthScreen, SignInAuthScreen, SignUpAuthScreen } =
+      firebaseUiReact;
 
     return (
       <FirebaseUIProvider ui={firebaseUi}>
         <Container component="main" maxWidth="sm" sx={{ py: 4 }}>
           <Stack spacing={3}>
-            {creatingAccount ? (
+            {mode === "signUp" ? (
               <AuthForm emailAutocomplete="email" passwordAutocomplete="new-password">
-                <SignUpAuthScreen
-                  onSignUp={onComplete}
-                  onSignInClick={() => setCreatingAccount(false)}
-                />
+                <SignUpAuthScreen onSignUp={onComplete} onSignInClick={() => setMode("signIn")} />
+              </AuthForm>
+            ) : mode === "forgotPassword" ? (
+              <AuthForm emailAutocomplete="email" passwordAutocomplete="current-password">
+                <ForgotPasswordAuthScreen onBackToSignInClick={() => setMode("signIn")} />
               </AuthForm>
             ) : (
               <AuthForm emailAutocomplete="username" passwordAutocomplete="current-password">
                 <SignInAuthScreen
                   onSignIn={onComplete}
-                  onSignUpClick={() => setCreatingAccount(true)}
+                  onForgotPasswordClick={() => setMode("forgotPassword")}
+                  onSignUpClick={() => setMode("signUp")}
                 />
               </AuthForm>
             )}
