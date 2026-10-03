@@ -320,12 +320,14 @@ server-side authorization remains the security boundary. Demo projects connect t
 Auth, Firestore, and Functions emulators and skip App Check.
 
 Before the first hosted Functions deployment, confirm Blaze billing, required Cloud
-Functions/Run/Build and Artifact Registry APIs, deployment-service-account permissions,
-and a least-privilege runtime service account. Set repository variables
-`FIREBASE_OPERATOR_UIDS_JSON` and `FIREBASE_FUNCTIONS_SERVICE_ACCOUNT`; the delivery
-workflow validates them before writing the Functions environment file. The runtime
-identity needs only the Firebase Auth claim/user operations and Firestore document
-access used by management. Do not grant broad project ownership to either identity.
+Functions/Run/Build and Artifact Registry APIs, and deployment-service-account
+permissions. Set `FIREBASE_OPERATOR_UIDS_JSON` plus one distinct runtime identity in
+`FIREBASE_GET_MY_AUTHORIZATION_SERVICE_ACCOUNT`, `FIREBASE_SEARCH_USERS_SERVICE_ACCOUNT`,
+`FIREBASE_REVEAL_USER_EMAIL_SERVICE_ACCOUNT`, and
+`FIREBASE_APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT`. The delivery workflow validates them
+before writing the Functions environment file. Grant each Function's identity only the
+Firebase Auth and Firestore operations that callable needs; do not grant broad project
+ownership to any runtime or deployment identity.
 
 ### Environment variables
 

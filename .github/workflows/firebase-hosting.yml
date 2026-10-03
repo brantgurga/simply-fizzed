@@ -130,7 +130,10 @@ jobs:
       - name: Validate Functions deployment configuration
         env:
           OPERATOR_UIDS_JSON: ${{ vars.FIREBASE_OPERATOR_UIDS_JSON }}
-          FUNCTIONS_SERVICE_ACCOUNT: ${{ vars.FIREBASE_FUNCTIONS_SERVICE_ACCOUNT }}
+          GET_MY_AUTHORIZATION_SERVICE_ACCOUNT: ${{ vars.FIREBASE_GET_MY_AUTHORIZATION_SERVICE_ACCOUNT }}
+          SEARCH_USERS_SERVICE_ACCOUNT: ${{ vars.FIREBASE_SEARCH_USERS_SERVICE_ACCOUNT }}
+          REVEAL_USER_EMAIL_SERVICE_ACCOUNT: ${{ vars.FIREBASE_REVEAL_USER_EMAIL_SERVICE_ACCOUNT }}
+          APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT: ${{ vars.FIREBASE_APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT }}
         run: |
           node --input-type=module <<'NODE'
           import fs from "node:fs";
@@ -156,15 +159,29 @@ jobs:
             console.error("::error::Set FIREBASE_OPERATOR_UIDS_JSON to unique Auth UIDs");
             process.exit(1);
           }
-          const serviceAccount = process.env.FUNCTIONS_SERVICE_ACCOUNT ?? "";
-          if (!/^[^@\s]+@simply-fizzed-prod\.iam\.gserviceaccount\.com$/.test(serviceAccount)) {
-            console.error("::error::Set FIREBASE_FUNCTIONS_SERVICE_ACCOUNT for simply-fizzed-prod");
+          const serviceAccounts = [
+            ["GET_MY_AUTHORIZATION_SERVICE_ACCOUNT", process.env.GET_MY_AUTHORIZATION_SERVICE_ACCOUNT],
+            ["SEARCH_USERS_SERVICE_ACCOUNT", process.env.SEARCH_USERS_SERVICE_ACCOUNT],
+            ["REVEAL_USER_EMAIL_SERVICE_ACCOUNT", process.env.REVEAL_USER_EMAIL_SERVICE_ACCOUNT],
+            ["APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT", process.env.APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT],
+          ];
+          const serviceAccountPattern = /^[^@\s]+@simply-fizzed-prod\.iam\.gserviceaccount\.com$/;
+          for (const [name, value = ""] of serviceAccounts) {
+            if (!serviceAccountPattern.test(value)) {
+              console.error(`::error::Set FIREBASE_${name} for simply-fizzed-prod`);
+              process.exit(1);
+            }
+          }
+          if (new Set(serviceAccounts.map(([, value]) => value)).size !== serviceAccounts.length) {
+            console.error("::error::Each Function requires a distinct runtime service account");
             process.exit(1);
           }
           fs.writeFileSync(
             "functions/.env.simply-fizzed-prod",
             `OPERATOR_UIDS_JSON=${JSON.stringify(raw)}\n` +
-              `FUNCTIONS_SERVICE_ACCOUNT=${JSON.stringify(serviceAccount)}\n`,
+              serviceAccounts
+                .map(([name, value]) => `${name}=${JSON.stringify(value)}\n`)
+                .join(""),
             { mode: 0o600 },
           );
           NODE

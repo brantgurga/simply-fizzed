@@ -18,8 +18,20 @@ const operatorUids = defineString("OPERATOR_UIDS_JSON", {
   format: "json",
   input: { text: { nonEmpty: true } },
 });
-const runtimeServiceAccount = defineString("FUNCTIONS_SERVICE_ACCOUNT", {
-  description: "Least-privilege service account used by user-management Functions.",
+const getMyAuthorizationServiceAccount = defineString("GET_MY_AUTHORIZATION_SERVICE_ACCOUNT", {
+  description: "Least-privilege runtime identity for getMyAuthorization.",
+  input: { text: { nonEmpty: true } },
+});
+const searchUsersServiceAccount = defineString("SEARCH_USERS_SERVICE_ACCOUNT", {
+  description: "Least-privilege runtime identity for searchUsers.",
+  input: { text: { nonEmpty: true } },
+});
+const revealUserEmailServiceAccount = defineString("REVEAL_USER_EMAIL_SERVICE_ACCOUNT", {
+  description: "Least-privilege runtime identity for revealUserEmail.",
+  input: { text: { nonEmpty: true } },
+});
+const applyUserManagementServiceAccount = defineString("APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT", {
+  description: "Least-privilege runtime identity for applyUserManagement.",
   input: { text: { nonEmpty: true } },
 });
 
@@ -40,7 +52,6 @@ const callableOptions = {
   // App Check limits abuse in hosted environments; auth and server-side
   // authorization below remain the security boundary. Emulators have no attester.
   enforceAppCheck: process.env["FUNCTIONS_EMULATOR"] !== "true",
-  serviceAccount: runtimeServiceAccount,
   timeoutSeconds: 30,
   memory: "256MiB" as const,
   maxInstances: 10,
@@ -59,21 +70,26 @@ async function translateErrors<T>(operation: () => Promise<T>): Promise<T> {
 }
 
 /** Return server-evaluated claims and restriction state for the signed-in user. */
-export const getMyAuthorization = onCall(callableOptions, (request) =>
-  translateErrors(() => service.getMyAuthorization(request.auth?.uid)),
+export const getMyAuthorization = onCall(
+  { ...callableOptions, serviceAccount: getMyAuthorizationServiceAccount },
+  (request) => translateErrors(() => service.getMyAuthorization(request.auth?.uid)),
 );
 
 /** Perform bounded, privileged Auth user lookup without creating a public directory. */
-export const searchUsers = onCall<SearchUsersInput>(callableOptions, (request) =>
-  translateErrors(() => service.searchUsers(request.auth?.uid, request.data)),
+export const searchUsers = onCall<SearchUsersInput>(
+  { ...callableOptions, serviceAccount: searchUsersServiceAccount },
+  (request) => translateErrors(() => service.searchUsers(request.auth?.uid, request.data)),
 );
 
 /** Explicitly reveal one manageable user's email without persisting it. */
-export const revealUserEmail = onCall<{ targetUid: string }>(callableOptions, (request) =>
-  translateErrors(() => service.revealUserEmail(request.auth?.uid, request.data?.targetUid)),
+export const revealUserEmail = onCall<{ targetUid: string }>(
+  { ...callableOptions, serviceAccount: revealUserEmailServiceAccount },
+  (request) =>
+    translateErrors(() => service.revealUserEmail(request.auth?.uid, request.data?.targetUid)),
 );
 
 /** Apply staged restriction and/or Moderator changes using current server authority. */
-export const applyUserManagement = onCall<ApplyUserManagementInput>(callableOptions, (request) =>
-  translateErrors(() => service.applyUserManagement(request.auth?.uid, request.data)),
+export const applyUserManagement = onCall<ApplyUserManagementInput>(
+  { ...callableOptions, serviceAccount: applyUserManagementServiceAccount },
+  (request) => translateErrors(() => service.applyUserManagement(request.auth?.uid, request.data)),
 );
