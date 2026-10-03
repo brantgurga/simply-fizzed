@@ -57,12 +57,12 @@ const callableOptions = {
 /**
  * Translate service-layer failures into stable callable-function errors.
  *
- * @param operation - The service operation to execute.
- * @returns The operation result when it succeeds.
+ * @param execute - Async callback that invokes one service-layer method.
+ * @returns The callback result when it succeeds.
  */
-async function translateErrors<T>(operation: () => Promise<T>): Promise<T> {
+async function translateErrors<T>(execute: () => Promise<T>): Promise<T> {
   try {
-    return await operation();
+    return await execute();
   } catch (error) {
     if (error instanceof ServiceError) throw new HttpsError(error.code, error.message);
     logger.error("User-management operation failed", {
