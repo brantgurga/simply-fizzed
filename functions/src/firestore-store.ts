@@ -1,4 +1,5 @@
 import { FieldValue, Timestamp, type DocumentData, type Firestore } from "firebase-admin/firestore";
+import * as z from "zod/mini";
 import { isRestrictionActive } from "./management.js";
 import type {
   ManagementStore,
@@ -10,32 +11,98 @@ import type {
 export const RESTRICTIONS_COLLECTION = "restrictions";
 export const USER_MODERATION_COLLECTION = "userModeration";
 
-/** Convert an Admin SDK timestamp to a date without accepting untrusted shapes. */
-function timestampDate(value: unknown): Date | undefined {
-  return value instanceof Timestamp ? value.toDate() : undefined;
+const nonEmptyStringSchema = z.string().check(z.minLength(1));
+const adminTimestampSchema = z.pipe(
+  z.transform((value: unknown) => (value instanceof Timestamp ? value.toDate() : undefined)),
+  z.date(),
+);
+
+/** Create a schema that replaces invalid persisted strings with a fail-safe value. */
+function stringWithFallback(fallback: string) {
+  return z.pipe(
+    z.unknown(),
+    z.transform((value) => {
+      const parsed = nonEmptyStringSchema.safeParse(value);
+      return parsed.success ? parsed.data : fallback;
+    }),
+  );
 }
 
-/** Read a non-empty string or return the supplied fail-safe fallback. */
-function safeString(value: unknown, fallback: string): string {
-  return typeof value === "string" && value.length > 0 ? value : fallback;
+/** Create a schema that replaces invalid timestamps with a fail-safe date. */
+function dateWithFallback(fallback: Date) {
+  return z.pipe(
+    z.unknown(),
+    z.transform((value) => {
+      const parsed = adminTimestampSchema.safeParse(value);
+      return parsed.success ? parsed.data : fallback;
+    }),
+  );
 }
 
-/** Decode an authoritative restriction and fail closed for malformed expiration data. */
-function restrictionFromData(data: DocumentData): RestrictionRecord {
-  const originalAt = timestampDate(data["originallyRestrictedAt"]) ?? new Date(0);
-  const updatedAt = timestampDate(data["restrictionLastUpdatedAt"]) ?? originalAt;
-  const hasExpiration = Object.hasOwn(data, "expiresAt");
-  const expiresAt = hasExpiration ? timestampDate(data["expiresAt"]) : undefined;
-  return {
-    publicReason: safeString(data["publicReason"], "Community access is restricted."),
-    originallyRestrictedBy: safeString(data["originallyRestrictedBy"], "unknown"),
-    originallyRestrictedAt: originalAt,
-    restrictionLastUpdatedBy: safeString(data["restrictionLastUpdatedBy"], "unknown"),
-    restrictionLastUpdatedAt: updatedAt,
-    ...(expiresAt === undefined ? {} : { expiresAt }),
-    ...(hasExpiration && expiresAt === undefined ? { invalidExpiration: true as const } : {}),
-  };
-}
+const optionalTimestampSchema = z.pipe(
+  z.unknown(),
+  z.transform((value) => {
+    const parsed = adminTimestampSchema.safeParse(value);
+    return parsed.success ? parsed.data : undefined;
+  }),
+);
+
+/** Runtime schema for an untrusted authoritative restriction document. */
+export const restrictionDocumentSchema = z.pipe(
+  z.transform((value: unknown) => {
+    const data = typeof value === "object" && value !== null ? value : {};
+    return {
+      publicReason: Reflect.get(data, "publicReason"),
+      originallyRestrictedBy: Reflect.get(data, "originallyRestrictedBy"),
+      originallyRestrictedAt: Reflect.get(data, "originallyRestrictedAt"),
+      restrictionLastUpdatedBy: Reflect.get(data, "restrictionLastUpdatedBy"),
+      restrictionLastUpdatedAt: Reflect.get(data, "restrictionLastUpdatedAt"),
+      expiresAt: Reflect.get(data, "expiresAt"),
+      hasExpiration: Object.hasOwn(data, "expiresAt"),
+    };
+  }),
+  z.pipe(
+    z.object({
+      publicReason: stringWithFallback("Community access is restricted."),
+      originallyRestrictedBy: stringWithFallback("unknown"),
+      originallyRestrictedAt: dateWithFallback(new Date(0)),
+      restrictionLastUpdatedBy: stringWithFallback("unknown"),
+      restrictionLastUpdatedAt: optionalTimestampSchema,
+      expiresAt: optionalTimestampSchema,
+      hasExpiration: z.boolean(),
+    }),
+    z.transform((data): RestrictionRecord => {
+      const restrictionLastUpdatedAt = data.restrictionLastUpdatedAt ?? data.originallyRestrictedAt;
+      return {
+        publicReason: data.publicReason,
+        originallyRestrictedBy: data.originallyRestrictedBy,
+        originallyRestrictedAt: data.originallyRestrictedAt,
+        restrictionLastUpdatedBy: data.restrictionLastUpdatedBy,
+        restrictionLastUpdatedAt,
+        ...(data.expiresAt === undefined ? {} : { expiresAt: data.expiresAt }),
+        ...(data.hasExpiration && data.expiresAt === undefined
+          ? { invalidExpiration: true as const }
+          : {}),
+      };
+    }),
+  ),
+);
+
+/** Runtime schema for untrusted supplementary private moderation data. */
+export const privateUserDataDocumentSchema = z.pipe(
+  z.transform((value: unknown) => ({
+    internalReason:
+      typeof value === "object" && value !== null
+        ? Reflect.get(value, "internalReason")
+        : undefined,
+  })),
+  z.pipe(
+    z.object({ internalReason: stringWithFallback("") }),
+    z.transform(({ internalReason }): PrivateUserData =>
+      internalReason.length > 0 ? { internalReason } : {},
+    ),
+  ),
+);
 
 /** Firestore adapter for authoritative restrictions and private supplementary metadata. */
 export class FirestoreManagementStore implements ManagementStore {
@@ -49,16 +116,13 @@ export class FirestoreManagementStore implements ManagementStore {
   async getRestriction(uid: string): Promise<RestrictionRecord | undefined> {
     const snapshot = await this.#db.collection(RESTRICTIONS_COLLECTION).doc(uid).get();
     if (!snapshot.exists) return undefined;
-    return restrictionFromData(snapshot.data() ?? {});
+    return restrictionDocumentSchema.parse(snapshot.data() ?? {});
   }
 
   /** Read supplementary moderation data that cannot grant or restrict authority. */
   async getPrivateUserData(uid: string): Promise<PrivateUserData> {
     const snapshot = await this.#db.collection(USER_MODERATION_COLLECTION).doc(uid).get();
-    const internalReason = snapshot.exists ? snapshot.get("internalReason") : undefined;
-    return typeof internalReason === "string" && internalReason.length > 0
-      ? { internalReason }
-      : {};
+    return privateUserDataDocumentSchema.parse(snapshot.data() ?? {});
   }
 
   /** Atomically save authoritative restriction state and supplementary private context. */
@@ -73,7 +137,7 @@ export class FirestoreManagementStore implements ManagementStore {
       const publicSnapshot = await transaction.get(publicReference);
       const privateSnapshot = await transaction.get(privateReference);
       const current = publicSnapshot.exists
-        ? restrictionFromData(publicSnapshot.data() ?? {})
+        ? restrictionDocumentSchema.parse(publicSnapshot.data() ?? {})
         : undefined;
       const activeCurrent = isRestrictionActive(current, restriction.restrictionLastUpdatedAt)
         ? current
