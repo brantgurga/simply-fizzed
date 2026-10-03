@@ -58,9 +58,14 @@ jobs:
         with:
           node-version: "24"
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci
+          npm --prefix functions ci
 
       - name: Validate production client configuration
         run: |
@@ -89,6 +94,11 @@ jobs:
             firebase.json
             firestore.indexes.json
             firestore.rules
+            functions/lib/
+            functions/src/
+            functions/package.json
+            functions/package-lock.json
+            functions/tsconfig.json
             package.json
             package-lock.json
           if-no-files-found: error
@@ -113,7 +123,51 @@ jobs:
           name: firebase-hosting
 
       - name: Install deployment dependencies
-        run: npm ci
+        run: |
+          npm ci
+          npm --prefix functions ci
+
+      - name: Validate Functions deployment configuration
+        env:
+          OPERATOR_UIDS_JSON: ${{ vars.FIREBASE_OPERATOR_UIDS_JSON }}
+          FUNCTIONS_SERVICE_ACCOUNT: ${{ vars.FIREBASE_FUNCTIONS_SERVICE_ACCOUNT }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const raw = process.env.OPERATOR_UIDS_JSON ?? "";
+          let parsed;
+          try {
+            parsed = JSON.parse(raw);
+          } catch {
+            parsed = undefined;
+          }
+          const structurallyValid =
+            Array.isArray(parsed) &&
+            parsed.length > 0 &&
+            parsed.every(
+              (uid) =>
+                typeof uid === "string" &&
+                uid.length >= 1 &&
+                uid.length <= 128 &&
+                uid.trim() === uid,
+            ) &&
+            new Set(parsed).size === parsed.length;
+          if (!structurallyValid) {
+            console.error("::error::Set FIREBASE_OPERATOR_UIDS_JSON to unique Auth UIDs");
+            process.exit(1);
+          }
+          const serviceAccount = process.env.FUNCTIONS_SERVICE_ACCOUNT ?? "";
+          if (!/^[^@\s]+@simply-fizzed-prod\.iam\.gserviceaccount\.com$/.test(serviceAccount)) {
+            console.error("::error::Set FIREBASE_FUNCTIONS_SERVICE_ACCOUNT for simply-fizzed-prod");
+            process.exit(1);
+          }
+          fs.writeFileSync(
+            "functions/.env.simply-fizzed-prod",
+            `OPERATOR_UIDS_JSON=${JSON.stringify(raw)}\n` +
+              `FUNCTIONS_SERVICE_ACCOUNT=${JSON.stringify(serviceAccount)}\n`,
+            { mode: 0o600 },
+          );
+          NODE
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
@@ -122,9 +176,10 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: github-deployer@simply-fizzed-prod.iam.gserviceaccount.com
 
-      - name: Deploy Firestore rules and indexes
+      - name: Deploy Functions, Firestore rules, and indexes
         run: >-
-          ./node_modules/.bin/firebase deploy --only firestore:rules,firestore:indexes
+          ./node_modules/.bin/firebase deploy
+          --only functions,firestore:rules,firestore:indexes
           --project simply-fizzed-prod --non-interactive
 
       - name: Deploy staging channel

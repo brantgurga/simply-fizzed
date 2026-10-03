@@ -84,7 +84,7 @@ export default defineConfig({
     environment: "jsdom",
     pool: "vmThreads",
     setupFiles: "./src/test/setup.ts",
-    // Dedicated runners own browser E2E and emulator-backed rules tests.
-    exclude: [...configDefaults.exclude, "e2e/**", "firestore-rules/**"],
+    // Dedicated runners own browser E2E and Firebase emulator-backed tests.
+    exclude: [...configDefaults.exclude, "e2e/**", "firestore-rules/**", "functions/**"],
   },
 });

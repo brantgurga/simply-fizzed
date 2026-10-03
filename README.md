@@ -291,6 +291,42 @@ Authentication in local development and e2e uses only the local emulator. Social
 identity providers are intentionally deferred because they require provider credentials
 and authorized domains from a live Firebase project.
 
+### Authorization and user management
+
+Public users can browse, authenticated Fans can contribute, and a `moderator: true`
+Firebase Auth custom claim grants moderation capability. Operator authority is separate:
+the Functions runtime reads `OPERATOR_UIDS_JSON`, a deployment-controlled JSON array
+of one or more Auth UIDs. The configuration has no application-defined maximum.
+Malformed structure fails closed for every Operator; a well-formed UID that no longer
+resolves grants nothing to that UID without disabling other configured Operators.
+
+All management calls authenticate from trusted callable context and then reload current
+Auth claims, restriction state, and Operator configuration server-side. Client-supplied
+identity or role fields grant nothing. User lookup and mutations are online-only, email
+is obfuscated unless explicitly revealed for the current page session, and the full
+email is never copied into Firestore or persistent browser storage.
+
+`restrictions/{uid}` is the only source of truth for restriction status. The affected
+user may read its public reason, original and latest actor/timestamp attribution, and
+optional expiration. A restriction is active when expiration is absent or strictly
+after server `request.time`; it is inactive at the exact expiration boundary.
+`userModeration/{uid}` is server-only supplementary data for internal reason and active
+Moderator-grant metadata and cannot grant a role or preserve a restriction.
+
+The Functions package uses the currently supported Node 22 runtime and second-generation
+callables in `us-central1`, matching the database location and Firebase Admin SDK runtime
+requirements. Production callable App Check enforcement reduces abuse, but authenticated
+server-side authorization remains the security boundary. Demo projects connect to the
+Auth, Firestore, and Functions emulators and skip App Check.
+
+Before the first hosted Functions deployment, confirm Blaze billing, required Cloud
+Functions/Run/Build and Artifact Registry APIs, deployment-service-account permissions,
+and a least-privilege runtime service account. Set repository variables
+`FIREBASE_OPERATOR_UIDS_JSON` and `FIREBASE_FUNCTIONS_SERVICE_ACCOUNT`; the delivery
+workflow validates them before writing the Functions environment file. The runtime
+identity needs only the Firebase Auth claim/user operations and Firestore document
+access used by management. Do not grant broad project ownership to either identity.
+
 ### Environment variables
 
 Configuration is provided through Vite environment variables (only
@@ -342,11 +378,18 @@ scripts run in a separate job without OIDC access. Configure repository variable
 `GCP_WORKLOAD_IDENTITY_PROVIDER` (the provider's full resource name).
 
 The dedicated `github-deployer@simply-fizzed-prod.iam.gserviceaccount.com`
-service account needs Firebase Hosting Admin and Firebase Rules Admin; add
-Firebase Authentication Admin if staging URLs should support sign-in. Restrict
-the provider to repository ID
+service account needs Firebase Hosting Admin and Firebase Rules Admin, plus the
+validated least-privilege Gen 2 Functions deployment permissions and permission to
+act as the configured Functions runtime identity. Add Firebase Authentication Admin
+if staging URLs should support sign-in. Restrict the provider to repository ID
 `1320193089`, `refs/heads/main`, and this workflow, then grant only that identity
 `roles/iam.workloadIdentityUser`.
+
+Functions, rules, and indexes deploy together before the staging Hosting channel, so
+that backend deployment affects the shared production Firebase project immediately.
+Validate billing, APIs, runtime IAM, Operator UIDs, App Check registration, and the
+Functions service account before merging a change that enables this step; the workflow
+does not create or broaden cloud IAM automatically.
 
 ### Firestore data model
 

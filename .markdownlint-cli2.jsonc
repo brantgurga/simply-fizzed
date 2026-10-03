@@ -24,5 +24,11 @@
   "globs": ["**/*.md"],
 
   // Generated, vendored, or report output that we do not author.
-  "ignores": ["node_modules", "dist", "playwright-report", "test-results"],
+  "ignores": [
+    "node_modules",
+    "functions/node_modules",
+    "dist",
+    "playwright-report",
+    "test-results",
+  ],
 }

@@ -19,6 +19,7 @@ import Stack from "@mui/material/Stack";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
+import { communityWriteErrorMessage, useAuthorization } from "./authorization";
 import { publicContributorName } from "./contributor";
 import { app, auth, db, isFirestoreAvailable } from "./firebase";
 import type { GeoPoint } from "./model/firestore";
@@ -28,10 +29,11 @@ import LocationDetail from "./location/LocationDetail";
 import LocationInput from "./location/LocationInput";
 import { createGeocoder } from "./location/geocoder";
 import { loadLastSearchCenter, saveLastSearchCenter } from "./location/lastSearchCenter";
+import UserManagement from "./management/UserManagement";
 import NearbySearch from "./nearby/NearbySearch";
 import { searchNearby } from "./nearby/nearby";
 import UserProfile from "./profile/UserProfile";
-import { profileRoute, useHashRoute } from "./routes";
+import { manageUsersRoute, profileRoute, useHashRoute } from "./routes";
 import { savePublicProfile } from "./rating/ratings";
 import SodaDetail from "./soda/SodaDetail";
 
@@ -116,13 +118,22 @@ function App() {
   const geocoder = useMemo(() => createGeocoder(), []);
   const [location, setLocation] = useState<GeoPoint | undefined>(loadLastSearchCenter);
   const [user, setUser] = useState<User | null>(null);
+  const {
+    authorization,
+    loading: authorizationLoading,
+    refresh: refreshAuthorization,
+  } = useAuthorization(user);
+  const communityWritable = authorization?.canWriteCommunity === true;
   const [profileReady, setProfileReady] = useState(false);
   const [firestoreUnavailable, setFirestoreUnavailable] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [loginMode, setLoginMode] = useState<"signIn" | "signUp">("signIn");
   const pendingLocation = useRef(false);
   const [addingLocation, setAddingLocation] = useState(false);
-  const [contributionMessage, setContributionMessage] = useState<string>();
+  const [contributionMessage, setContributionMessage] = useState<{
+    severity: "error" | "success";
+    text: string;
+  }>();
   const search = useCallback((center: GeoPoint) => searchNearby(db, center), []);
   const resolveLocation = useCallback((center: GeoPoint) => {
     saveLastSearchCenter(center);
@@ -148,26 +159,41 @@ function App() {
       setLoginMode("signUp");
       pendingLocation.current = true;
       setShowLogin(true);
-    } else {
+    } else if (communityWritable) {
       setAddingLocation(true);
+    } else {
+      setContributionMessage({
+        severity: "error",
+        text: "Community contribution access is unavailable until current permission is confirmed.",
+      });
     }
-  }, [user]);
+  }, [communityWritable, user]);
   const saveLocation = useCallback(
     async (input: NewLocationInput) => {
       if (user === null) throw new Error("Authentication is required to add a location");
+      if (!communityWritable) throw new Error("Community contribution access is unavailable.");
       const contributorName = publicContributorName(user);
-      await addLocation(
-        db,
-        geocoder,
-        { id: user.uid, ...(contributorName === undefined ? {} : { name: contributorName }) },
-        input,
-      );
+      try {
+        await addLocation(
+          db,
+          geocoder,
+          { id: user.uid, ...(contributorName === undefined ? {} : { name: contributorName }) },
+          input,
+        );
+      } catch (error) {
+        const message = communityWriteErrorMessage(error);
+        if (message.includes("restricted")) {
+          setContributionMessage({ severity: "error", text: message });
+          void refreshAuthorization();
+        }
+        throw error;
+      }
     },
-    [geocoder, user],
+    [communityWritable, geocoder, refreshAuthorization, user],
   );
   const handleLocationAdded = useCallback((name: string) => {
     setAddingLocation(false);
-    setContributionMessage(`Thanks — ${name} was added.`);
+    setContributionMessage({ severity: "success", text: `Thanks — ${name} was added.` });
   }, []);
 
   useEffect(() => {
@@ -207,17 +233,27 @@ function App() {
           })
           .catch(() => undefined);
       }
-      if (nextUser !== null && pendingLocation.current) {
-        pendingLocation.current = false;
-        setShowLogin(false);
-        setAddingLocation(true);
-      }
+      if (nextUser !== null && pendingLocation.current) setShowLogin(false);
     });
     return () => {
       profileRequest += 1;
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (user === null || !pendingLocation.current || authorization === null) return;
+    pendingLocation.current = false;
+    // Continue the user-requested contribution only after server authority resolves.
+    // oxlint-disable-next-line react/set-state-in-effect
+    if (authorization.canWriteCommunity) setAddingLocation(true);
+    else {
+      setContributionMessage({
+        severity: "error",
+        text: "Community contribution access is unavailable until current permission is confirmed.",
+      });
+    }
+  }, [authorization, user]);
 
   return (
     <>
@@ -242,6 +278,11 @@ function App() {
                 <Typography variant="body2">
                   {user.displayName ?? user.email ?? "Signed in"}
                 </Typography>
+              )}
+              {authorization?.canManageUsers === true && (
+                <Link href={manageUsersRoute} color="inherit" variant="body2">
+                  Manage users
+                </Link>
               )}
               <Button color="inherit" onClick={handleSignOut}>
                 Sign out
@@ -272,12 +313,45 @@ function App() {
         </Suspense>
       ) : (
         <Container component="main" maxWidth="md" sx={{ py: 4 }}>
+          {authorization?.restricted === true && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              Community contributions are restricted
+              {authorization.restriction?.publicReason
+                ? `: ${authorization.restriction.publicReason}`
+                : "."}
+              {authorization.restriction !== null && (
+                <Typography component="span" variant="caption" sx={{ display: "block", mt: 0.5 }}>
+                  Originally restricted by {authorization.restriction.originallyRestrictedBy} at{" "}
+                  {new Date(authorization.restriction.originallyRestrictedAt).toLocaleString()}.
+                  Last updated by {authorization.restriction.restrictionLastUpdatedBy} at{" "}
+                  {new Date(authorization.restriction.restrictionLastUpdatedAt).toLocaleString()}.
+                  {authorization.restriction.expiresAt === null
+                    ? " No expiration."
+                    : ` Expires ${new Date(authorization.restriction.expiresAt).toLocaleString()}.`}
+                </Typography>
+              )}
+            </Alert>
+          )}
           {route.page === "location" ? (
-            <LocationDetail locationId={route.id} user={user} onSignIn={requestSignIn} />
+            <LocationDetail
+              locationId={route.id}
+              user={user}
+              onSignIn={requestSignIn}
+              canContribute={communityWritable}
+              onCommunityWriteRejected={() => void refreshAuthorization()}
+            />
           ) : route.page === "soda" ? (
             <SodaDetail sodaId={route.id} user={user} onSignIn={requestSignIn} />
           ) : route.page === "profile" ? (
             <UserProfile userId={route.id} />
+          ) : route.page === "manageUsers" ? (
+            authorization?.canManageUsers === true ? (
+              <UserManagement authorization={authorization} />
+            ) : authorizationLoading && user !== null ? (
+              <Typography>Confirming user-management access…</Typography>
+            ) : (
+              <Alert severity="warning">Current user-management authority is required.</Alert>
+            )
           ) : route.page === "notFound" ? (
             <Stack spacing={2}>
               <Alert severity="warning">This page could not be found.</Alert>
@@ -286,7 +360,7 @@ function App() {
           ) : (
             <Stack spacing={2}>
               {contributionMessage !== undefined && (
-                <Alert severity="success">{contributionMessage}</Alert>
+                <Alert severity={contributionMessage.severity}>{contributionMessage.text}</Alert>
               )}
 
               {addingLocation && user !== null ? (
@@ -313,9 +387,11 @@ function App() {
                     <Typography variant="body1" color="text.secondary">
                       Find soda near you. Set your location to start searching.
                     </Typography>
-                    <Button variant="outlined" onClick={requestLocationContribution}>
-                      Add a location
-                    </Button>
+                    {(user === null || communityWritable) && (
+                      <Button variant="outlined" onClick={requestLocationContribution}>
+                        Add a location
+                      </Button>
+                    )}
                   </Stack>
 
                   <LocationInput

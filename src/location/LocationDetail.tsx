@@ -19,6 +19,7 @@ import {
 } from "../availability/addAvailability";
 import { AvailabilityDetailsEditor } from "../availability/AvailabilityDetails";
 import AvailabilityForm from "../availability/AvailabilityForm";
+import { communityWriteErrorMessage } from "../authorization";
 import { publicContributorName } from "../contributor";
 import { db } from "../firebase";
 import type { Availability, Soda, SodaForm, Verification } from "../model/firestore";
@@ -45,6 +46,8 @@ interface LocationDetailProps {
   locationId: string;
   user: ContributionUser | null;
   onSignIn: () => void;
+  canContribute?: boolean;
+  onCommunityWriteRejected?: () => void;
   locationLoader?: (id: string) => Promise<DocumentLoad<LocationDoc>>;
   availabilityLoader?: (id: string) => Promise<AvailabilityLoad>;
   verificationLoader?: (id: string) => Promise<VerificationLoad>;
@@ -135,6 +138,8 @@ export default function LocationDetail({
   locationId,
   user,
   onSignIn,
+  canContribute = user !== null,
+  onCommunityWriteRejected,
   locationLoader = defaultLocationLoader,
   availabilityLoader = defaultAvailabilityLoader,
   verificationLoader = defaultVerificationLoader,
@@ -205,6 +210,7 @@ export default function LocationDetail({
 
   const location = state.location.value;
   const commitLocationId = locationId;
+  const communityWritable = user !== null && canContribute;
   /** Records a location-scoped synchronization error and rethrows a rejected commit. */
   const awaitCommit = async (committed: Promise<void>) => {
     try {
@@ -212,8 +218,11 @@ export default function LocationDetail({
     } catch (error) {
       setWriteError({
         locationId: commitLocationId,
-        message: "A saved change could not be synchronized. Please retry while online.",
+        message: communityWriteErrorMessage(error),
       });
+      const code =
+        typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+      if (code.endsWith("permission-denied")) onCommunityWriteRejected?.();
       throw error;
     }
   };
@@ -223,7 +232,9 @@ export default function LocationDetail({
   };
 
   const add = async (soda: SodaDocument | Soda, form: SodaForm, details: AvailabilityDetails) => {
-    if (user === null) throw new Error("Sign in to contribute.");
+    if (!communityWritable || user === null) {
+      throw new Error("Community contribution access is unavailable.");
+    }
     let queued: QueuedWrite<Availability>;
     let catalogSoda: SodaDocument;
     if ("id" in soda) {
@@ -274,7 +285,9 @@ export default function LocationDetail({
 
   /** Optimistically saves details, rolling back only this edit when synchronization fails. */
   const saveDetails = async (item: Availability, details: AvailabilityDetails) => {
-    if (user === null) throw new Error("Sign in to contribute.");
+    if (!communityWritable || user === null) {
+      throw new Error("Community contribution access is unavailable.");
+    }
     const queued = availabilityUpdater(item, details, user);
     setWriteError(undefined);
     setState((current) =>
@@ -315,7 +328,7 @@ export default function LocationDetail({
 
   /** Queues an explicit confirmation and restores prior freshness state if it is rejected. */
   const confirm = () => {
-    if (user === null) return;
+    if (!communityWritable || user === null) return;
     const queued = verificationWriter(locationId, user);
     const previous = state.verification.latest;
     setWriteError(undefined);
@@ -390,7 +403,7 @@ export default function LocationDetail({
       {confirmationMessage?.locationId === locationId && (
         <Alert severity="success">{confirmationMessage.message}</Alert>
       )}
-      {user !== null && (
+      {communityWritable && (
         <Button variant="outlined" sx={{ alignSelf: "flex-start" }} onClick={confirm}>
           Confirm availability
         </Button>
@@ -412,7 +425,9 @@ export default function LocationDetail({
                 <AvailabilityDetailsEditor
                   value={{ canSample: item.canSample, canPurchase: item.canPurchase }}
                   idPrefix={`availability-${index}`}
-                  {...(user === null ? {} : { onSave: (details) => saveDetails(item, details) })}
+                  {...(!communityWritable
+                    ? {}
+                    : { onSave: (details) => saveDetails(item, details) })}
                 />
               </Stack>
             </ListItem>
@@ -429,6 +444,10 @@ export default function LocationDetail({
           }
         >
           Sign in to edit or confirm soda availability.
+        </Alert>
+      ) : !communityWritable ? (
+        <Alert severity="warning">
+          Community contribution controls are unavailable until current permission is confirmed.
         </Alert>
       ) : (
         <AvailabilityForm onAdd={add} loadCatalog={catalogLoader} />
