@@ -319,6 +319,8 @@ requirements. Production callable App Check enforcement reduces abuse, but authe
 server-side authorization remains the security boundary. Demo projects connect to the
 Auth, Firestore, and Functions emulators and skip App Check. Functions unit and emulator
 integration suites run with Mocha independently of the PWA's Vitest configuration.
+Its standalone oxlint configuration enforces type-aware promise handling, including
+explicit async/await flow, and CI runs both syntax and type-aware Functions linting.
 
 Before the first hosted Functions deployment, confirm Blaze billing, required Cloud
 Functions/Run/Build and Artifact Registry APIs, and deployment-service-account

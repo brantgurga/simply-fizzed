@@ -40,10 +40,14 @@ jobs:
         run: npm run typecheck
 
       - name: Lint
-        run: npm run lint
+        run: |
+          npm run lint
+          npm --prefix functions run lint
 
       - name: Lint (type-aware)
-        run: npm run lint:types
+        run: |
+          npm run lint:types
+          npm --prefix functions run lint:types
 
       - name: Check formatting
         run: npm run fmt:check

@@ -9,6 +9,7 @@ export type ServiceErrorCode =
   | "not-found"
   | "internal";
 
+/** Represents a client-safe user-management failure and its callable error code. */
 export class ServiceError extends Error {
   readonly code: ServiceErrorCode;
 
@@ -245,10 +246,12 @@ export async function changeModeratorClaim(
   }
 }
 
+/** Determine whether an unknown input is a non-array record. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Validate and normalize a required string received at the callable boundary. */
 function requiredString(value: unknown, field: string, maxLength: number): string {
   if (typeof value !== "string") {
     throw new ServiceError("invalid-argument", `${field} must be a string.`);
@@ -263,11 +266,13 @@ function requiredString(value: unknown, field: string, maxLength: number): strin
   return normalized;
 }
 
+/** Validate an optional string, treating null and the empty string as absent. */
 function optionalString(value: unknown, field: string, maxLength: number): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   return requiredString(value, field, maxLength);
 }
 
+/** Recognize supported Auth user-not-found error shapes without trusting other errors. */
 function isNotFoundError(error: unknown): boolean {
   return (
     isRecord(error) &&
@@ -276,6 +281,7 @@ function isNotFoundError(error: unknown): boolean {
   );
 }
 
+/** Convert persisted restriction values into the serialized callable response shape. */
 function restrictionView(
   restriction: RestrictionRecord | undefined,
   internalReason?: string,
@@ -292,10 +298,12 @@ function restrictionView(
   };
 }
 
+/** Read Moderator authority from the authoritative Auth custom claim. */
 function moderatorClaim(user: AuthUser): boolean {
   return user.customClaims?.["moderator"] === true;
 }
 
+/** Enforces server-authoritative authorization for user-management operations. */
 export class UserManagementService {
   readonly #auth: AuthGateway;
   readonly #store: ManagementStore;
@@ -317,6 +325,7 @@ export class UserManagementService {
     this.#operationId = operationId;
   }
 
+  /** Resolve current Auth, Operator configuration, and restriction state for a caller. */
   async #actor(uid: string | undefined): Promise<Actor> {
     if (uid === undefined) throw new ServiceError("unauthenticated", "Sign in is required.");
 
@@ -341,6 +350,7 @@ export class UserManagementService {
     };
   }
 
+  /** Return the current server-evaluated authorization view for a caller. */
   async getMyAuthorization(uid: string | undefined): Promise<AuthorizationView> {
     const now = this.#now();
     const actor = await this.#actor(uid);
@@ -356,6 +366,7 @@ export class UserManagementService {
     };
   }
 
+  /** Require active Moderator or Operator authority and return the resolved caller. */
   async #requireManager(uid: string | undefined): Promise<Actor> {
     const actor = await this.#actor(uid);
     if (!actor.operator && (!actor.moderator || actor.restricted)) {
@@ -364,10 +375,12 @@ export class UserManagementService {
     return actor;
   }
 
+  /** Determine whether a caller may manage a target under the role hierarchy. */
   #canManageTarget(actor: Actor, target: AuthUser): boolean {
     return actor.operator || !moderatorClaim(target);
   }
 
+  /** Build a privacy-preserving management view from authoritative server records. */
   async #managedUser(target: AuthUser): Promise<ManagedUserView> {
     const restriction = await this.#store.getRestriction(target.uid);
     const privateData = await this.#store.getPrivateUserData(target.uid);
@@ -383,6 +396,7 @@ export class UserManagementService {
     };
   }
 
+  /** Search a bounded Auth user set after verifying current management authority. */
   async searchUsers(uid: string | undefined, input: SearchUsersInput): Promise<ManagedUserView[]> {
     const actor = await this.#requireManager(uid);
     if (!isRecord(input)) throw new ServiceError("invalid-argument", "Search input is required.");
@@ -430,9 +444,10 @@ export class UserManagementService {
     const manageable = targets
       .filter((target) => this.#canManageTarget(actor, target))
       .slice(0, SEARCH_RESULT_LIMIT);
-    return Promise.all(manageable.map((target) => this.#managedUser(target)));
+    return await Promise.all(manageable.map(async (target) => await this.#managedUser(target)));
   }
 
+  /** Reveal one manageable user's email without persisting it in public data. */
   async revealUserEmail(
     uid: string | undefined,
     targetUidValue: unknown,
@@ -452,6 +467,7 @@ export class UserManagementService {
     return { email: target.email ?? null };
   }
 
+  /** Apply validated role and restriction changes in fail-safe authority order. */
   async applyUserManagement(
     uid: string | undefined,
     input: ApplyUserManagementInput,
@@ -565,6 +581,6 @@ export class UserManagementService {
     }
 
     const confirmedTarget = await this.#auth.getUser(targetUid);
-    return this.#managedUser(confirmedTarget);
+    return await this.#managedUser(confirmedTarget);
   }
 }

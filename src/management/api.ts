@@ -43,6 +43,7 @@ export interface ManagementChanges {
   restriction?: RestrictionDraft | null;
 }
 
+/** Signals that an online-only management operation was attempted offline. */
 export class ManagementOfflineError extends Error {
   constructor() {
     super("User management requires an internet connection.");
@@ -50,6 +51,7 @@ export class ManagementOfflineError extends Error {
   }
 }
 
+/** Reject management requests before invoking a callable while the browser is offline. */
 function requireOnline(): void {
   if (!navigator.onLine) throw new ManagementOfflineError();
 }

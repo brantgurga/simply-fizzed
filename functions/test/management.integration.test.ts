@@ -82,13 +82,14 @@ before(async () => {
   adminAuth = getAdminAuth(adminApp);
   adminDb = getAdminFirestore(adminApp);
   await Promise.all(
-    Object.values(accounts).map((account) =>
-      adminAuth.createUser({
-        uid: account.uid,
-        email: account.email,
-        displayName: account.displayName,
-        password: PASSWORD,
-      }),
+    Object.values(accounts).map(
+      async (account) =>
+        await adminAuth.createUser({
+          uid: account.uid,
+          email: account.email,
+          displayName: account.displayName,
+          password: PASSWORD,
+        }),
     ),
   );
   await Promise.all([
@@ -123,7 +124,7 @@ before(async () => {
 });
 
 after(async () => {
-  await Promise.all([...clients.values()].map((client) => deleteApp(client.app)));
+  await Promise.all([...clients.values()].map(async (client) => await deleteApp(client.app)));
   await deleteAdminApp(adminApp);
 });
 

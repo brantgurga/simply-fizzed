@@ -54,6 +54,12 @@ const callableOptions = {
   enforceAppCheck: process.env["FUNCTIONS_EMULATOR"] !== "true",
 };
 
+/**
+ * Translate service-layer failures into stable callable-function errors.
+ *
+ * @param operation - The service operation to execute.
+ * @returns The operation result when it succeeds.
+ */
 async function translateErrors<T>(operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();
@@ -69,24 +75,31 @@ async function translateErrors<T>(operation: () => Promise<T>): Promise<T> {
 /** Return server-evaluated claims and restriction state for the signed-in user. */
 export const getMyAuthorization = onCall(
   { ...callableOptions, serviceAccount: getMyAuthorizationServiceAccount },
-  (request) => translateErrors(() => service.getMyAuthorization(request.auth?.uid)),
+  async (request) =>
+    await translateErrors(async () => await service.getMyAuthorization(request.auth?.uid)),
 );
 
 /** Perform bounded, privileged Auth user lookup without creating a public directory. */
 export const searchUsers = onCall<SearchUsersInput>(
   { ...callableOptions, serviceAccount: searchUsersServiceAccount },
-  (request) => translateErrors(() => service.searchUsers(request.auth?.uid, request.data)),
+  async (request) =>
+    await translateErrors(async () => await service.searchUsers(request.auth?.uid, request.data)),
 );
 
 /** Explicitly reveal one manageable user's email without persisting it. */
 export const revealUserEmail = onCall<{ targetUid: string }>(
   { ...callableOptions, serviceAccount: revealUserEmailServiceAccount },
-  (request) =>
-    translateErrors(() => service.revealUserEmail(request.auth?.uid, request.data?.targetUid)),
+  async (request) =>
+    await translateErrors(
+      async () => await service.revealUserEmail(request.auth?.uid, request.data?.targetUid),
+    ),
 );
 
 /** Apply staged restriction and/or Moderator changes using current server authority. */
 export const applyUserManagement = onCall<ApplyUserManagementInput>(
   { ...callableOptions, serviceAccount: applyUserManagementServiceAccount },
-  (request) => translateErrors(() => service.applyUserManagement(request.auth?.uid, request.data)),
+  async (request) =>
+    await translateErrors(
+      async () => await service.applyUserManagement(request.auth?.uid, request.data),
+    ),
 );

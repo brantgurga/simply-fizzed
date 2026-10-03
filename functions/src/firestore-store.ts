@@ -10,14 +10,17 @@ import type {
 export const RESTRICTIONS_COLLECTION = "restrictions";
 export const USER_MODERATION_COLLECTION = "userModeration";
 
+/** Convert an Admin SDK timestamp to a date without accepting untrusted shapes. */
 function timestampDate(value: unknown): Date | undefined {
   return value instanceof Timestamp ? value.toDate() : undefined;
 }
 
+/** Read a non-empty string or return the supplied fail-safe fallback. */
 function safeString(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
+/** Decode an authoritative restriction and fail closed for malformed expiration data. */
 function restrictionFromData(data: DocumentData): RestrictionRecord {
   const originalAt = timestampDate(data["originallyRestrictedAt"]) ?? new Date(0);
   const updatedAt = timestampDate(data["restrictionLastUpdatedAt"]) ?? originalAt;
@@ -42,12 +45,14 @@ export class FirestoreManagementStore implements ManagementStore {
     this.#db = db;
   }
 
+  /** Read one authoritative restriction by Firebase Auth UID. */
   async getRestriction(uid: string): Promise<RestrictionRecord | undefined> {
     const snapshot = await this.#db.collection(RESTRICTIONS_COLLECTION).doc(uid).get();
     if (!snapshot.exists) return undefined;
     return restrictionFromData(snapshot.data() ?? {});
   }
 
+  /** Read supplementary moderation data that cannot grant or restrict authority. */
   async getPrivateUserData(uid: string): Promise<PrivateUserData> {
     const snapshot = await this.#db.collection(USER_MODERATION_COLLECTION).doc(uid).get();
     const internalReason = snapshot.exists ? snapshot.get("internalReason") : undefined;
@@ -56,6 +61,7 @@ export class FirestoreManagementStore implements ManagementStore {
       : {};
   }
 
+  /** Atomically save authoritative restriction state and supplementary private context. */
   async saveRestriction(
     uid: string,
     restriction: RestrictionRecord,
@@ -91,6 +97,7 @@ export class FirestoreManagementStore implements ManagementStore {
     });
   }
 
+  /** Atomically remove authoritative restriction state and its private reason. */
   async removeRestriction(uid: string): Promise<void> {
     const publicReference = this.#db.collection(RESTRICTIONS_COLLECTION).doc(uid);
     const privateReference = this.#db.collection(USER_MODERATION_COLLECTION).doc(uid);
@@ -106,10 +113,12 @@ export class FirestoreManagementStore implements ManagementStore {
     });
   }
 
+  /** Write supplementary attribution before granting the authoritative Moderator claim. */
   async writeModeratorGrant(uid: string, metadata: ModeratorGrantMetadata): Promise<void> {
     await this.#db.collection(USER_MODERATION_COLLECTION).doc(uid).set(metadata, { merge: true });
   }
 
+  /** Remove supplementary grant attribution, optionally only for a matching operation. */
   async clearModeratorGrant(uid: string, operationId?: string): Promise<void> {
     const reference = this.#db.collection(USER_MODERATION_COLLECTION).doc(uid);
     await this.#db.runTransaction(async (transaction) => {

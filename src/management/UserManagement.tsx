@@ -41,6 +41,7 @@ interface UserManagementProps {
   saver?: typeof applyManagementChanges;
 }
 
+/** Track browser connectivity for online-only management controls. */
 function useOnline(): boolean {
   const [online, setOnline] = useState(() => navigator.onLine);
   useEffect(() => {
@@ -55,6 +56,7 @@ function useOnline(): boolean {
   return online;
 }
 
+/** Convert a server ISO timestamp into a local datetime input value. */
 function localDateTime(iso: string | null): string {
   if (iso === null) return "";
   const date = new Date(iso);
@@ -63,6 +65,7 @@ function localDateTime(iso: string | null): string {
   return local.toISOString().slice(0, 16);
 }
 
+/** Create an editable draft from confirmed server state. */
 function draftFor(user: ManagedUser): Draft {
   return {
     moderator: user.moderator,
@@ -73,10 +76,12 @@ function draftFor(user: ManagedUser): Draft {
   };
 }
 
+/** Compare complete management drafts for unsaved changes. */
 function sameDraft(left: Draft, right: Draft): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+/** Render online-only, capability-gated user search and management controls. */
 export default function UserManagement({
   authorization,
   searcher = searchManagedUsers,
@@ -103,6 +108,7 @@ export default function UserManagement({
     draft !== undefined && confirmedDraft !== undefined && !sameDraft(draft, confirmedDraft);
   const validRestriction = draft?.restricted !== true || draft.publicReason.trim().length > 0;
 
+  /** Select a result and reset transient, user-specific state. */
   function choose(user: ManagedUser): void {
     setSelected(user);
     setDraft(draftFor(user));
@@ -110,6 +116,7 @@ export default function UserManagement({
     setMessage(undefined);
   }
 
+  /** Run an explicit bounded user search and replace the current results. */
   async function search(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     if (!online || query.trim().length === 0) return;
@@ -131,6 +138,7 @@ export default function UserManagement({
     }
   }
 
+  /** Reveal the selected email only in component memory. */
   async function reveal(): Promise<void> {
     if (!online || selected === undefined) return;
     setRevealing(true);
@@ -145,6 +153,7 @@ export default function UserManagement({
     }
   }
 
+  /** Persist staged changes and reload confirmed server state after failures. */
   async function save(): Promise<void> {
     if (!online || selected === undefined || draft === undefined || confirmedDraft === undefined) {
       return;

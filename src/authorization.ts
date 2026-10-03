@@ -24,10 +24,12 @@ export interface AuthorizationState {
   refresh: () => Promise<void>;
 }
 
+/** Convert a Firestore timestamp to ISO text with a fail-safe epoch fallback. */
 function timestampIso(value: unknown): string {
   return value instanceof Timestamp ? value.toDate().toISOString() : new Date(0).toISOString();
 }
 
+/** Decode a self-readable cached restriction conservatively. */
 function cachedRestriction(data: Record<string, unknown>): RestrictionView {
   const expiresAt = data["expiresAt"];
   return {
