@@ -313,7 +313,7 @@ after server `request.time`; it is inactive at the exact expiration boundary.
 `userModeration/{uid}` is server-only supplementary data for internal reason and active
 Moderator-grant metadata and cannot grant a role or preserve a restriction.
 
-The Functions package uses the currently supported Node 22 runtime and second-generation
+The Functions package uses the current GA Node 24 runtime and second-generation
 callables in `us-central1`, matching the database location and Firebase Admin SDK runtime
 requirements. Production callable App Check enforcement reduces abuse, but authenticated
 server-side authorization remains the security boundary. Demo projects connect to the

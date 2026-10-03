@@ -195,7 +195,7 @@ jobs:
 
       - name: Deploy Functions, Firestore rules, and indexes
         run: >-
-          ./node_modules/.bin/firebase deploy
+          npx --no-install firebase deploy
           --only functions,firestore:rules,firestore:indexes
           --project simply-fizzed-prod --non-interactive
 
@@ -206,7 +206,7 @@ jobs:
         run: |
           set -euo pipefail
           output="$RUNNER_TEMP/firebase-hosting-staging.json"
-          ./node_modules/.bin/firebase hosting:channel:deploy "$CHANNEL_ID" \
+          npx --no-install firebase hosting:channel:deploy "$CHANNEL_ID" \
             --project simply-fizzed-prod \
             --expires 30d \
             --non-interactive \
@@ -282,7 +282,7 @@ jobs:
 
       - name: Deploy live channel
         run: >-
-          ./node_modules/.bin/firebase deploy --only hosting
+          npx --no-install firebase deploy --only hosting
           --project simply-fizzed-prod --non-interactive
 
       - name: Summarize production deployment
