@@ -16,7 +16,7 @@ Additional tooling (linting, formatting, testing, Firebase, and CI/CD) is tracke
 
 - [Node.js](https://nodejs.org/) 20 or newer (developed against v24)
 - npm 10 or newer
-- A Java 21 runtime for the Firestore emulator. Authentication and Hosting do
+- A Java 25 runtime for the Firestore emulator. Authentication and Hosting do
   not require Java, but the security-rule and end-to-end suites start Firestore.
 
 ## Getting started
@@ -115,7 +115,7 @@ The dedicated [`firestore-rules`](./firestore-rules) suite loads the committed
 It exercises public reads and the authorization, validation, immutability, and
 default-deny boundaries without production credentials or a browser.
 
-With Java 21 available, run `npm run test:rules`. The command starts only the
+With Java 25 available, run `npm run test:rules`. The command starts only the
 Firestore emulator under the offline `demo-simply-fizzed` project, runs the
 Node-based Vitest suite, propagates failures, and shuts the emulator down.
 
@@ -317,7 +317,8 @@ The Functions package uses the current GA Node 24 runtime and second-generation
 callables in `us-central1`, matching the database location and Firebase Admin SDK runtime
 requirements. Production callable App Check enforcement reduces abuse, but authenticated
 server-side authorization remains the security boundary. Demo projects connect to the
-Auth, Firestore, and Functions emulators and skip App Check.
+Auth, Firestore, and Functions emulators and skip App Check. Functions unit and emulator
+integration suites run with Mocha independently of the PWA's Vitest configuration.
 
 Before the first hosted Functions deployment, confirm Blaze billing, required Cloud
 Functions/Run/Build and Artifact Registry APIs, and deployment-service-account

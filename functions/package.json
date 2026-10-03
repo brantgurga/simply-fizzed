@@ -5,10 +5,10 @@
   "type": "module",
   "main": "lib/index.js",
   "scripts": {
-    "test": "vitest run --config vitest.config.ts",
+    "test": "mocha --import=tsx \"src/**/*.test.ts\"",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "mocha --import=tsx --timeout 30000 \"test/**/*.integration.test.ts\""
   },
   "dependencies": {
     "firebase-admin": "^14.5.0",
@@ -18,9 +18,14 @@
     "@tsconfig/node24": "^24.0.5",
     "@tsconfig/recommended": "^1.0.13",
     "@tsconfig/strictest": "^2.0.8",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^24.19.1",
-    "typescript": "~7.0.2",
-    "vitest": "^5.0.3"
+    "@types/sinon": "^21.0.0",
+    "expect": "^30.5.2",
+    "mocha": "^12.0.3",
+    "sinon": "^22.1.0",
+    "tsx": "^4.20.6",
+    "typescript": "~7.0.2"
   },
   "overrides": {
     "uuid@<11.1.1": "11.1.1"

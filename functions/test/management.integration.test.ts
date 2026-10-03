@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { expect } from "expect";
 import {
   deleteApp as deleteAdminApp,
   initializeApp as initializeAdminApp,
@@ -78,7 +78,7 @@ async function call<T>(name: AccountName, functionName: string, data: unknown = 
   return (await callable(data)).data;
 }
 
-beforeAll(async () => {
+before(async () => {
   adminAuth = getAdminAuth(adminApp);
   adminDb = getAdminFirestore(adminApp);
   await Promise.all(
@@ -122,7 +122,7 @@ beforeAll(async () => {
   for (const [name, client] of createdClients) clients.set(name, client);
 });
 
-afterAll(async () => {
+after(async () => {
   await Promise.all([...clients.values()].map((client) => deleteApp(client.app)));
   await deleteAdminApp(adminApp);
 });

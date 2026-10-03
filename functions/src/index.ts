@@ -1,4 +1,4 @@
-import { getApps, initializeApp } from "firebase-admin/app";
+import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
@@ -35,7 +35,7 @@ const applyUserManagementServiceAccount = defineString("APPLY_USER_MANAGEMENT_SE
   input: { text: { nonEmpty: true } },
 });
 
-const app = getApps()[0] ?? initializeApp();
+const app = initializeApp();
 const service = new UserManagementService(
   getAuth(app),
   new FirestoreManagementStore(getFirestore(app)),
@@ -52,9 +52,6 @@ const callableOptions = {
   // App Check limits abuse in hosted environments; auth and server-side
   // authorization below remain the security boundary. Emulators have no attester.
   enforceAppCheck: process.env["FUNCTIONS_EMULATOR"] !== "true",
-  timeoutSeconds: 30,
-  memory: "256MiB" as const,
-  maxInstances: 10,
 };
 
 async function translateErrors<T>(operation: () => Promise<T>): Promise<T> {

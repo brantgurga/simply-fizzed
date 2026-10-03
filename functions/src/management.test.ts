@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { expect } from "expect";
+import * as sinon from "sinon";
 import {
   changeModeratorClaim,
   claimsWithModerator,
@@ -25,24 +26,24 @@ function restriction(expiresAt?: Date): RestrictionRecord {
 }
 
 function gateways(events: string[]) {
-  const setCustomUserClaims = vi.fn(async () => {
+  const setCustomUserClaims = sinon.stub().callsFake(async () => {
     events.push("claim");
   });
-  const clearModeratorGrant = vi.fn(async () => {
+  const clearModeratorGrant = sinon.stub().callsFake(async () => {
     events.push("cleanup");
   });
   const auth: AuthGateway = {
-    getUser: vi.fn(),
-    getUserByEmail: vi.fn(),
-    listUsers: vi.fn(),
+    getUser: sinon.stub(),
+    getUserByEmail: sinon.stub(),
+    listUsers: sinon.stub(),
     setCustomUserClaims,
   };
   const store: ManagementStore = {
-    getRestriction: vi.fn(),
-    getPrivateUserData: vi.fn(),
-    saveRestriction: vi.fn(),
-    removeRestriction: vi.fn(),
-    writeModeratorGrant: vi.fn(async () => {
+    getRestriction: sinon.stub(),
+    getPrivateUserData: sinon.stub(),
+    saveRestriction: sinon.stub(),
+    removeRestriction: sinon.stub(),
+    writeModeratorGrant: sinon.stub().callsFake(async () => {
       events.push("metadata");
     }),
     clearModeratorGrant,
@@ -62,13 +63,12 @@ const moderator: AuthUser = {
 };
 
 describe("Operator configuration", () => {
-  it.each([undefined, "", "not-json", "[]", "{}", '["same","same"]', '[" spaced "]'])(
-    "fails closed for %s",
-    (value) => {
+  for (const value of [undefined, "", "not-json", "[]", "{}", '["same","same"]', '[" spaced "]']) {
+    it(`fails closed for ${String(value)}`, () => {
       expect(parseOperatorUids(value)).toMatchObject({ valid: false });
       expect(parseOperatorUids(value).uids.size).toBe(0);
-    },
-  );
+    });
+  }
 
   it("accepts multiple unique, structurally valid UIDs", () => {
     const result = parseOperatorUids('["operator-one","operator-two"]');
@@ -96,25 +96,27 @@ describe("restriction expiration", () => {
 
 describe("combined transition ordering", () => {
   it("does not revoke before an intended restriction is durably saved", async () => {
-    const setCustomUserClaims = vi.fn();
+    const setCustomUserClaims = sinon.stub();
     const auth: AuthGateway = {
-      getUser: vi.fn(async (uid) =>
-        uid === "operator-uid"
-          ? { uid, disabled: false }
-          : { uid, disabled: false, customClaims: { moderator: true } },
-      ),
-      getUserByEmail: vi.fn(),
-      listUsers: vi.fn(),
+      getUser: sinon
+        .stub()
+        .callsFake(async (uid: string) =>
+          uid === "operator-uid"
+            ? { uid, disabled: false }
+            : { uid, disabled: false, customClaims: { moderator: true } },
+        ),
+      getUserByEmail: sinon.stub(),
+      listUsers: sinon.stub(),
       setCustomUserClaims,
     };
-    const saveRestriction = vi.fn().mockRejectedValue(new Error("Firestore unavailable"));
+    const saveRestriction = sinon.stub().rejects(new Error("Firestore unavailable"));
     const store: ManagementStore = {
-      getRestriction: vi.fn(),
-      getPrivateUserData: vi.fn(),
+      getRestriction: sinon.stub(),
+      getPrivateUserData: sinon.stub(),
       saveRestriction,
-      removeRestriction: vi.fn(),
-      writeModeratorGrant: vi.fn(),
-      clearModeratorGrant: vi.fn(),
+      removeRestriction: sinon.stub(),
+      writeModeratorGrant: sinon.stub(),
+      clearModeratorGrant: sinon.stub(),
     };
     const service = new UserManagementService(
       auth,
@@ -131,8 +133,8 @@ describe("combined transition ordering", () => {
         restriction: { publicReason: "Community access paused" },
       }),
     ).rejects.toThrow("Firestore unavailable");
-    expect(saveRestriction).toHaveBeenCalledOnce();
-    expect(setCustomUserClaims).not.toHaveBeenCalled();
+    sinon.assert.calledOnce(saveRestriction);
+    sinon.assert.notCalled(setCustomUserClaims);
   });
 });
 
@@ -154,7 +156,7 @@ describe("Moderator claim changes", () => {
     await changeModeratorClaim(auth, store, fan, true, "operator-uid", NOW, "operation-one");
 
     expect(events).toEqual(["metadata", "claim"]);
-    expect(setCustomUserClaims).toHaveBeenCalledWith("fan-uid", {
+    sinon.assert.calledWithExactly(setCustomUserClaims, "fan-uid", {
       existing: "preserved",
       moderator: true,
     });
@@ -163,7 +165,7 @@ describe("Moderator claim changes", () => {
   it("attempts cleanup after a failed grant without treating stale metadata as authority", async () => {
     const events: string[] = [];
     const { auth, store, setCustomUserClaims, clearModeratorGrant } = gateways(events);
-    setCustomUserClaims.mockImplementation(async () => {
+    setCustomUserClaims.callsFake(async () => {
       events.push("claim");
       throw new Error("claim failed");
     });
@@ -172,25 +174,25 @@ describe("Moderator claim changes", () => {
       changeModeratorClaim(auth, store, fan, true, "operator-uid", NOW, "operation-one"),
     ).rejects.toThrow("claim failed");
     expect(events).toEqual(["metadata", "claim", "cleanup"]);
-    expect(clearModeratorGrant).toHaveBeenCalledWith("fan-uid", "operation-one");
+    sinon.assert.calledWithExactly(clearModeratorGrant, "fan-uid", "operation-one");
   });
 
   it("keeps claim failure authoritative even when metadata cleanup also fails", async () => {
     const events: string[] = [];
     const { auth, store, setCustomUserClaims, clearModeratorGrant } = gateways(events);
-    setCustomUserClaims.mockRejectedValue(new Error("claim failed"));
-    clearModeratorGrant.mockRejectedValue(new Error("cleanup failed"));
+    setCustomUserClaims.rejects(new Error("claim failed"));
+    clearModeratorGrant.rejects(new Error("cleanup failed"));
 
     await expect(
       changeModeratorClaim(auth, store, fan, true, "operator-uid", NOW, "operation-one"),
     ).rejects.toThrow("claim failed");
-    expect(setCustomUserClaims).toHaveBeenCalledOnce();
+    sinon.assert.calledOnce(setCustomUserClaims);
   });
 
   it("removes the claim before best-effort revocation cleanup", async () => {
     const events: string[] = [];
     const { auth, store, setCustomUserClaims, clearModeratorGrant } = gateways(events);
-    clearModeratorGrant.mockImplementation(async () => {
+    clearModeratorGrant.callsFake(async () => {
       events.push("cleanup");
       throw new Error("cleanup failed");
     });
@@ -199,7 +201,7 @@ describe("Moderator claim changes", () => {
       changeModeratorClaim(auth, store, moderator, false, "operator-uid", NOW, "operation-two"),
     ).resolves.toBeUndefined();
     expect(events).toEqual(["claim", "cleanup"]);
-    expect(setCustomUserClaims).toHaveBeenCalledWith("fan-uid", {
+    sinon.assert.calledWithExactly(setCustomUserClaims, "fan-uid", {
       existing: "preserved",
     });
   });
