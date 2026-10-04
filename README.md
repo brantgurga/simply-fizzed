@@ -21,10 +21,11 @@ Additional tooling (linting, formatting, testing, Firebase, and CI/CD) is tracke
 
 ## Getting started
 
-Install dependencies:
+Install the app and standalone Functions package dependencies:
 
 ```sh
 npm install
+npm --prefix functions install
 ```
 
 Start the development server with hot module replacement:

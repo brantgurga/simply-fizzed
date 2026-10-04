@@ -537,9 +537,7 @@ test.describe("App", () => {
       await setRestrictionByEmail(email, true);
       await context.setOffline(false);
 
-      await expect(
-        page.getByText(/could not be synchronized because contribution access/i),
-      ).toBeVisible();
+      await expect(page.getByText(/saved change could not be synchronized/i)).toBeVisible();
       await expect(page.getByText(/community contributions are restricted/i)).toBeVisible();
       await expect
         .poll(() => availabilitySyncState(availabilityId, KROGER.id))

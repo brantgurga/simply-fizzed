@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
@@ -99,6 +99,7 @@ export default function UserManagement({
   const [revealing, setRevealing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ severity: "error" | "success"; text: string }>();
+  const revealRequest = useRef(0);
 
   const confirmedDraft = useMemo(
     () => (selected === undefined ? undefined : draftFor(selected)),
@@ -110,9 +111,11 @@ export default function UserManagement({
 
   /** Select a result and reset transient, user-specific state. */
   function choose(user: ManagedUser): void {
+    revealRequest.current += 1;
     setSelected(user);
     setDraft(draftFor(user));
     setRevealedEmail(undefined);
+    setRevealing(false);
     setMessage(undefined);
   }
 
@@ -120,11 +123,13 @@ export default function UserManagement({
   async function search(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     if (!online || query.trim().length === 0) return;
+    revealRequest.current += 1;
     setSearching(true);
     setMessage(undefined);
     setSelected(undefined);
     setDraft(undefined);
     setRevealedEmail(undefined);
+    setRevealing(false);
     try {
       setResults(await searcher(mode, query.trim()));
     } catch {
@@ -141,15 +146,20 @@ export default function UserManagement({
   /** Reveal the selected email only in component memory. */
   async function reveal(): Promise<void> {
     if (!online || selected === undefined) return;
+    const currentRequest = ++revealRequest.current;
+    const selectedUid = selected.uid;
     setRevealing(true);
     setMessage(undefined);
     try {
-      setRevealedEmail(await revealer(selected.uid));
+      const email = await revealer(selectedUid);
+      if (revealRequest.current === currentRequest) setRevealedEmail(email);
     } catch {
-      setRevealedEmail(undefined);
-      setMessage({ severity: "error", text: "The email could not be revealed." });
+      if (revealRequest.current === currentRequest) {
+        setRevealedEmail(undefined);
+        setMessage({ severity: "error", text: "The email could not be revealed." });
+      }
     } finally {
-      setRevealing(false);
+      if (revealRequest.current === currentRequest) setRevealing(false);
     }
   }
 

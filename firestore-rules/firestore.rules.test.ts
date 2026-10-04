@@ -724,7 +724,10 @@ describe("restrictions and authorization-document privacy", () => {
       setDoc(doc(database, "verifications", "restricted-verification"), validVerification()),
     );
     const batch = writeBatch(database);
-    batch.set(doc(database, "sodas", "restricted-soda"), validNewSoda());
+    batch.set(
+      doc(database, "sodas", "restricted-soda"),
+      validNewSoda({ initialAvailabilityId: "existing-location$restricted-soda$draft" }),
+    );
     batch.set(
       doc(database, "availability", "existing-location$restricted-soda$draft"),
       validAvailability({

@@ -12,6 +12,8 @@ export type ClientAuthorization = AuthorizationView & {
   source: "server" | "cachedRestriction";
 };
 
+const AUTHORIZATION_REFRESH_INTERVAL_MILLIS = 5 * 60 * 1_000;
+
 interface AuthorizationEntry {
   userId: string;
   authorization: ClientAuthorization | null;
@@ -73,10 +75,10 @@ export function conservativeRestrictedAuthorization(
 }
 
 /** Convert a server rule rejection into the restriction-aware synchronization message. */
-export function communityWriteErrorMessage(error: unknown): string {
+export function communityWriteErrorMessage(error: unknown, restricted: boolean): string {
   const code =
     typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
-  return code.endsWith("permission-denied")
+  return restricted && code.endsWith("permission-denied")
     ? "A saved community change could not be synchronized because contribution access is restricted."
     : "A saved change could not be synchronized. Please retry while online.";
 }
@@ -148,13 +150,22 @@ export function useAuthorization(user: Pick<User, "uid"> | null): AuthorizationS
       () => undefined,
     );
     const handleOnline = () => void refresh();
+    const handleActive = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
     window.addEventListener("online", handleOnline);
+    window.addEventListener("focus", handleActive);
+    document.addEventListener("visibilitychange", handleActive);
+    const refreshTimer = window.setInterval(handleActive, AUTHORIZATION_REFRESH_INTERVAL_MILLIS);
     void refresh();
 
     return () => {
       request.current += 1;
       unsubscribe();
       window.removeEventListener("online", handleOnline);
+      window.removeEventListener("focus", handleActive);
+      document.removeEventListener("visibilitychange", handleActive);
+      window.clearInterval(refreshTimer);
     };
   }, [refresh, userId]);
 

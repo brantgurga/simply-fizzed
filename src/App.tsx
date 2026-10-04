@@ -124,6 +124,7 @@ function App() {
     refresh: refreshAuthorization,
   } = useAuthorization(user);
   const communityWritable = authorization?.canWriteCommunity === true;
+  const restricted = authorization?.restricted === true;
   const [profileReady, setProfileReady] = useState(false);
   const [firestoreUnavailable, setFirestoreUnavailable] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
@@ -181,15 +182,17 @@ function App() {
           input,
         );
       } catch (error) {
-        const message = communityWriteErrorMessage(error);
-        if (message.includes("restricted")) {
+        const message = communityWriteErrorMessage(error, restricted);
+        const code =
+          typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+        if (code.endsWith("permission-denied")) {
           setContributionMessage({ severity: "error", text: message });
           void refreshAuthorization();
         }
         throw error;
       }
     },
-    [communityWritable, geocoder, refreshAuthorization, user],
+    [communityWritable, geocoder, refreshAuthorization, restricted, user],
   );
   const handleLocationAdded = useCallback((name: string) => {
     setAddingLocation(false);
@@ -338,6 +341,7 @@ function App() {
               user={user}
               onSignIn={requestSignIn}
               canContribute={communityWritable}
+              restricted={restricted}
               onCommunityWriteRejected={() => void refreshAuthorization()}
             />
           ) : route.page === "soda" ? (

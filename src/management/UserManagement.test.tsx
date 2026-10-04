@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientAuthorization } from "../authorization";
@@ -69,6 +69,44 @@ describe("UserManagement", () => {
       />,
     );
     expect(screen.queryByText("fan.person@example.com")).not.toBeInTheDocument();
+  });
+
+  it("discards a pending email reveal after selecting another user", async () => {
+    const interaction = userEvent.setup();
+    const secondFan: ManagedUser = {
+      ...managedFan,
+      uid: "second-fan-uid",
+      displayName: "Finn Fan",
+      obfuscatedEmail: "fi…@example.com",
+    };
+    let resolveEmail!: (email: string) => void;
+    const revealer = vi.fn(
+      async () =>
+        await new Promise<string>((resolve) => {
+          resolveEmail = resolve;
+        }),
+    );
+    render(
+      <UserManagement
+        authorization={authorization}
+        searcher={vi.fn().mockResolvedValue([managedFan, secondFan])}
+        revealer={revealer}
+        saver={vi.fn()}
+      />,
+    );
+
+    await interaction.type(screen.getByLabelText("User search"), "Fan");
+    await interaction.click(screen.getByRole("button", { name: "Search" }));
+    await interaction.click(await screen.findByText("Fiona Fan"));
+    await interaction.click(screen.getByRole("button", { name: "Reveal full email" }));
+    await interaction.click(screen.getByText("Finn Fan"));
+    await act(async () => {
+      resolveEmail("fan.person@example.com");
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText("fan.person@example.com")).not.toBeInTheDocument();
+    expect(screen.getAllByText(/fi…@example\.com/)).toHaveLength(2);
   });
 
   it("stages role and restriction changes until explicit Save", async () => {

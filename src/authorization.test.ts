@@ -69,13 +69,19 @@ describe("conservative authorization", () => {
 });
 
 describe("community synchronization errors", () => {
-  it("identifies Firestore permission rejection as restriction-related", () => {
-    expect(communityWriteErrorMessage({ code: "firestore/permission-denied" })).toContain(
+  it("identifies a restricted user's Firestore rejection as restriction-related", () => {
+    expect(communityWriteErrorMessage({ code: "firestore/permission-denied" }, true)).toContain(
       "contribution access is restricted",
     );
   });
 
+  it("does not label an unrestricted user's rule rejection as a restriction", () => {
+    expect(communityWriteErrorMessage({ code: "firestore/permission-denied" }, false)).toContain(
+      "retry while online",
+    );
+  });
+
   it("keeps a generic retry message for unrelated failures", () => {
-    expect(communityWriteErrorMessage(new Error("network"))).toContain("retry while online");
+    expect(communityWriteErrorMessage(new Error("network"), true)).toContain("retry while online");
   });
 });

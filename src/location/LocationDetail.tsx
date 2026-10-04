@@ -47,6 +47,7 @@ interface LocationDetailProps {
   user: ContributionUser | null;
   onSignIn: () => void;
   canContribute?: boolean;
+  restricted?: boolean;
   onCommunityWriteRejected?: () => void;
   locationLoader?: (id: string) => Promise<DocumentLoad<LocationDoc>>;
   availabilityLoader?: (id: string) => Promise<AvailabilityLoad>;
@@ -139,6 +140,7 @@ export default function LocationDetail({
   user,
   onSignIn,
   canContribute = user !== null,
+  restricted = false,
   onCommunityWriteRejected,
   locationLoader = defaultLocationLoader,
   availabilityLoader = defaultAvailabilityLoader,
@@ -218,7 +220,7 @@ export default function LocationDetail({
     } catch (error) {
       setWriteError({
         locationId: commitLocationId,
-        message: communityWriteErrorMessage(error),
+        message: communityWriteErrorMessage(error, restricted),
       });
       const code =
         typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
