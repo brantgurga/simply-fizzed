@@ -130,6 +130,7 @@ jobs:
       - name: Validate Functions deployment configuration
         env:
           OPERATOR_UIDS_JSON: ${{ vars.FIREBASE_OPERATOR_UIDS_JSON }}
+          ENFORCE_APP_CHECK: ${{ vars.FIREBASE_ENFORCE_FUNCTIONS_APP_CHECK }}
           GET_MY_AUTHORIZATION_SERVICE_ACCOUNT: ${{ vars.FIREBASE_GET_MY_AUTHORIZATION_SERVICE_ACCOUNT }}
           SEARCH_USERS_SERVICE_ACCOUNT: ${{ vars.FIREBASE_SEARCH_USERS_SERVICE_ACCOUNT }}
           REVEAL_USER_EMAIL_SERVICE_ACCOUNT: ${{ vars.FIREBASE_REVEAL_USER_EMAIL_SERVICE_ACCOUNT }}
@@ -159,6 +160,11 @@ jobs:
             console.error("::error::Set FIREBASE_OPERATOR_UIDS_JSON to unique Auth UIDs");
             process.exit(1);
           }
+          const enforceAppCheck = (process.env.ENFORCE_APP_CHECK || "false").toLowerCase();
+          if (enforceAppCheck !== "true" && enforceAppCheck !== "false") {
+            console.error("::error::FIREBASE_ENFORCE_FUNCTIONS_APP_CHECK must be true or false");
+            process.exit(1);
+          }
           const serviceAccounts = [
             ["GET_MY_AUTHORIZATION_SERVICE_ACCOUNT", process.env.GET_MY_AUTHORIZATION_SERVICE_ACCOUNT],
             ["SEARCH_USERS_SERVICE_ACCOUNT", process.env.SEARCH_USERS_SERVICE_ACCOUNT],
@@ -179,6 +185,7 @@ jobs:
           fs.writeFileSync(
             "functions/.env.simply-fizzed-prod",
             `OPERATOR_UIDS_JSON=${JSON.stringify(raw)}\n` +
+              `ENFORCE_APP_CHECK=${enforceAppCheck}\n` +
               serviceAccounts
                 .map(([name, value]) => `${name}=${JSON.stringify(value)}\n`)
                 .join(""),

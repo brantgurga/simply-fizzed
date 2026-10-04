@@ -25,7 +25,7 @@ function restriction(expiresAt?: Date): RestrictionRecord {
   };
 }
 
-function gateways(events: string[]) {
+function gateways(events: string[], currentUser: AuthUser = fan) {
   const setCustomUserClaims = sinon.stub().callsFake(async () => {
     events.push("claim");
   });
@@ -33,7 +33,7 @@ function gateways(events: string[]) {
     events.push("cleanup");
   });
   const auth: AuthGateway = {
-    getUser: sinon.stub(),
+    getUser: sinon.stub().resolves(currentUser),
     getUserByEmail: sinon.stub(),
     listUsers: sinon.stub(),
     setCustomUserClaims,
@@ -136,6 +136,46 @@ describe("combined transition ordering", () => {
     sinon.assert.calledOnce(saveRestriction);
     sinon.assert.notCalled(setCustomUserClaims);
   });
+
+  it("keeps a restriction when a combined promotion fails", async () => {
+    const auth: AuthGateway = {
+      getUser: sinon
+        .stub()
+        .callsFake(async (uid: string) =>
+          uid === "operator-uid"
+            ? { uid, disabled: false }
+            : { uid, disabled: false, customClaims: { existing: "preserved" } },
+        ),
+      getUserByEmail: sinon.stub(),
+      listUsers: sinon.stub(),
+      setCustomUserClaims: sinon.stub().rejects(new Error("claim failed")),
+    };
+    const removeRestriction = sinon.stub();
+    const store: ManagementStore = {
+      getRestriction: sinon.stub().resolves(restriction()),
+      getPrivateUserData: sinon.stub(),
+      saveRestriction: sinon.stub(),
+      removeRestriction,
+      writeModeratorGrant: sinon.stub(),
+      clearModeratorGrant: sinon.stub(),
+    };
+    const service = new UserManagementService(
+      auth,
+      store,
+      () => '["operator-uid"]',
+      () => NOW,
+      () => "operation-one",
+    );
+
+    await expect(
+      service.applyUserManagement("operator-uid", {
+        targetUid: "fan-uid",
+        moderator: true,
+        restriction: null,
+      }),
+    ).rejects.toThrow("claim failed");
+    sinon.assert.notCalled(removeRestriction);
+  });
 });
 
 describe("Moderator claim changes", () => {
@@ -153,7 +193,7 @@ describe("Moderator claim changes", () => {
     const events: string[] = [];
     const { auth, store, setCustomUserClaims } = gateways(events);
 
-    await changeModeratorClaim(auth, store, fan, true, "operator-uid", NOW, "operation-one");
+    await changeModeratorClaim(auth, store, fan.uid, true, "operator-uid", NOW, "operation-one");
 
     expect(events).toEqual(["metadata", "claim"]);
     sinon.assert.calledWithExactly(setCustomUserClaims, "fan-uid", {
@@ -171,7 +211,7 @@ describe("Moderator claim changes", () => {
     });
 
     await expect(
-      changeModeratorClaim(auth, store, fan, true, "operator-uid", NOW, "operation-one"),
+      changeModeratorClaim(auth, store, fan.uid, true, "operator-uid", NOW, "operation-one"),
     ).rejects.toThrow("claim failed");
     expect(events).toEqual(["metadata", "claim", "cleanup"]);
     sinon.assert.calledWithExactly(clearModeratorGrant, "fan-uid", "operation-one");
@@ -184,25 +224,38 @@ describe("Moderator claim changes", () => {
     clearModeratorGrant.rejects(new Error("cleanup failed"));
 
     await expect(
-      changeModeratorClaim(auth, store, fan, true, "operator-uid", NOW, "operation-one"),
+      changeModeratorClaim(auth, store, fan.uid, true, "operator-uid", NOW, "operation-one"),
     ).rejects.toThrow("claim failed");
     sinon.assert.calledOnce(setCustomUserClaims);
   });
 
   it("removes the claim before best-effort revocation cleanup", async () => {
     const events: string[] = [];
-    const { auth, store, setCustomUserClaims, clearModeratorGrant } = gateways(events);
+    const { auth, store, setCustomUserClaims, clearModeratorGrant } = gateways(events, moderator);
     clearModeratorGrant.callsFake(async () => {
       events.push("cleanup");
       throw new Error("cleanup failed");
     });
 
     await expect(
-      changeModeratorClaim(auth, store, moderator, false, "operator-uid", NOW, "operation-two"),
+      changeModeratorClaim(auth, store, moderator.uid, false, "operator-uid", NOW, "operation-two"),
     ).resolves.toBeUndefined();
     expect(events).toEqual(["claim", "cleanup"]);
     sinon.assert.calledWithExactly(setCustomUserClaims, "fan-uid", {
       existing: "preserved",
+    });
+  });
+
+  it("reloads claims immediately before preserving unrelated values", async () => {
+    const events: string[] = [];
+    const currentUser: AuthUser = { ...fan, customClaims: { concurrent: "current" } };
+    const { auth, store, setCustomUserClaims } = gateways(events, currentUser);
+
+    await changeModeratorClaim(auth, store, fan.uid, true, "operator-uid", NOW, "operation-one");
+
+    sinon.assert.calledWithExactly(setCustomUserClaims, fan.uid, {
+      concurrent: "current",
+      moderator: true,
     });
   });
 });

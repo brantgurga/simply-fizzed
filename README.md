@@ -255,12 +255,14 @@ fixed staging and production domains on that key and the Maps browser key. Use a
 separate non-production key if live services must be tested from `localhost`;
 never allow `localhost` on production keys.
 
-Deploy with enforcement disabled first. In **Firebase console > App Check >
-APIs**, review request metrics until legitimate staging and production traffic
-shows valid tokens, then enable enforcement separately for **Authentication**,
-**Cloud Firestore**, and **Maps JavaScript API**. Disable enforcement for an API
-if valid clients are rejected; App Check supplements rather than replaces browser
-key restrictions.
+Deploy with enforcement disabled first: leave
+`FIREBASE_ENFORCE_FUNCTIONS_APP_CHECK` unset or set it to `false`. In **Firebase
+console > App Check > APIs**, review request metrics until legitimate staging and
+production traffic shows valid tokens. Then set that repository variable to `true`
+and redeploy to enforce callable tokens, and enable enforcement separately for
+**Authentication**, **Cloud Firestore**, and **Maps JavaScript API**. Revert the
+variable or disable enforcement for an API if valid clients are rejected; App Check
+supplements rather than replaces browser key restrictions.
 
 ### Coming-soon gate
 
@@ -303,9 +305,11 @@ resolves grants nothing to that UID without disabling other configured Operators
 
 All management calls authenticate from trusted callable context and then reload current
 Auth claims, restriction state, and Operator configuration server-side. Client-supplied
-identity or role fields grant nothing. User lookup and mutations are online-only, email
-is obfuscated unless explicitly revealed for the current page session, and the full
-email is never copied into Firestore or persistent browser storage.
+identity or role fields grant nothing. The management callable is the application's
+single writer for Auth custom claims and reloads claims immediately before replacing
+them so unrelated values are preserved. User lookup and mutations are online-only,
+email is obfuscated unless explicitly revealed for the current page session, and the
+full email is never copied into Firestore or persistent browser storage.
 
 `restrictions/{uid}` is the only source of truth for restriction status. The affected
 user may read its public reason, original and latest actor/timestamp attribution, and
@@ -328,7 +332,9 @@ Functions/Run/Build and Artifact Registry APIs, and deployment-service-account
 permissions. Set `FIREBASE_OPERATOR_UIDS_JSON` plus one distinct runtime identity in
 `FIREBASE_GET_MY_AUTHORIZATION_SERVICE_ACCOUNT`, `FIREBASE_SEARCH_USERS_SERVICE_ACCOUNT`,
 `FIREBASE_REVEAL_USER_EMAIL_SERVICE_ACCOUNT`, and
-`FIREBASE_APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT`. The delivery workflow validates them
+`FIREBASE_APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT`. Leave the optional
+`FIREBASE_ENFORCE_FUNCTIONS_APP_CHECK` repository variable unset or `false` for the
+observe-first rollout described above. The delivery workflow validates these values
 before writing the Functions environment file. Grant each Function's identity only the
 Firebase Auth and Firestore operations that callable needs; do not grant broad project
 ownership to any runtime or deployment identity.
@@ -386,8 +392,8 @@ scripts run in a separate job without OIDC access. Configure repository variable
 The dedicated `github-deployer@simply-fizzed-prod.iam.gserviceaccount.com`
 service account needs Firebase Hosting Admin and Firebase Rules Admin, plus the
 validated least-privilege Gen 2 Functions deployment permissions and permission to
-act as the configured Functions runtime identity. Add Firebase Authentication Admin
-if staging URLs should support sign-in. Restrict the provider to repository ID
+act as the configured Functions runtime identities. Browser sign-in does not require
+Auth administration on the deployment identity. Restrict the provider to repository ID
 `1320193089`, `refs/heads/main`, and this workflow, then grant only that identity
 `roles/iam.workloadIdentityUser`.
 

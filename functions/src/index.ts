@@ -2,7 +2,7 @@ import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
-import { defineString } from "firebase-functions/params";
+import { defineBoolean, defineString } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { FirestoreManagementStore } from "./firestore-store.js";
 import {
@@ -17,6 +17,10 @@ const operatorUids = defineString("OPERATOR_UIDS_JSON", {
   description: "A JSON array of unique Firebase Auth UIDs with Operator authority.",
   format: "json",
   input: { text: { nonEmpty: true } },
+});
+const enforceAppCheck = defineBoolean("ENFORCE_APP_CHECK", {
+  default: false,
+  description: "Reject callable requests without valid App Check tokens.",
 });
 const getMyAuthorizationServiceAccount = defineString("GET_MY_AUTHORIZATION_SERVICE_ACCOUNT", {
   description: "Least-privilege runtime identity for getMyAuthorization.",
@@ -49,9 +53,9 @@ const service = new UserManagementService(
 );
 const callableOptions = {
   region: REGION,
-  // App Check limits abuse in hosted environments; auth and server-side
-  // authorization below remain the security boundary. Emulators have no attester.
-  enforceAppCheck: process.env["FUNCTIONS_EMULATOR"] !== "true",
+  // App Check is a deployment-controlled abuse defense; auth and server-side
+  // authorization below remain the security boundary.
+  enforceAppCheck: process.env["FUNCTIONS_EMULATOR"] === "true" ? false : enforceAppCheck,
 };
 
 /**

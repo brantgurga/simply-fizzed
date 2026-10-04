@@ -196,17 +196,20 @@ export function claimsWithModerator(
 
 /**
  * Change the authoritative claim using fail-safe ordering around supplementary metadata.
- * Metadata is written before a grant and removed only after a revocation.
+ * Claims are reloaded immediately before replacement so unrelated values from an earlier
+ * request snapshot are not restored. This callable must remain the only application writer
+ * of custom claims; the Admin SDK does not provide compare-and-swap claim updates.
  */
 export async function changeModeratorClaim(
   auth: AuthGateway,
   store: ManagementStore,
-  target: AuthUser,
+  targetUid: string,
   enabled: boolean,
   actorUid: string,
   now: Date,
   operationId: string,
 ): Promise<void> {
+  const target = await auth.getUser(targetUid);
   const currentlyEnabled = target.customClaims?.["moderator"] === true;
   if (currentlyEnabled === enabled) {
     if (!enabled) {
@@ -564,26 +567,28 @@ export class UserManagementService {
       await changeModeratorClaim(
         this.#auth,
         this.#store,
-        target,
+        target.uid,
         false,
         actor.user.uid,
         now,
         this.#operationId(),
       );
     }
-    if (plannedRestriction === null) {
-      await this.#store.removeRestriction(targetUid);
-    }
     if (requestedModerator === true) {
       await changeModeratorClaim(
         this.#auth,
         this.#store,
-        target,
+        target.uid,
         true,
         actor.user.uid,
         now,
         this.#operationId(),
       );
+    }
+    // Remove the write-suppressing restriction only after every requested role
+    // transition succeeds, including a combined unrestrict-and-promote request.
+    if (plannedRestriction === null) {
+      await this.#store.removeRestriction(targetUid);
     }
 
     const confirmedTarget = await this.#auth.getUser(targetUid);
