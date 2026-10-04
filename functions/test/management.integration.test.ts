@@ -173,6 +173,24 @@ describe("callable authorization boundary", () => {
     ).rejects.toMatchObject({ code: "functions/permission-denied" });
   });
 
+  it("prevents a Moderator from discovering or managing a configured Operator", async () => {
+    await expect(
+      call<unknown[]>("moderator", "searchUsers", {
+        mode: "uid",
+        query: accounts.operator.uid,
+      }),
+    ).resolves.toEqual([]);
+    await expect(
+      call("moderator", "revealUserEmail", { targetUid: accounts.operator.uid }),
+    ).rejects.toMatchObject({ code: "functions/permission-denied" });
+    await expect(
+      call("moderator", "applyUserManagement", {
+        targetUid: accounts.operator.uid,
+        restriction: { publicReason: "Unauthorized restriction" },
+      }),
+    ).rejects.toMatchObject({ code: "functions/permission-denied" });
+  });
+
   it("requires an explicit authorized call to reveal a full email", async () => {
     await expect(
       call("moderator", "revealUserEmail", { targetUid: accounts.fan.uid }),

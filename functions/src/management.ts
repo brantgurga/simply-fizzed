@@ -123,6 +123,7 @@ interface Actor {
   user: AuthUser;
   moderator: boolean;
   operator: boolean;
+  operatorUids: ReadonlySet<string>;
   restriction?: RestrictionRecord;
   restricted: boolean;
 }
@@ -341,10 +342,12 @@ export class UserManagementService {
 
     const restriction = await this.#store.getRestriction(uid);
     const configuration = parseOperatorUids(this.#operatorConfiguration());
+    const operatorUids = configuration.valid ? configuration.uids : new Set<string>();
     return {
       user,
       moderator: moderatorClaim(user),
-      operator: configuration.valid && configuration.uids.has(uid),
+      operator: operatorUids.has(uid),
+      operatorUids,
       ...(restriction === undefined ? {} : { restriction }),
       restricted: isRestrictionActive(restriction, this.#now()),
     };
@@ -377,7 +380,7 @@ export class UserManagementService {
 
   /** Determine whether a caller may manage a target under the role hierarchy. */
   #canManageTarget(actor: Actor, target: AuthUser): boolean {
-    return actor.operator || !moderatorClaim(target);
+    return actor.operator || (!actor.operatorUids.has(target.uid) && !moderatorClaim(target));
   }
 
   /** Build a privacy-preserving management view from authoritative server records. */
@@ -493,7 +496,10 @@ export class UserManagementService {
       throw error;
     }
     if (!this.#canManageTarget(actor, target)) {
-      throw new ServiceError("permission-denied", "Moderators cannot manage another Moderator.");
+      throw new ServiceError(
+        "permission-denied",
+        "Moderators cannot manage another Moderator or Operator.",
+      );
     }
     if (requestedModerator !== undefined && !actor.operator) {
       throw new ServiceError("permission-denied", "Only an Operator can change Moderator status.");
