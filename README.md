@@ -258,8 +258,8 @@ never allow `localhost` on production keys.
 Deploy with enforcement disabled first: leave
 `FIREBASE_ENFORCE_FUNCTIONS_APP_CHECK` unset or set it to `false`. In **Firebase
 console > App Check > APIs**, review request metrics until legitimate staging and
-production traffic shows valid tokens. Then set that repository variable to `true`
-and redeploy to enforce callable tokens, and enable enforcement separately for
+production traffic shows valid tokens. Then set that production environment
+variable to `true` and redeploy to enforce callable tokens, and enable enforcement separately for
 **Authentication**, **Cloud Firestore**, and **Maps JavaScript API**. Revert the
 variable or disable enforcement for an API if valid clients are rejected; App Check
 supplements rather than replaces browser key restrictions.
@@ -332,9 +332,10 @@ Functions/Run/Build and Artifact Registry APIs, and deployment-service-account
 permissions. Set `FIREBASE_OPERATOR_UIDS_JSON` plus one distinct runtime identity in
 `FIREBASE_GET_MY_AUTHORIZATION_SERVICE_ACCOUNT`, `FIREBASE_SEARCH_USERS_SERVICE_ACCOUNT`,
 `FIREBASE_REVEAL_USER_EMAIL_SERVICE_ACCOUNT`, and
-`FIREBASE_APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT`. Leave the optional
-`FIREBASE_ENFORCE_FUNCTIONS_APP_CHECK` repository variable unset or `false` for the
-observe-first rollout described above. The delivery workflow validates these values
+`FIREBASE_APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT`. Configure these as `production`
+environment variables. Leave the optional `FIREBASE_ENFORCE_FUNCTIONS_APP_CHECK`
+environment variable unset or `false` for the observe-first rollout described above.
+The delivery workflow validates these values
 before writing the Functions environment file. Grant each Function's identity only the
 Firebase Auth and Firestore operations that callable needs; do not grant broad project
 ownership to any runtime or deployment identity.
@@ -385,9 +386,10 @@ and stricter rules, then publish the stricter rules in a subsequent staging run.
 
 The workflow exchanges GitHub OIDC tokens for short-lived Google credentials
 through `google-github-actions/auth`; it stores no service-account key. Build
-scripts run in a separate job without OIDC access. Configure repository variables `VITE_FIREBASE_API_KEY`,
-`VITE_FIREBASE_APPCHECK_SITE_KEY`, `VITE_GOOGLE_MAPS_API_KEY`, and
-`GCP_WORKLOAD_IDENTITY_PROVIDER` (the provider's full resource name).
+scripts run in a separate job without OIDC access. Configure `VITE_FIREBASE_API_KEY`,
+`VITE_FIREBASE_APPCHECK_SITE_KEY`, and `VITE_GOOGLE_MAPS_API_KEY` as `production`
+environment variables. Configure `GCP_WORKLOAD_IDENTITY_PROVIDER` as a repository
+variable (the provider's full resource name).
 
 The dedicated `github-deployer@simply-fizzed-prod.iam.gserviceaccount.com`
 service account needs Firebase Hosting Admin and Firebase Rules Admin, plus the

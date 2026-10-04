@@ -37,6 +37,7 @@ jobs:
         github.event.workflow_run.conclusion == 'success'
       }}
     runs-on: ubuntu-latest
+    environment: production
     env:
       VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
       VITE_FIREBASE_AUTH_DOMAIN: simply-fizzed-prod.firebaseapp.com
@@ -70,15 +71,15 @@ jobs:
       - name: Validate production client configuration
         run: |
           test -n "$VITE_FIREBASE_API_KEY" || {
-            echo "::error::Set the VITE_FIREBASE_API_KEY repository variable"
+            echo "::error::Set the VITE_FIREBASE_API_KEY production environment variable"
             exit 1
           }
           test -n "$VITE_FIREBASE_APPCHECK_SITE_KEY" || {
-            echo "::error::Set the VITE_FIREBASE_APPCHECK_SITE_KEY repository variable"
+            echo "::error::Set the VITE_FIREBASE_APPCHECK_SITE_KEY production environment variable"
             exit 1
           }
           test -n "$VITE_GOOGLE_MAPS_API_KEY" || {
-            echo "::error::Set the VITE_GOOGLE_MAPS_API_KEY repository variable"
+            echo "::error::Set the VITE_GOOGLE_MAPS_API_KEY production environment variable"
             exit 1
           }
 
@@ -108,6 +109,7 @@ jobs:
     name: Deploy staging channel
     needs: build-staging
     runs-on: ubuntu-latest
+    environment: production
     permissions:
       actions: read
       id-token: write
