@@ -143,6 +143,19 @@ async function seedAvailabilityReferences(): Promise<void> {
   });
 }
 
+async function seedRestriction(userId: string, expiresAt?: unknown): Promise<void> {
+  await testEnvironment.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "restrictions", userId), {
+      publicReason: "Pause inaccurate community contributions",
+      originallyRestrictedBy: "moderator-user",
+      originallyRestrictedAt: Timestamp.fromMillis(1_000),
+      restrictionLastUpdatedBy: "moderator-user",
+      restrictionLastUpdatedAt: Timestamp.fromMillis(1_000),
+      ...(expiresAt === undefined ? {} : { expiresAt }),
+    });
+  });
+}
+
 beforeAll(async () => {
   testEnvironment = await initializeTestEnvironment({
     projectId: PROJECT_ID,
@@ -689,6 +702,95 @@ describe("public profiles and rating inventories", () => {
       setDoc(doc(database, "profiles", USER_ID, "ratings", "existing-soda"), validRating()),
     );
     await assertFails(deleteDoc(doc(database, "profiles", USER_ID, "ratings", "existing-soda")));
+  });
+});
+
+describe("restrictions and authorization-document privacy", () => {
+  it("denies every community write while restricted despite client claim assertions", async () => {
+    await seedAvailabilityReferences();
+    await seedRestriction(USER_ID);
+    const database = testEnvironment
+      .authenticatedContext(USER_ID, { moderator: true, operator: true, restricted: false })
+      .firestore();
+
+    await assertFails(setDoc(doc(database, "locations", "restricted-location"), validLocation()));
+    await assertFails(
+      setDoc(
+        doc(database, "availability", "existing-location$existing-soda$can"),
+        validAvailability(),
+      ),
+    );
+    await assertFails(
+      setDoc(doc(database, "verifications", "restricted-verification"), validVerification()),
+    );
+    const batch = writeBatch(database);
+    batch.set(
+      doc(database, "sodas", "restricted-soda"),
+      validNewSoda({ initialAvailabilityId: "existing-location$restricted-soda$draft" }),
+    );
+    batch.set(
+      doc(database, "availability", "existing-location$restricted-soda$draft"),
+      validAvailability({
+        sodaId: "restricted-soda",
+        form: "draft",
+        sodaName: "Root Beer",
+        sodaBrand: "Sprecher",
+      }),
+    );
+    await assertFails(batch.commit());
+  });
+
+  it("keeps personal profile and rating writes available while restricted", async () => {
+    await seedAvailabilityReferences();
+    await seedRestriction(USER_ID);
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+
+    await assertSucceeds(setDoc(doc(database, "profiles", USER_ID), validProfile()));
+    await assertSucceeds(
+      setDoc(doc(database, "profiles", USER_ID, "ratings", "existing-soda"), validRating()),
+    );
+  });
+
+  it("enforces no-expiration and future restrictions but ignores stale expired metadata", async () => {
+    await seedRestriction(USER_ID, Timestamp.fromMillis(Date.now() + 60_000));
+    let database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    await assertFails(setDoc(doc(database, "locations", "future-restricted"), validLocation()));
+
+    await testEnvironment.clearFirestore();
+    await seedRestriction(USER_ID, Timestamp.fromMillis(Date.now() - 60_000));
+    database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    await assertSucceeds(
+      setDoc(doc(database, "locations", "expired-restriction"), validLocation()),
+    );
+  });
+
+  it("fails closed when persisted expiration metadata is malformed", async () => {
+    await seedRestriction(USER_ID, "not-a-timestamp");
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+
+    await assertFails(setDoc(doc(database, "locations", "malformed-expiration"), validLocation()));
+  });
+
+  it("allows only the affected user to get the public restriction document", async () => {
+    await seedRestriction(USER_ID);
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "userModeration", USER_ID), {
+        internalReason: "Private moderator context",
+        moderatorGrantedBy: "operator-user",
+      });
+    });
+    const ownDatabase = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const otherDatabase = testEnvironment.authenticatedContext("other-user").firestore();
+    const publicDatabase = testEnvironment.unauthenticatedContext().firestore();
+
+    await assertSucceeds(getDoc(doc(ownDatabase, "restrictions", USER_ID)));
+    await assertFails(getDoc(doc(otherDatabase, "restrictions", USER_ID)));
+    await assertFails(getDoc(doc(publicDatabase, "restrictions", USER_ID)));
+    await assertFails(getDocs(collection(ownDatabase, "restrictions")));
+    await assertFails(getDoc(doc(ownDatabase, "userModeration", USER_ID)));
+    await assertFails(
+      updateDoc(doc(ownDatabase, "restrictions", USER_ID), { publicReason: "Removed" }),
+    );
   });
 });
 

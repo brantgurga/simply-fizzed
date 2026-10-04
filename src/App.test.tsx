@@ -16,13 +16,36 @@ const auth = vi.hoisted(() => ({
   addLocation: vi.fn(),
   savePublicProfile: vi.fn(),
   isFirestoreAvailable: vi.fn(),
+  refreshAuthorization: vi.fn(),
+  authorization: {
+    moderator: false,
+    operator: false,
+    restricted: false,
+    canWriteCommunity: true,
+    canManageUsers: false,
+    evaluatedAt: "2026-10-03T12:00:00.000Z",
+    restriction: null as null | { publicReason: string },
+    source: "server" as const,
+  },
 }));
 
 vi.mock("./firebase", () => ({
   app: {},
   auth: {},
   db: {},
+  functions: {},
   isFirestoreAvailable: auth.isFirestoreAvailable,
+}));
+vi.mock("./authorization", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./authorization")>()),
+  useAuthorization: () => ({
+    authorization: auth.currentUser === null ? null : auth.authorization,
+    loading: false,
+    refresh: auth.refreshAuthorization,
+  }),
+}));
+vi.mock("./management/UserManagement", () => ({
+  default: () => <section aria-label="User management page">User management</section>,
 }));
 vi.mock("firebase/auth", () => ({
   onAuthStateChanged: vi.fn((_auth, listener: (user: typeof auth.currentUser) => void) => {
@@ -133,6 +156,17 @@ describe("App", () => {
     auth.savePublicProfile.mockResolvedValue(undefined);
     auth.isFirestoreAvailable.mockReset();
     auth.isFirestoreAvailable.mockResolvedValue(true);
+    auth.refreshAuthorization.mockReset();
+    Object.assign(auth.authorization, {
+      moderator: false,
+      operator: false,
+      restricted: false,
+      canWriteCommunity: true,
+      canManageUsers: false,
+      evaluatedAt: "2026-10-03T12:00:00.000Z",
+      restriction: null,
+      source: "server",
+    });
     window.localStorage.clear();
     window.history.replaceState(null, "", "#/");
   });
@@ -281,6 +315,37 @@ describe("App", () => {
       expect.objectContaining({ name: "Corner Shop" }),
     );
     expect(await screen.findByText("Thanks — Corner Shop was added.")).toBeVisible();
+  });
+
+  it("suppresses community controls while restricted without suppressing personal identity", () => {
+    auth.currentUser = { uid: "fan-123", displayName: "Soda Fan", email: "fan@example.com" };
+    Object.assign(auth.authorization, {
+      restricted: true,
+      canWriteCommunity: false,
+      restriction: { publicReason: "Pause inaccurate additions" },
+    });
+
+    render(<App />);
+
+    expect(screen.getByText(/community contributions are restricted/i)).toHaveTextContent(
+      "Pause inaccurate additions",
+    );
+    expect(screen.queryByRole("button", { name: "Add a location" })).not.toBeInTheDocument();
+    expect(screen.getByText("Soda Fan")).toBeVisible();
+  });
+
+  it("gates the management route and navigation with server-confirmed capability", () => {
+    auth.currentUser = { uid: "operator-uid", displayName: "Operator", email: null };
+    Object.assign(auth.authorization, { operator: true, canManageUsers: true });
+    window.history.replaceState(null, "", "#/manage/users");
+
+    render(<App />);
+
+    expect(screen.getByRole("link", { name: "Manage users" })).toHaveAttribute(
+      "href",
+      "#/manage/users",
+    );
+    expect(screen.getByLabelText("User management page")).toBeVisible();
   });
 
   it("waits for public profile provisioning before linking to it", async () => {

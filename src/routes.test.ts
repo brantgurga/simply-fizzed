@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { locationRoute, parseHashRoute, profileRoute, sodaRoute } from "./routes";
+import { locationRoute, manageUsersRoute, parseHashRoute, profileRoute, sodaRoute } from "./routes";
 
 describe("hash routes", () => {
   it("preserves the browse home", () => {
     expect(parseHashRoute("")).toEqual({ page: "home" });
     expect(parseHashRoute("#/")).toEqual({ page: "home" });
+  });
+
+  it("recognizes the exact privileged management route", () => {
+    expect(parseHashRoute(manageUsersRoute)).toEqual({ page: "manageUsers" });
   });
 
   it("round-trips safely encoded exact document ids", () => {

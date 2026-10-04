@@ -28,6 +28,9 @@ const firebase = vi.hoisted(() => ({
   getFirestore: vi.fn(),
   getRemoteConfig: vi.fn(),
   getValue: vi.fn(),
+  functions: { name: "functions" },
+  connectFunctionsEmulator: vi.fn(),
+  getFunctions: vi.fn(),
   initializeApp: vi.fn(),
   isSupported: vi.fn(),
   initializeAppCheck: vi.fn(),
@@ -53,6 +56,11 @@ vi.mock("firebase/app", () => ({
 vi.mock("firebase/app-check", () => ({
   initializeAppCheck: firebase.initializeAppCheck,
   ReCaptchaEnterpriseProvider: firebase.ReCaptchaEnterpriseProvider,
+}));
+
+vi.mock("firebase/functions", () => ({
+  connectFunctionsEmulator: firebase.connectFunctionsEmulator,
+  getFunctions: firebase.getFunctions,
 }));
 
 vi.mock("firebase/remote-config", () => ({
@@ -94,6 +102,7 @@ describe("Firebase initialization", () => {
     firebase.initializeAppCheck.mockReturnValue(firebase.appCheck);
     firebase.initializeAuth.mockReturnValue(firebase.auth);
     firebase.getRemoteConfig.mockReturnValue(firebase.remoteConfig);
+    firebase.getFunctions.mockReturnValue(firebase.functions);
     firebase.isSupported.mockResolvedValue(true);
     firebase.ensureInitialized.mockResolvedValue(undefined);
     firebase.fetchAndActivate.mockResolvedValue(true);
@@ -141,6 +150,12 @@ describe("Firebase initialization", () => {
       "127.0.0.1",
       8080,
     );
+    expect(firebase.getFunctions).toHaveBeenCalledWith(firebase.app, "us-central1");
+    expect(firebase.connectFunctionsEmulator).toHaveBeenCalledWith(
+      firebase.functions,
+      "127.0.0.1",
+      5001,
+    );
     expect(firebase.initializeAppCheck).not.toHaveBeenCalled();
     expect(firebase.isSupported).not.toHaveBeenCalled();
     expect(firebase.getRemoteConfig).not.toHaveBeenCalled();
@@ -180,6 +195,7 @@ describe("Firebase initialization", () => {
     expect(firebase.initializeFirestore).not.toHaveBeenCalled();
     expect(firebase.initializeAppCheck).not.toHaveBeenCalled();
     expect(firebase.connectAuthEmulator).not.toHaveBeenCalled();
+    expect(firebase.connectFunctionsEmulator).not.toHaveBeenCalled();
   });
 
   it("exports App Check and configures Remote Config for non-demo projects", async () => {

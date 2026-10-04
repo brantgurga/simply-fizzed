@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "typecheck": "tsc -b",
+    "build": "npm run build:functions && tsc -b && vite build",
+    "typecheck": "tsc -b && npm run typecheck:functions",
     "lint": "oxlint . .github/scripts",
     "lint:fix": "oxlint --fix . .github/scripts",
     "lint:types": "oxlint --type-aware . .github/scripts",
@@ -19,9 +19,13 @@
     "e2e:ui": "playwright test --ui",
     "emulators": "firebase emulators:start --project demo-simply-fizzed",
     "emulators:hosting": "firebase emulators:start --only hosting --project demo-simply-fizzed",
-    "emulators:e2e": "firebase emulators:start --only hosting,firestore,auth --project demo-simply-fizzed",
+    "emulators:e2e": "firebase emulators:start --only hosting,firestore,auth,functions --project demo-simply-fizzed",
     "preview": "vite preview",
-    "prepare": "husky"
+    "prepare": "husky",
+    "build:functions": "npm --prefix functions run build",
+    "typecheck:functions": "npm --prefix functions run typecheck",
+    "test:functions": "npm --prefix functions test",
+    "test:functions:integration": "npm run build:functions && firebase emulators:exec --only auth,firestore,functions --project demo-simply-fizzed \"npm --prefix functions run test:integration\""
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

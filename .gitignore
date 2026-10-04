@@ -29,6 +29,7 @@ gha-creds-*.json
 
 # Firebase
 .firebase/
+/functions/lib/
 firebase-debug.log
 firebase-debug.*.log
 firestore-debug.log

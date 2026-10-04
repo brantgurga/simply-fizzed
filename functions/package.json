@@ -1,0 +1,41 @@
+{
+  "name": "simply-fizzed-functions",
+  "version": "0.0.0-SNAPSHOT",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "scripts": {
+    "test": "mocha --import=tsx \"src/**/*.test.ts\"",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:integration": "mocha --import=tsx --timeout 30000 \"test/**/*.integration.test.ts\"",
+    "lint": "oxlint --deny-warnings .",
+    "lint:types": "oxlint --type-aware --deny-warnings ."
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.0",
+    "firebase-functions": "^7.4.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@tsconfig/node24": "^24.0.5",
+    "@tsconfig/recommended": "^1.0.13",
+    "@tsconfig/strictest": "^2.0.8",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^24.19.1",
+    "@types/sinon": "^21.0.0",
+    "expect": "^30.5.2",
+    "mocha": "^12.0.3",
+    "oxlint": "^1.86.0",
+    "oxlint-tsgolint": "^7.0.2003",
+    "sinon": "^22.1.0",
+    "tsx": "^4.20.6",
+    "typescript": "~7.0.2"
+  },
+  "overrides": {
+    "uuid@<11.1.1": "11.1.1"
+  },
+  "engines": {
+    "node": "24"
+  }
+}

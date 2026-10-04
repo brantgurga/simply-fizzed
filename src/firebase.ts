@@ -28,6 +28,7 @@ import {
   getValue,
   isSupported,
 } from "firebase/remote-config";
+import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 import { isHostnameEnabled } from "./availability";
 import { COLLECTIONS } from "./model/firestore";
 
@@ -101,6 +102,8 @@ export const db = existingApp
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
     });
 
+export const functions = getFunctions(app, "us-central1");
+
 /**
  * Confirm that Firestore can serve data from the backend, rather than allowing an
  * empty persistent cache to masquerade as an empty database. An offline browser
@@ -127,4 +130,5 @@ if (isDemoProject) {
     connectAuthEmulator(auth, "http://127.0.0.1:9099");
   }
   connectFirestoreEmulator(db, "127.0.0.1", 8080);
+  if (!existingApp) connectFunctionsEmulator(functions, "127.0.0.1", 5001);
 }

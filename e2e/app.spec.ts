@@ -3,6 +3,7 @@ import {
   deleteApp as deleteAdminApp,
   initializeApp as initializeAdminApp,
 } from "firebase-admin/app";
+import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
 import { deleteApp, initializeApp } from "firebase/app";
 import { connectAuthEmulator, createUserWithEmailAndPassword, getAuth } from "firebase/auth";
@@ -115,6 +116,34 @@ async function setAvailabilityDetails(
  *
  * @throws When the fixture is missing or an emulator reset operation fails.
  */
+async function setRestrictionByEmail(email: string, restricted: boolean): Promise<void> {
+  process.env["FIREBASE_AUTH_EMULATOR_HOST"] = "127.0.0.1:9099";
+  process.env["FIRESTORE_EMULATOR_HOST"] = "127.0.0.1:8080";
+  const app = initializeAdminApp(
+    { projectId: PROJECT_ID },
+    `restriction-${cleanupAppNumber.toString()}`,
+  );
+  cleanupAppNumber += 1;
+  try {
+    const user = await getAdminAuth(app).getUserByEmail(email);
+    const reference = getAdminFirestore(app).collection("restrictions").doc(user.uid);
+    if (!restricted) {
+      await reference.delete();
+      return;
+    }
+    const now = new Date();
+    await reference.set({
+      publicReason: "Repeated inaccurate test contribution",
+      originallyRestrictedBy: "e2e-moderator",
+      originallyRestrictedAt: now,
+      restrictionLastUpdatedBy: "e2e-moderator",
+      restrictionLastUpdatedAt: now,
+    });
+  } finally {
+    await deleteAdminApp(app);
+  }
+}
+
 async function resetAvailabilitySyncState(id: string, locationId: string): Promise<void> {
   const fixture = AVAILABILITY.find((item) => item.id === id);
   if (fixture === undefined) throw new Error(`Missing availability fixture ${id}`);
@@ -472,6 +501,55 @@ test.describe("App", () => {
     } finally {
       await context.setOffline(false);
       await resetAvailabilitySyncState(availabilityId, KROGER.id);
+    }
+  });
+
+  test("rejects an offline community edit when the Fan is restricted before reconnect", async ({
+    page,
+    context,
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== "chromium", "Offline authorization is exercised once.");
+    const email = `restricted-offline-${testInfo.retry.toString()}@example.com`;
+    const availabilityId = `${KROGER.id}$big-k-root-beer$can`;
+    await resetAvailabilitySyncState(availabilityId, KROGER.id);
+    await page.goto(`/#/locations/${KROGER.id}`);
+    await page.getByRole("button", { name: "Sign in" }).last().click();
+    await page.getByRole("button", { name: /sign up/i }).click();
+    await page.getByLabel(/email address/i).fill(email);
+    await page.getByLabel(/password/i).fill("emulator-password");
+    await page.getByRole("button", { name: /create account/i }).click();
+
+    try {
+      const row = page
+        .getByRole("listitem")
+        .filter({ has: page.getByRole("link", { name: "Big K Root Beer in cans" }) });
+      await expect(row.getByRole("button", { name: "Edit availability details" })).toBeVisible();
+      await context.setOffline(true);
+      await row.getByRole("button", { name: "Edit availability details" }).click();
+      await row.getByLabel("Can sample").click();
+      await page.getByRole("option", { name: "Yes" }).click();
+      await row.getByLabel("Can purchase").click();
+      await page.getByRole("option", { name: "No", exact: true }).click();
+      await row.getByRole("button", { name: "Save details" }).click();
+      await expect(row.getByRole("button", { name: "Saving…" })).toBeDisabled();
+
+      await setRestrictionByEmail(email, true);
+      await context.setOffline(false);
+
+      await expect(page.getByText(/saved change could not be synchronized/i)).toBeVisible();
+      await expect(page.getByText(/community contributions are restricted/i)).toBeVisible();
+      await expect
+        .poll(() => availabilitySyncState(availabilityId, KROGER.id))
+        .toMatchObject({ canSample: "no", canPurchase: "yes" });
+      await expect(row.getByText("Can sample: No")).toBeVisible();
+      await expect(row.getByText("Can purchase: Yes")).toBeVisible();
+    } finally {
+      await context.setOffline(false);
+      await Promise.all([
+        setRestrictionByEmail(email, false),
+        resetAvailabilitySyncState(availabilityId, KROGER.id),
+      ]);
     }
   });
 

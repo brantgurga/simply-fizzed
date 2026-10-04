@@ -58,9 +58,14 @@ jobs:
         with:
           node-version: "24"
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci
+          npm --prefix functions ci
 
       - name: Validate production client configuration
         run: |
@@ -89,6 +94,11 @@ jobs:
             firebase.json
             firestore.indexes.json
             firestore.rules
+            functions/lib/
+            functions/src/
+            functions/package.json
+            functions/package-lock.json
+            functions/tsconfig.json
             package.json
             package-lock.json
           if-no-files-found: error
@@ -113,7 +123,75 @@ jobs:
           name: firebase-hosting
 
       - name: Install deployment dependencies
-        run: npm ci
+        run: |
+          npm ci
+          npm --prefix functions ci
+
+      - name: Validate Functions deployment configuration
+        env:
+          OPERATOR_UIDS_JSON: ${{ vars.FIREBASE_OPERATOR_UIDS_JSON }}
+          ENFORCE_APP_CHECK: ${{ vars.FIREBASE_ENFORCE_FUNCTIONS_APP_CHECK }}
+          GET_MY_AUTHORIZATION_SERVICE_ACCOUNT: ${{ vars.FIREBASE_GET_MY_AUTHORIZATION_SERVICE_ACCOUNT }}
+          SEARCH_USERS_SERVICE_ACCOUNT: ${{ vars.FIREBASE_SEARCH_USERS_SERVICE_ACCOUNT }}
+          REVEAL_USER_EMAIL_SERVICE_ACCOUNT: ${{ vars.FIREBASE_REVEAL_USER_EMAIL_SERVICE_ACCOUNT }}
+          APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT: ${{ vars.FIREBASE_APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT }}
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const raw = process.env.OPERATOR_UIDS_JSON ?? "";
+          let parsed;
+          try {
+            parsed = JSON.parse(raw);
+          } catch {
+            parsed = undefined;
+          }
+          const structurallyValid =
+            Array.isArray(parsed) &&
+            parsed.length > 0 &&
+            parsed.every(
+              (uid) =>
+                typeof uid === "string" &&
+                uid.length >= 1 &&
+                uid.length <= 128 &&
+                uid.trim() === uid,
+            ) &&
+            new Set(parsed).size === parsed.length;
+          if (!structurallyValid) {
+            console.error("::error::Set FIREBASE_OPERATOR_UIDS_JSON to unique Auth UIDs");
+            process.exit(1);
+          }
+          const enforceAppCheck = (process.env.ENFORCE_APP_CHECK || "false").toLowerCase();
+          if (enforceAppCheck !== "true" && enforceAppCheck !== "false") {
+            console.error("::error::FIREBASE_ENFORCE_FUNCTIONS_APP_CHECK must be true or false");
+            process.exit(1);
+          }
+          const serviceAccounts = [
+            ["GET_MY_AUTHORIZATION_SERVICE_ACCOUNT", process.env.GET_MY_AUTHORIZATION_SERVICE_ACCOUNT],
+            ["SEARCH_USERS_SERVICE_ACCOUNT", process.env.SEARCH_USERS_SERVICE_ACCOUNT],
+            ["REVEAL_USER_EMAIL_SERVICE_ACCOUNT", process.env.REVEAL_USER_EMAIL_SERVICE_ACCOUNT],
+            ["APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT", process.env.APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT],
+          ];
+          const serviceAccountPattern = /^[^@\s]+@simply-fizzed-prod\.iam\.gserviceaccount\.com$/;
+          for (const [name, value = ""] of serviceAccounts) {
+            if (!serviceAccountPattern.test(value)) {
+              console.error(`::error::Set FIREBASE_${name} for simply-fizzed-prod`);
+              process.exit(1);
+            }
+          }
+          if (new Set(serviceAccounts.map(([, value]) => value)).size !== serviceAccounts.length) {
+            console.error("::error::Each Function requires a distinct runtime service account");
+            process.exit(1);
+          }
+          fs.writeFileSync(
+            "functions/.env.simply-fizzed-prod",
+            `OPERATOR_UIDS_JSON=${JSON.stringify(raw)}\n` +
+              `ENFORCE_APP_CHECK=${enforceAppCheck}\n` +
+              serviceAccounts
+                .map(([name, value]) => `${name}=${JSON.stringify(value)}\n`)
+                .join(""),
+            { mode: 0o600 },
+          );
+          NODE
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
@@ -122,9 +200,10 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: github-deployer@simply-fizzed-prod.iam.gserviceaccount.com
 
-      - name: Deploy Firestore rules and indexes
+      - name: Deploy Functions, Firestore rules, and indexes
         run: >-
-          ./node_modules/.bin/firebase deploy --only firestore:rules,firestore:indexes
+          npx --no-install firebase deploy
+          --only functions,firestore:rules,firestore:indexes
           --project simply-fizzed-prod --non-interactive
 
       - name: Deploy staging channel
@@ -134,7 +213,7 @@ jobs:
         run: |
           set -euo pipefail
           output="$RUNNER_TEMP/firebase-hosting-staging.json"
-          ./node_modules/.bin/firebase hosting:channel:deploy "$CHANNEL_ID" \
+          npx --no-install firebase hosting:channel:deploy "$CHANNEL_ID" \
             --project simply-fizzed-prod \
             --expires 30d \
             --non-interactive \
@@ -210,7 +289,7 @@ jobs:
 
       - name: Deploy live channel
         run: >-
-          ./node_modules/.bin/firebase deploy --only hosting
+          npx --no-install firebase deploy --only hosting
           --project simply-fizzed-prod --non-interactive
 
       - name: Summarize production deployment
