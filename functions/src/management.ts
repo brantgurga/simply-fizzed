@@ -336,8 +336,11 @@ export class UserManagementService {
     let user: AuthUser;
     try {
       user = await this.#auth.getUser(uid);
-    } catch {
-      throw new ServiceError("unauthenticated", "The signed-in account is unavailable.");
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        throw new ServiceError("unauthenticated", "The signed-in account is unavailable.");
+      }
+      throw error;
     }
     if (user.disabled) {
       throw new ServiceError("permission-denied", "The signed-in account is disabled.");

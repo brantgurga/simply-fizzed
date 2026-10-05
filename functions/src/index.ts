@@ -69,8 +69,11 @@ async function translateErrors<T>(execute: () => Promise<T>): Promise<T> {
     return await execute();
   } catch (error) {
     if (error instanceof ServiceError) throw new HttpsError(error.code, error.message);
+    const code: unknown =
+      typeof error === "object" && error !== null ? Reflect.get(error, "code") : undefined;
     logger.error("User-management operation failed", {
       errorType: error instanceof Error ? error.name : typeof error,
+      errorCode: typeof code === "string" || typeof code === "number" ? code : undefined,
     });
     throw new HttpsError("internal", "The operation could not be completed.");
   }
