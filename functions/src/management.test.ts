@@ -94,6 +94,40 @@ describe("restriction expiration", () => {
   });
 });
 
+describe("caller resolution", () => {
+  it("reports a missing caller account as unauthenticated", async () => {
+    const { auth, store } = gateways([]);
+    auth.getUser = sinon
+      .stub()
+      .rejects(Object.assign(new Error("gone"), { code: "auth/user-not-found" }));
+    const service = new UserManagementService(
+      auth,
+      store,
+      () => undefined,
+      () => NOW,
+    );
+
+    await expect(service.getMyAuthorization("fan-uid")).rejects.toMatchObject({
+      code: "unauthenticated",
+      message: "The signed-in account is unavailable.",
+    });
+  });
+
+  it("propagates other Auth failures for internal error handling", async () => {
+    const { auth, store } = gateways([]);
+    const failure = Object.assign(new Error("denied"), { code: "auth/insufficient-permission" });
+    auth.getUser = sinon.stub().rejects(failure);
+    const service = new UserManagementService(
+      auth,
+      store,
+      () => undefined,
+      () => NOW,
+    );
+
+    await expect(service.getMyAuthorization("fan-uid")).rejects.toBe(failure);
+  });
+});
+
 describe("combined transition ordering", () => {
   it("does not revoke before an intended restriction is durably saved", async () => {
     const setCustomUserClaims = sinon.stub();
