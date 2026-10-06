@@ -2,6 +2,19 @@
 
 Simply Fizzed is a tracker for places to find soda and to review and discover new soda possibilities.
 
+## License and contributions
+
+Simply Fizzed is copyright © 2026 Brant Langer Gurganus and licensed under the
+[GNU Affero General Public License v3.0 only](LICENSE). Operators of modified
+network versions must offer their users the corresponding source as required by
+AGPL section 13. The application exposes source and license links in its footer.
+
+See [third-party notices](THIRD_PARTY_NOTICES.md) for separately licensed
+software and fonts, [branding guidance](BRANDING.md) before presenting a fork,
+and [contribution requirements](CONTRIBUTING.md) before opening a pull request.
+External human contributions require the copyright assignment described in
+[`COPYRIGHT_ASSIGNMENT.md`](COPYRIGHT_ASSIGNMENT.md).
+
 ## Tech stack
 
 This repository is being bootstrapped with the professional stack tracked in issue #6:
@@ -449,8 +462,11 @@ geohash radius search continues to use Firestore's automatic single-field index.
 ## User interface
 
 Material UI (MUI) provides the component library and a retro root beer theme of
-brown, caramel, cream, and frothy off-white. Distinct light and dark palettes in
-[`src/theme.ts`](./src/theme.ts) use strong value contrast for WCAG AA text and
+brown, caramel, cream, and frothy off-white. Replaceable identity values and
+assets are centralized in [`src/branding.ts`](./src/branding.ts), while shared
+palette and browser/PWA colors live in
+[`src/theme-tokens.ts`](./src/theme-tokens.ts). Distinct light and dark palettes
+in [`src/theme.ts`](./src/theme.ts) use strong value contrast for WCAG AA text and
 controls; semantic states retain MUI's icons and differ by lightness as well as
 hue so color is not their only cue.
 

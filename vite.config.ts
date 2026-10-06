@@ -1,75 +1,57 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import { configDefaults, defineConfig } from "vitest/config";
+import { brand } from "./src/branding.ts";
+import { browserThemeColors } from "./src/theme-tokens.ts";
+
+const installAssets = [
+  brand.favicon,
+  brand.appleTouchIcon,
+  ...brand.icons.map(({ src }) => src),
+  ...brand.screenshots.map(({ src }) => src),
+].map((path) => path.replace(/^\//u, ""));
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    {
+      name: "brand-html",
+      transformIndexHtml(html) {
+        return html
+          .replaceAll("%BRAND_NAME%", brand.name)
+          .replaceAll("%BRAND_FAVICON%", brand.favicon)
+          .replaceAll("%BRAND_APPLE_TOUCH_ICON%", brand.appleTouchIcon)
+          .replaceAll("%THEME_LIGHT%", browserThemeColors.light)
+          .replaceAll("%THEME_DARK%", browserThemeColors.dark);
+      },
+    },
     react(),
     VitePWA({
       registerType: "prompt",
       injectRegister: false,
-      includeAssets: [
-        "favicon.svg",
-        "icon-192.png",
-        "icon-512.png",
-        "icon-maskable-192.png",
-        "icon-maskable-512.png",
-        "screenshot-narrow.png",
-        "screenshot-wide.png",
-      ],
+      includeAssets: installAssets,
       manifest: {
         id: "/",
-        name: "Simply Fizzed",
-        short_name: "SimFiz",
-        description: "Find sodas and the places that serve them.",
+        name: brand.name,
+        short_name: brand.shortName,
+        description: brand.description,
         start_url: "/",
         scope: "/",
         display: "standalone",
-        background_color: "#FFF8E7",
-        theme_color: "#6B3418",
-        icons: [
-          {
-            src: "/icon-192.png",
-            sizes: "192x192",
-            type: "image/png",
-            purpose: "any",
-          },
-          {
-            src: "/icon-512.png",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "any",
-          },
-          {
-            src: "/icon-maskable-192.png",
-            sizes: "192x192",
-            type: "image/png",
-            purpose: "maskable",
-          },
-          {
-            src: "/icon-maskable-512.png",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "maskable",
-          },
-        ],
-        screenshots: [
-          {
-            src: "/screenshot-wide.png",
-            sizes: "1280x768",
-            type: "image/png",
-            form_factor: "wide",
-            label: "Simply Fizzed desktop search",
-          },
-          {
-            src: "/screenshot-narrow.png",
-            sizes: "750x750",
-            type: "image/png",
-            form_factor: "narrow",
-            label: "Simply Fizzed mobile search",
-          },
-        ],
+        background_color: browserThemeColors.background,
+        theme_color: browserThemeColors.light,
+        icons: brand.icons.map(({ src, sizes, type, purpose }) => ({ src, sizes, type, purpose })),
+        screenshots: brand.screenshots.map(({ src, sizes, type, formFactor, label }) => ({
+          src,
+          sizes,
+          type,
+          form_factor: formFactor,
+          label,
+        })),
       },
       workbox: {
         cleanupOutdatedCaches: true,

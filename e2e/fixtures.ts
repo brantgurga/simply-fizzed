@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
 // Deterministic seed data for the end-to-end tests. Both the Playwright
 // globalSetup (which writes these documents into the Firestore emulator) and the
 // specs (which assert on them) import from here so the seeded data and the

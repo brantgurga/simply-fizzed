@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
 import { defineConfig, devices } from "@playwright/test";
 
 // Keep browser binaries hermetic (under node_modules) so they stay on the same

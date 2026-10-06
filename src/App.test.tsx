@@ -1,9 +1,14 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
 import type { ReactNode } from "react";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { getContrastRatio } from "@mui/material/styles";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { brand } from "./branding";
 import theme, { rootBeerPalettes } from "./theme";
 
 const auth = vi.hoisted(() => ({
@@ -65,8 +70,9 @@ vi.mock("./rating/ratings", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./rating/ratings")>()),
   savePublicProfile: auth.savePublicProfile,
 }));
-vi.mock("./location/AddLocationForm", () => ({
-  ISSUE_REPORT_URL: "https://github.com/brantgurga/simply-fizzed/issues",
+vi.mock("./location/AddLocationForm", async (importOriginal) => ({
+  ISSUE_REPORT_URL: (await importOriginal<typeof import("./location/AddLocationForm")>())
+    .ISSUE_REPORT_URL,
   default: ({
     onSave,
     onAdded,
@@ -210,7 +216,12 @@ describe("App", () => {
   it("keeps browsing available without signing in", () => {
     render(<App />);
 
-    expect(screen.getByRole("heading", { name: "Simply Fizzed" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: brand.name })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Source" })).toHaveAttribute("href", brand.sourceUrl);
+    expect(screen.getByRole("link", { name: /AGPL-3.0-only license/i })).toHaveAttribute(
+      "href",
+      brand.licenseUrl,
+    );
     expect(
       screen.getByText("Find soda near you. Set your location to start searching."),
     ).toBeVisible();
@@ -225,7 +236,7 @@ describe("App", () => {
     expect(await screen.findByText(/soda data is currently unavailable/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /report it/i })).toHaveAttribute(
       "href",
-      "https://github.com/brantgurga/simply-fizzed/issues",
+      brand.issuesUrl,
     );
     expect(screen.queryByText(/no soda found/i)).not.toBeInTheDocument();
   });

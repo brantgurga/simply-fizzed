@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
 import { collection, doc, type Firestore, getDoc, getDocs, query, where } from "firebase/firestore";
 import { COLLECTIONS, type Availability } from "../model/firestore";
 import { groupAvailabilityByLocation, parseAvailability, parseLocation } from "../nearby/results";

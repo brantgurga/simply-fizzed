@@ -2,6 +2,7 @@
   "name": "simply-fizzed-functions",
   "version": "0.0.0-SNAPSHOT",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "main": "lib/index.js",
   "scripts": {

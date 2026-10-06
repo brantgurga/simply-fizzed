@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import CssBaseline from "@mui/material/CssBaseline";

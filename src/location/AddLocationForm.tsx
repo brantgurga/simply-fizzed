@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
 import { type FormEvent, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
@@ -5,9 +9,10 @@ import Button from "@mui/material/Button";
 import Link from "@mui/material/Link";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
+import { brand } from "../branding";
 import type { NewLocationInput } from "./addLocation";
 
-export const ISSUE_REPORT_URL = "https://github.com/brantgurga/simply-fizzed/issues";
+export const ISSUE_REPORT_URL = brand.issuesUrl;
 const SAVE_ERROR = "Something went wrong while adding this location.";
 
 interface AddLocationFormProps {

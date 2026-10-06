@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
 import {
   lazy,
   Suspense,
@@ -20,6 +24,7 @@ import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { communityWriteErrorMessage, useAuthorization } from "./authorization";
+import { brand } from "./branding";
 import { publicContributorName } from "./contributor";
 import { app, auth, db, isFirestoreAvailable } from "./firebase";
 import type { GeoPoint } from "./model/firestore";
@@ -264,7 +269,7 @@ function App() {
         <Toolbar sx={{ gap: 2 }}>
           <Typography variant="h6" component="h1" sx={{ flexGrow: 1 }}>
             <Link href="#/" color="inherit" underline="none">
-              Simply Fizzed
+              {brand.name}
             </Link>
           </Typography>
           {user === null ? (
@@ -418,6 +423,13 @@ function App() {
           )}
         </Container>
       )}
+
+      <Box component="footer" sx={{ py: 2, textAlign: "center" }}>
+        <Stack direction="row" spacing={2} sx={{ justifyContent: "center" }}>
+          <Link href={brand.sourceUrl}>Source</Link>
+          <Link href={brand.licenseUrl}>AGPL-3.0-only license</Link>
+        </Stack>
+      </Box>
     </>
   );
 }

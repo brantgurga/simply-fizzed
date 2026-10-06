@@ -1,6 +1,11 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
 import Container from "@mui/material/Container";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
+import { brand } from "./branding";
 
 function ComingSoon() {
   return (
@@ -11,7 +16,7 @@ function ComingSoon() {
     >
       <Stack spacing={2} sx={{ width: "100%" }}>
         <Typography component="h1" variant="h3">
-          Simply Fizzed
+          {brand.name}
         </Typography>
         <Typography component="h2" variant="h5">
           Coming soon

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
 import { useState } from "react";
 import Button from "@mui/material/Button";
 import FormControl from "@mui/material/FormControl";

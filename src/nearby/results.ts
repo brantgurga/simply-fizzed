@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
 // Pure helpers for turning raw Firestore documents into typed, display-ready
 // nearby results: runtime parsing/validation of untrusted document data (no
 // unsafe casts), grouping availability by location, and formatting sodas and
