@@ -4,6 +4,7 @@
 
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { brand } from "./branding";
 import { getStartupContent } from "./startup";
 
 const isFullAppEnabled = vi.hoisted(() => vi.fn());
@@ -35,6 +36,11 @@ describe("getStartupContent", () => {
 
     expect(isFullAppEnabled).toHaveBeenCalledWith("www.example.com");
     expect(screen.getByRole("heading", { name: "Coming soon" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Source" })).toHaveAttribute("href", brand.sourceUrl);
+    expect(screen.getByRole("link", { name: /AGPL-3.0-only license/i })).toHaveAttribute(
+      "href",
+      brand.licenseUrl,
+    );
     expect(screen.queryByText("Full application")).not.toBeInTheDocument();
   });
 });

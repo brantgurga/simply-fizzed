@@ -99,6 +99,23 @@ export function assignmentRequired(login, type, paths, owner) {
   return true;
 }
 
+/**
+ * @param {string} pullRequestAuthor
+ * @param {Array<{ sha: string, author: { login: string } | null }>} commits
+ * @param {string} owner
+ */
+export function validateCommitAuthors(pullRequestAuthor, commits, owner) {
+  return commits.flatMap(({ sha, author }) => {
+    if (author === null) {
+      return [`${sha.slice(0, 7)}: commit author is not linked to a GitHub account`];
+    }
+    if (author.login === owner || author.login === pullRequestAuthor) return [];
+    return [
+      `${sha.slice(0, 7)}: external commit author @${author.login} must submit and attest in their own pull request`,
+    ];
+  });
+}
+
 /** @param {string[]} paths */
 export function validateLocalFiles(paths) {
   return paths.flatMap((path) => {
@@ -121,39 +138,49 @@ export async function validatePullRequest({ github, context, core }) {
     core.setFailed("License policy requires a pull_request_target event.");
     return;
   }
-  /** @type {Array<{ filename: string, status: string }>} */
-  const files = await github.paginate(github.rest.pulls.listFiles, {
+  const request = {
     owner: context.repo.owner,
     repo: context.repo.repo,
     pull_number: pullRequest.number,
     per_page: 100,
-  });
+  };
+  const results = await Promise.all([
+    github.paginate(github.rest.pulls.listFiles, request),
+    github.paginate(github.rest.pulls.listCommits, request),
+  ]);
+  /** @type {Array<{ filename: string, status: string }>} */
+  const files = results[0];
+  /** @type {Array<{ sha: string, author: { login: string } | null }>} */
+  const commits = results[1];
   const paths = files.filter((file) => file.status !== "removed").map((file) => file.filename);
-  const errors = (
-    await Promise.all(
-      paths
-        .filter((path) => noticeStyle(path) !== undefined)
-        .map(async (path) => {
-          const response = await github.rest.repos.getContent({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            path,
-            ref: pullRequest.head.sha,
-          });
-          if (
-            Array.isArray(response.data) ||
-            response.data.type !== "file" ||
-            !response.data.content
-          ) {
-            return [`${path}: GitHub did not return readable file content`];
-          }
-          return validateNotice(
-            path,
-            Buffer.from(response.data.content, "base64").toString("utf8"),
-          );
-        }),
-    )
-  ).flat();
+  const errors = validateCommitAuthors(pullRequest.user.login, commits, context.repo.owner);
+  errors.push(
+    ...(
+      await Promise.all(
+        paths
+          .filter((path) => noticeStyle(path) !== undefined)
+          .map(async (path) => {
+            const response = await github.rest.repos.getContent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path,
+              ref: pullRequest.head.sha,
+            });
+            if (
+              Array.isArray(response.data) ||
+              response.data.type !== "file" ||
+              !response.data.content
+            ) {
+              return [`${path}: GitHub did not return readable file content`];
+            }
+            return validateNotice(
+              path,
+              Buffer.from(response.data.content, "base64").toString("utf8"),
+            );
+          }),
+      )
+    ).flat(),
+  );
 
   if (
     assignmentRequired(pullRequest.user.login, pullRequest.user.type, paths, context.repo.owner) &&

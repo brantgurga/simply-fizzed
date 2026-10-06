@@ -9,6 +9,7 @@ import {
   hasAssignmentAttestation,
   noticeStyle,
   noticeText,
+  validateCommitAuthors,
   validateNotice,
   validatePullRequest,
 } from "./license-policy.js";
@@ -54,6 +55,42 @@ describe("license policy", () => {
     expect(assignmentRequired("contributor", "User", ["README.md"], "brantgurga")).toBe(true);
   });
 
+  it("rejects commits whose external author cannot personally attest", () => {
+    expect(
+      validateCommitAuthors(
+        "brantgurga",
+        [{ sha: "1234567890", author: { login: "contributor" } }],
+        "brantgurga",
+      ),
+    ).toHaveLength(1);
+    expect(
+      validateCommitAuthors(
+        "contributor",
+        [
+          { sha: "1234567890", author: { login: "contributor" } },
+          { sha: "abcdef0123", author: { login: "another-contributor" } },
+        ],
+        "brantgurga",
+      ),
+    ).toHaveLength(1);
+    expect(
+      validateCommitAuthors("contributor", [{ sha: "1234567890", author: null }], "brantgurga"),
+    ).toHaveLength(1);
+  });
+
+  it("allows commits authored by the attesting contributor or repository owner", () => {
+    expect(
+      validateCommitAuthors(
+        "contributor",
+        [
+          { sha: "1234567890", author: { login: "contributor" } },
+          { sha: "abcdef0123", author: { login: "brantgurga" } },
+        ],
+        "brantgurga",
+      ),
+    ).toEqual([]);
+  });
+
   it("validates pull request files through the API without a contribution checkout", async () => {
     const getContent = vi.fn().mockResolvedValue({
       data: {
@@ -62,13 +99,21 @@ describe("license policy", () => {
       },
     });
     const setFailed = vi.fn();
-    await validatePullRequest({
-      github: {
-        paginate: vi.fn().mockResolvedValue([
+    const listFiles = vi.fn();
+    const listCommits = vi.fn();
+    const paginate = vi.fn((method) => {
+      if (method === listFiles) {
+        return Promise.resolve([
           { filename: "src/new.ts", status: "added" },
           { filename: "README.md", status: "modified" },
-        ]),
-        rest: { pulls: { listFiles: vi.fn() }, repos: { getContent } },
+        ]);
+      }
+      return Promise.resolve([{ sha: "abc1234", author: { login: "contributor" } }]);
+    });
+    await validatePullRequest({
+      github: {
+        paginate,
+        rest: { pulls: { listFiles, listCommits }, repos: { getContent } },
       },
       context: {
         repo: { owner: "brantgurga", repo: "simply-fizzed" },

@@ -3,6 +3,7 @@
 // See LICENSE for copying terms.
 
 import Container from "@mui/material/Container";
+import Link from "@mui/material/Link";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { brand } from "./branding";
@@ -24,6 +25,10 @@ function ComingSoon() {
         <Typography color="text.secondary">
           We’re putting the finishing touches on a better way to find your favorite sodas.
         </Typography>
+        <Stack direction="row" spacing={2} sx={{ justifyContent: "center" }}>
+          <Link href={brand.sourceUrl}>Source</Link>
+          <Link href={brand.licenseUrl}>AGPL-3.0-only license</Link>
+        </Stack>
       </Stack>
     </Container>
   );
