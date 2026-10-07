@@ -137,4 +137,45 @@ describe("license policy", () => {
     });
     expect(setFailed).not.toHaveBeenCalled();
   });
+
+  it("reports missing notices and assignment through the workflow failure API", async () => {
+    const getContent = vi.fn().mockResolvedValue({
+      data: {
+        type: "file",
+        content: Buffer.from("export {};").toString("base64"),
+      },
+    });
+    const setFailed = vi.fn();
+    const listFiles = vi.fn();
+    const listCommits = vi.fn();
+    const paginate = vi.fn((method) => {
+      if (method === listFiles) {
+        return Promise.resolve([{ filename: "src/new.ts", status: "added" }]);
+      }
+      return Promise.resolve([{ sha: "abc1234", author: { login: "contributor" } }]);
+    });
+
+    await validatePullRequest({
+      github: {
+        paginate,
+        rest: { pulls: { listFiles, listCommits }, repos: { getContent } },
+      },
+      context: {
+        repo: { owner: "brantgurga", repo: "simply-fizzed" },
+        payload: {
+          pull_request: {
+            number: 10,
+            body: "",
+            user: { login: "contributor", type: "User" },
+            head: { sha: "abc123" },
+          },
+        },
+      },
+      core: { setFailed },
+    });
+
+    expect(setFailed).toHaveBeenCalledWith(
+      `src/new.ts: missing required license notice\nPull request body must contain this exact checked attestation:\n${ASSIGNMENT_ATTESTATION}`,
+    );
+  });
 });
