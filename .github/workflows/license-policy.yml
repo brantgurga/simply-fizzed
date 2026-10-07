@@ -24,7 +24,7 @@ jobs:
           persist-credentials: false
 
       - name: Validate changed files and contributor assignment
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const policy = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/license-policy.js`);
