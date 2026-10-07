@@ -79,23 +79,10 @@ export function hasAssignmentAttestation(body) {
   return body.split(/\r?\n/u).some((line) => line === ASSIGNMENT_ATTESTATION);
 }
 
-/** @param {string} login @param {string} type @param {string[]} paths @param {string} owner */
-export function assignmentRequired(login, type, paths, owner) {
+/** @param {string} login @param {string} type @param {string} owner */
+export function assignmentRequired(login, type, owner) {
   if (login === owner) return false;
-  const mechanicalDependencyPaths = new Set([
-    "package.json",
-    "package-lock.json",
-    "functions/package.json",
-    "functions/package-lock.json",
-  ]);
-  if (
-    type === "Bot" &&
-    login === "dependabot[bot]" &&
-    paths.length > 0 &&
-    paths.every((path) => mechanicalDependencyPaths.has(path))
-  ) {
-    return false;
-  }
+  if (type === "Bot" && login === "dependabot[bot]") return false;
   return true;
 }
 
@@ -183,7 +170,7 @@ export async function validatePullRequest({ github, context, core }) {
   );
 
   if (
-    assignmentRequired(pullRequest.user.login, pullRequest.user.type, paths, context.repo.owner) &&
+    assignmentRequired(pullRequest.user.login, pullRequest.user.type, context.repo.owner) &&
     !hasAssignmentAttestation(pullRequest.body ?? "")
   ) {
     errors.push(

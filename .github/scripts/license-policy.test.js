@@ -41,18 +41,11 @@ describe("license policy", () => {
     expect(hasAssignmentAttestation(`${ASSIGNMENT_ATTESTATION} extra`)).toBe(false);
   });
 
-  it("exempts only the owner and mechanical Dependabot updates", () => {
-    expect(assignmentRequired("brantgurga", "User", ["src/App.tsx"], "brantgurga")).toBe(false);
-    expect(
-      assignmentRequired(
-        "dependabot[bot]",
-        "Bot",
-        ["package.json", "package-lock.json"],
-        "brantgurga",
-      ),
-    ).toBe(false);
-    expect(assignmentRequired("dependabot[bot]", "Bot", ["src/App.tsx"], "brantgurga")).toBe(true);
-    expect(assignmentRequired("contributor", "User", ["README.md"], "brantgurga")).toBe(true);
+  it("exempts only the owner and Dependabot from assignment", () => {
+    expect(assignmentRequired("brantgurga", "User", "brantgurga")).toBe(false);
+    expect(assignmentRequired("dependabot[bot]", "Bot", "brantgurga")).toBe(false);
+    expect(assignmentRequired("other-bot[bot]", "Bot", "brantgurga")).toBe(true);
+    expect(assignmentRequired("contributor", "User", "brantgurga")).toBe(true);
   });
 
   it("rejects commits whose external author cannot personally attest", () => {
