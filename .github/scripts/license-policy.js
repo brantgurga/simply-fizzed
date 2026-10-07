@@ -13,7 +13,7 @@ export const COPYRIGHT_LINE = "Copyright (C) 2026 Brant Langer Gurganus";
 export const SPDX_LINE = "SPDX-License-Identifier: AGPL-3.0-only";
 export const LICENSE_POINTER = "See LICENSE for copying terms.";
 export const ASSIGNMENT_ATTESTATION =
-  "- [x] I own or control this contribution and assign its copyright to Brant Langer Gurganus under `COPYRIGHT_ASSIGNMENT.md`.";
+  "- [x] I own or control this contribution and assign its copyright under `COPYRIGHT_ASSIGNMENT.md`.";
 
 export const EXCLUSIONS = Object.freeze({
   ".v8r/schemas/": "vendored schemas retain their upstream license notices",

@@ -24,6 +24,7 @@ import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { communityWriteErrorMessage, useAuthorization } from "./authorization";
+import BrandFooter from "./BrandFooter";
 import { brand } from "./branding";
 import { publicContributorName } from "./contributor";
 import { app, auth, db, isFirestoreAvailable } from "./firebase";
@@ -424,12 +425,7 @@ function App() {
         </Container>
       )}
 
-      <Box component="footer" sx={{ py: 2, textAlign: "center" }}>
-        <Stack direction="row" spacing={2} sx={{ justifyContent: "center" }}>
-          <Link href={brand.sourceUrl}>Source</Link>
-          <Link href={brand.licenseUrl}>AGPL-3.0-only license</Link>
-        </Stack>
-      </Box>
+      <BrandFooter />
     </>
   );
 }
