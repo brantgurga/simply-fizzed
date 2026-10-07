@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
 // Firebase client initialization. The web app configuration is read from
 // `VITE_FIREBASE_*` environment variables (see `.env` / `.env.example`) rather
 // than hardcoded, so values differ per environment without code changes.

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
 // Distance calculation, the 60-mile radius filter, and nearest-first sorting are
 // kept here as pure functions with no React or Firestore dependencies so they can
 // be unit tested in isolation (issue #49). The Firestore querying that feeds them

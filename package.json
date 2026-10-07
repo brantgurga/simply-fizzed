@@ -2,6 +2,7 @@
   "name": "simply-fizzed",
   "version": "0.0.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -25,7 +26,9 @@
     "build:functions": "npm --prefix functions run build",
     "typecheck:functions": "npm --prefix functions run typecheck",
     "test:functions": "npm --prefix functions test",
-    "test:functions:integration": "npm run build:functions && firebase emulators:exec --only auth,firestore,functions --project demo-simply-fizzed \"npm --prefix functions run test:integration\""
+    "test:functions:integration": "npm run build:functions && firebase emulators:exec --only auth,firestore,functions --project demo-simply-fizzed \"npm --prefix functions run test:integration\"",
+    "check:licenses": "node .github/scripts/license-policy.js",
+    "test:license": "vitest run .github/scripts/license-policy.test.js"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

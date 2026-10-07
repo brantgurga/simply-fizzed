@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
 // Geocoding is placed behind a small `Geocoder` interface so the app can swap
 // implementations by environment: production builds use the Google Maps
 // JavaScript API geocoder, while local development, e2e, and unit tests use a fake that

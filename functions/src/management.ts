@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
 export const SEARCH_RESULT_LIMIT = 10;
 export const DISPLAY_NAME_PAGE_LIMIT = 5;
 export const AUTH_PAGE_SIZE = 1_000;

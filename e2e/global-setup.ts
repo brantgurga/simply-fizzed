@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
 // Playwright global setup: clear the Auth and Firestore emulators, then seed
 // deterministic Firestore fixtures. Playwright starts the `webServer` (which
 // boots all three emulators) first; explicit readiness checks remove startup

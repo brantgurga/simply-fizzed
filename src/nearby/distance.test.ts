@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
 import { describe, expect, it } from "vitest";
 import type { LocationDoc } from "./distance";
 import { chunk, distanceMiles, rankByDistance, SEARCH_RADIUS_MILES } from "./distance";

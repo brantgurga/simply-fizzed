@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
 // The Firestore side of nearby search: query `locations` by geohash bounds for a
 // 60-mile radius, batch-load `availability` for the in-radius locations, and
 // combine everything into ranked `NearbyLocation` results. The distance math and
