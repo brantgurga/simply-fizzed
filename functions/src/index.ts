@@ -147,37 +147,39 @@ export const applyUserManagement = onCall<ApplyUserManagementInput>(
 );
 
 /** Return one user's immutable audit history after current-authority checks. */
-export const getUserAuditHistory = onCall<{ targetUid: string }>(
+export const getUserAuditHistory = onCall<{
+  targetUid: string;
+  beforeSequence?: number;
+}>(
   { ...callableOptions, serviceAccount: getUserAuditHistoryServiceAccount },
   async (request) =>
     await translateErrors(
-      async () => await service.getAuditHistory(request.auth?.uid, request.data?.targetUid),
+      async () =>
+        await service.getAuditHistory(
+          request.auth?.uid,
+          request.data?.targetUid,
+          request.data?.beforeSequence,
+        ),
     ),
 );
 
 /** Record post-rollout account creation with an explicit non-human system actor. */
 export const recordAccountCreation = onUserCreated(
-  { region: REGION, serviceAccount: recordAccountCreationServiceAccount },
+  { region: REGION, retry: true, serviceAccount: recordAccountCreationServiceAccount },
   async (event) => {
     const user = event.data;
-    const expectedVersion = await auditStore.getVersion(user.uid);
-    if (expectedVersion !== 0) return;
-    const operation = { id: event.id, subjectUid: user.uid, expectedVersion };
-    await auditStore.beginOperation(operation);
-    const profile = await auditStore.readProfile(user.uid);
-    const after = auditableSnapshot(user, profile, undefined, {});
-    await auditStore.completeOperation(
-      operation,
+    const after = auditableSnapshot(user, null, undefined, {});
+    await auditStore.appendInitialEvent(
       {
-        id: event.id,
+        id: `account-created:${user.uid}`,
         actor: { kind: "system", id: "firebase-auth" },
         subjectUid: user.uid,
         type: "account.created",
         before: null,
         after,
-        changedFields: ["auth", ...(profile === null ? [] : ["profile"])],
+        changedFields: ["auth"],
       },
-      new Date(),
+      new Date(user.metadata.creationTime),
     );
   },
 );

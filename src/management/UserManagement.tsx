@@ -112,6 +112,7 @@ export default function UserManagement({
   const [actionReason, setActionReason] = useState("");
   const [history, setHistory] = useState<AuditHistoryData>();
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
   const [message, setMessage] = useState<{ severity: "error" | "success"; text: string }>();
   const revealRequest = useRef(0);
   const auditRequest = useRef(0);
@@ -128,6 +129,7 @@ export default function UserManagement({
   async function loadHistory(targetUid: string): Promise<void> {
     const request = ++auditRequest.current;
     setHistoryLoading(true);
+    setHistoryLoadingMore(false);
     try {
       const loaded = await historyLoader(targetUid);
       if (auditRequest.current === request) setHistory(loaded);
@@ -138,6 +140,32 @@ export default function UserManagement({
     }
   }
 
+  /** Append one bounded page of older history for the current user. */
+  async function loadMoreHistory(): Promise<void> {
+    if (selected === undefined || history?.nextBeforeSequence === undefined) return;
+    const request = ++auditRequest.current;
+    setHistoryLoadingMore(true);
+    try {
+      const loaded = await historyLoader(selected.uid, history.nextBeforeSequence);
+      if (auditRequest.current !== request) return;
+      setHistory((current) => {
+        if (current === undefined) return loaded;
+        const identities = new Map(current.identities.map((value) => [value.uid, value]));
+        for (const value of loaded.identities) identities.set(value.uid, value);
+        return {
+          events: [...current.events, ...loaded.events],
+          identities: [...identities.values()],
+          version: loaded.version,
+          ...(loaded.nextBeforeSequence === undefined
+            ? {}
+            : { nextBeforeSequence: loaded.nextBeforeSequence }),
+        };
+      });
+    } finally {
+      if (auditRequest.current === request) setHistoryLoadingMore(false);
+    }
+  }
+
   /** Select a result and reset transient, user-specific state. */
   function choose(user: ManagedUser): void {
     revealRequest.current += 1;
@@ -145,6 +173,7 @@ export default function UserManagement({
     setDraft(draftFor(user));
     setActionReason("");
     setHistory(undefined);
+    setHistoryLoadingMore(false);
     setRevealedEmail(undefined);
     setRevealing(false);
     setMessage(undefined);
@@ -165,6 +194,7 @@ export default function UserManagement({
     setRevealing(false);
     setHistory(undefined);
     setHistoryLoading(false);
+    setHistoryLoadingMore(false);
     try {
       setResults(await searcher(mode, query.trim()));
     } catch {
@@ -483,7 +513,11 @@ export default function UserManagement({
           ) : history === undefined ? (
             <Alert severity="info">User change history is unavailable.</Alert>
           ) : (
-            <AuditHistory history={history} />
+            <AuditHistory
+              history={history}
+              loadingMore={historyLoadingMore}
+              onLoadMore={() => void loadMoreHistory()}
+            />
           )}
         </Stack>
       )}

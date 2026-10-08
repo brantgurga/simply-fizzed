@@ -4,7 +4,7 @@
 
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { AuditHistory as AuditHistoryData } from "./api";
 import AuditHistory from "./AuditHistory";
 
@@ -79,5 +79,16 @@ describe("AuditHistory", () => {
     await interaction.click(screen.getAllByText("Inspect before and after snapshots")[0]!);
     expect(screen.getAllByText("Before")[0]).toBeVisible();
     expect(screen.getAllByText(/"displayName"/).length).toBeGreaterThan(0);
+  });
+
+  it("offers bounded pagination when older events remain", async () => {
+    const interaction = userEvent.setup();
+    const onLoadMore = vi.fn();
+    render(
+      <AuditHistory history={{ ...history, nextBeforeSequence: 1 }} onLoadMore={onLoadMore} />,
+    );
+
+    await interaction.click(screen.getByRole("button", { name: "Load older history" }));
+    expect(onLoadMore).toHaveBeenCalledOnce();
   });
 });

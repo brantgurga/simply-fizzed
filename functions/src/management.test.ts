@@ -223,11 +223,14 @@ describe("combined transition ordering", () => {
 function auditGateway() {
   return {
     getVersion: sinon.stub().resolves(0),
+    hasPendingOperation: sinon.stub().resolves(false),
     beginOperation: sinon.stub().resolves(),
     completeOperation: sinon.stub().resolves(),
     completeProfileOperation: sinon.stub().resolves(),
     cancelOperation: sinon.stub().resolves(),
-    listEvents: sinon.stub().resolves([]),
+    recoverPendingOperation: sinon.stub().resolves(false),
+    appendInitialEvent: sinon.stub().resolves(),
+    listEvents: sinon.stub().resolves({ events: [] }),
     readProfile: sinon.stub().resolves({ publicName: "Fiona" }),
   } satisfies UserAuditStore;
 }
@@ -339,6 +342,57 @@ describe("audited management", () => {
     sinon.assert.notCalled(audit.completeOperation);
   });
 
+  it("recovers a durable audit reservation after a side effect may have committed", async () => {
+    const auth: AuthGateway = {
+      getUser: sinon
+        .stub()
+        .callsFake(async (uid: string) =>
+          uid === "operator-uid" ? { uid, disabled: false } : fan,
+        ),
+      getUserByEmail: sinon.stub(),
+      listUsers: sinon.stub(),
+      setCustomUserClaims: sinon.stub(),
+      updateUser: sinon.stub(),
+    };
+    let currentRestriction: RestrictionRecord | undefined;
+    const store: ManagementStore = {
+      getRestriction: sinon
+        .stub()
+        .callsFake(async (uid: string) => (uid === fan.uid ? currentRestriction : undefined)),
+      getPrivateUserData: sinon.stub().resolves({}),
+      saveRestriction: sinon.stub().callsFake(async (_uid, value) => {
+        currentRestriction = value;
+        throw new Error("response lost after commit");
+      }),
+      removeRestriction: sinon.stub(),
+      writeModeratorGrant: sinon.stub(),
+      clearModeratorGrant: sinon.stub(),
+    };
+    const audit = auditGateway();
+    audit.hasPendingOperation.onFirstCall().resolves(false);
+    audit.hasPendingOperation.onSecondCall().resolves(true);
+    audit.recoverPendingOperation.resolves(true);
+    const service = new UserManagementService(
+      auth,
+      store,
+      () => '["operator-uid"]',
+      () => NOW,
+      () => "operation-one",
+      audit,
+    );
+
+    await expect(
+      service.applyUserManagement("operator-uid", {
+        targetUid: fan.uid,
+        expectedVersion: 0,
+        reason: "Recover an uncertain write",
+        restriction: { publicReason: "Pause contributions" },
+      }),
+    ).rejects.toThrow("response lost after commit");
+    sinon.assert.calledOnce(audit.recoverPendingOperation);
+    sinon.assert.notCalled(audit.cancelOperation);
+  });
+
   it("enforces self-history visibility while retaining unresolved UIDs", async () => {
     const { auth, store } = gateways([]);
     auth.getUser = sinon.stub().callsFake(async (uid: string) => {
@@ -350,7 +404,7 @@ describe("audited management", () => {
         : { uid, disabled: false };
     });
     const audit = auditGateway();
-    audit.listEvents.resolves([
+    const events = [
       {
         id: "event-one",
         actor: { kind: "user", uid: "deleted-uid" },
@@ -361,7 +415,8 @@ describe("audited management", () => {
         before: null,
         after: null,
       },
-    ] satisfies AuditEvent[]);
+    ] satisfies AuditEvent[];
+    audit.listEvents.resolves({ events, nextBeforeSequence: 1 });
     const service = new UserManagementService(
       auth,
       store,
@@ -374,7 +429,9 @@ describe("audited management", () => {
     await expect(service.getAuditHistory("moderator-uid", "moderator-uid")).rejects.toMatchObject({
       code: "permission-denied",
     });
-    const visible = await service.getAuditHistory("operator-uid", "fan-uid");
+    const visible = await service.getAuditHistory("operator-uid", "fan-uid", 2);
+    sinon.assert.calledWithExactly(audit.listEvents, "fan-uid", 2);
+    expect(visible.nextBeforeSequence).toBe(1);
     expect(visible.identities).toContainEqual({
       uid: "deleted-uid",
       displayName: null,

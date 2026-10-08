@@ -60,9 +60,21 @@ export interface AuditOperation {
   expectedVersion: number;
 }
 
+export interface AuditRecoveryDraft {
+  actor: AuditActor;
+  before: AuditableUserSnapshot;
+  reason: string;
+}
+
+export interface AuditEventPage {
+  events: AuditEvent[];
+  nextBeforeSequence?: number;
+}
+
 export interface UserAuditStore {
   getVersion(subjectUid: string): Promise<number>;
-  beginOperation(operation: AuditOperation): Promise<void>;
+  hasPendingOperation(subjectUid: string): Promise<boolean>;
+  beginOperation(operation: AuditOperation, recovery?: AuditRecoveryDraft): Promise<void>;
   completeOperation(
     operation: AuditOperation,
     draft: AuditEventDraft,
@@ -75,7 +87,9 @@ export interface UserAuditStore {
     occurredAt: Date,
   ): Promise<void>;
   cancelOperation(operation: AuditOperation): Promise<void>;
-  listEvents(subjectUid: string): Promise<AuditEvent[]>;
+  recoverPendingOperation(subjectUid: string, after: AuditableUserSnapshot): Promise<boolean>;
+  appendInitialEvent(draft: AuditEventDraft, occurredAt: Date): Promise<void>;
+  listEvents(subjectUid: string, beforeSequence?: number): Promise<AuditEventPage>;
   readProfile(subjectUid: string): Promise<AuditJson>;
 }
 

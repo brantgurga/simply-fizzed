@@ -4,12 +4,15 @@
 
 import { Timestamp, type Firestore } from "firebase-admin/firestore";
 import {
+  changedSnapshotFields,
   type AuditActor,
   type AuditEvent,
   type AuditEventDraft,
+  type AuditEventPage,
   type AuditEventType,
   type AuditJson,
   type AuditOperation,
+  type AuditRecoveryDraft,
   type AuditableUserSnapshot,
   type UserAuditStore,
 } from "./audit.js";
@@ -97,7 +100,12 @@ export class FirestoreUserAuditStore implements UserAuditStore {
       : 0;
   }
 
-  async beginOperation(operation: AuditOperation): Promise<void> {
+  async hasPendingOperation(subjectUid: string): Promise<boolean> {
+    const state = await this.#db.collection(USER_AUDIT_STATE_COLLECTION).doc(subjectUid).get();
+    return typeof state.get("pendingOperationId") === "string";
+  }
+
+  async beginOperation(operation: AuditOperation, recovery?: AuditRecoveryDraft): Promise<void> {
     const stateReference = this.#db
       .collection(USER_AUDIT_STATE_COLLECTION)
       .doc(operation.subjectUid);
@@ -130,6 +138,7 @@ export class FirestoreUserAuditStore implements UserAuditStore {
         expectedVersion: operation.expectedVersion,
         status: "pending",
         createdAt: Timestamp.now(),
+        ...(recovery === undefined ? {} : { recovery }),
       });
     });
   }
@@ -244,14 +253,106 @@ export class FirestoreUserAuditStore implements UserAuditStore {
     });
   }
 
-  async listEvents(subjectUid: string): Promise<AuditEvent[]> {
-    const snapshots = await this.#db
+  async recoverPendingOperation(
+    subjectUid: string,
+    after: AuditableUserSnapshot,
+  ): Promise<boolean> {
+    const state = await this.#db.collection(USER_AUDIT_STATE_COLLECTION).doc(subjectUid).get();
+    const operationId: unknown = state.get("pendingOperationId");
+    if (typeof operationId !== "string") return false;
+    const operationRecord = await this.#db
+      .collection(USER_AUDIT_OPERATIONS_COLLECTION)
+      .doc(operationId)
+      .get();
+    const recovery: unknown = operationRecord.get("recovery");
+    const createdAt: unknown = operationRecord.get("createdAt");
+    const expectedVersion: unknown = operationRecord.get("expectedVersion");
+    if (
+      !isRecord(recovery) ||
+      !(createdAt instanceof Timestamp) ||
+      operationRecord.get("subjectUid") !== subjectUid ||
+      typeof expectedVersion !== "number"
+    ) {
+      throw new ServiceError("failed-precondition", "Pending audit recovery data is invalid.");
+    }
+    const actor = auditActor(recovery["actor"]);
+    const before = recovery["before"];
+    const reason = recovery["reason"];
+    if (
+      actor === undefined ||
+      before === null ||
+      !auditableUserSnapshot(before) ||
+      typeof reason !== "string"
+    ) {
+      throw new ServiceError("failed-precondition", "Pending audit recovery data is invalid.");
+    }
+    const operation = {
+      id: operationId,
+      subjectUid,
+      expectedVersion,
+    };
+    const changedFields = changedSnapshotFields(before, after);
+    if (changedFields.length === 0) {
+      await this.cancelOperation(operation);
+      return true;
+    }
+    await this.completeOperation(
+      operation,
+      {
+        id: operationId,
+        actor,
+        subjectUid,
+        type: "user.management-updated",
+        before,
+        after,
+        reason,
+        changedFields,
+      },
+      createdAt.toDate(),
+    );
+    return true;
+  }
+
+  async appendInitialEvent(draft: AuditEventDraft, occurredAt: Date): Promise<void> {
+    const stateReference = this.#db.collection(USER_AUDIT_STATE_COLLECTION).doc(draft.subjectUid);
+    const eventReference = this.#db
+      .collection(USER_AUDIT_COLLECTION)
+      .doc(draft.subjectUid)
+      .collection("events")
+      .doc(draft.id);
+    await this.#db.runTransaction(async (transaction) => {
+      const [state, event] = await Promise.all([
+        transaction.get(stateReference),
+        transaction.get(eventReference),
+      ]);
+      if (event.exists) return;
+      if (state.get("pendingOperationId") !== undefined) {
+        throw new ServiceError("failed-precondition", "Another audit operation is pending.");
+      }
+      const version: unknown = state.get("version") ?? 0;
+      if (typeof version !== "number" || !Number.isSafeInteger(version) || version < 0) {
+        throw new ServiceError("failed-precondition", "Audit state is invalid.");
+      }
+      const sequence = version === 0 ? 1 : 0;
+      transaction.create(eventReference, {
+        ...draft,
+        sequence,
+        occurredAt: Timestamp.fromDate(occurredAt),
+      });
+      if (version === 0) transaction.set(stateReference, { version: sequence });
+    });
+  }
+
+  async listEvents(subjectUid: string, beforeSequence?: number): Promise<AuditEventPage> {
+    const pageSize = 25;
+    let query = this.#db
       .collection(USER_AUDIT_COLLECTION)
       .doc(subjectUid)
       .collection("events")
-      .orderBy("sequence", "desc")
-      .get();
-    return snapshots.docs.map((snapshot): AuditEvent => {
+      .orderBy("sequence", "desc");
+    if (beforeSequence !== undefined) query = query.where("sequence", "<", beforeSequence);
+    const snapshots = await query.limit(pageSize + 1).get();
+    const events = snapshots.docs.slice(0, pageSize).map((snapshot): AuditEvent => {
       const value: unknown = snapshot.data();
       if (!isRecord(value)) throw new Error("Invalid audit event.");
       const occurredAt = value["occurredAt"];
@@ -290,6 +391,10 @@ export class FirestoreUserAuditStore implements UserAuditStore {
       }
       return event;
     });
+    const oldest = events.at(-1);
+    return snapshots.docs.length > pageSize && oldest !== undefined
+      ? { events, nextBeforeSequence: oldest.sequence }
+      : { events };
   }
 
   async readProfile(subjectUid: string): Promise<AuditJson> {

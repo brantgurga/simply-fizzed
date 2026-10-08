@@ -69,6 +69,7 @@ export interface AuditHistory {
   events: AuditEvent[];
   identities: AuditIdentity[];
   version: number;
+  nextBeforeSequence?: number;
 }
 
 export type SearchMode = "uid" | "email" | "displayName";
@@ -132,13 +133,21 @@ export async function revealManagedUserEmail(targetUid: string): Promise<string 
 }
 
 /** Load immutable history using current server-evaluated authority. */
-export async function loadUserAuditHistory(targetUid: string): Promise<AuditHistory> {
+export async function loadUserAuditHistory(
+  targetUid: string,
+  beforeSequence?: number,
+): Promise<AuditHistory> {
   requireOnline();
-  const callable = httpsCallable<{ targetUid: string }, AuditHistory>(
+  const callable = httpsCallable<{ targetUid: string; beforeSequence?: number }, AuditHistory>(
     functions,
     "getUserAuditHistory",
   );
-  return (await callable({ targetUid })).data;
+  return (
+    await callable({
+      targetUid,
+      ...(beforeSequence === undefined ? {} : { beforeSequence }),
+    })
+  ).data;
 }
 
 /** Commit staged management changes and return only confirmed server state. */

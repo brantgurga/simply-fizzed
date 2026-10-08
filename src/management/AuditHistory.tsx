@@ -3,6 +3,7 @@
 // See LICENSE for copying terms.
 
 import Alert from "@mui/material/Alert";
+import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
 import Details from "@mui/material/AccordionDetails";
 import Summary from "@mui/material/AccordionSummary";
@@ -14,6 +15,8 @@ import type { AuditEvent, AuditHistory as AuditHistoryData, AuditIdentity, Audit
 
 interface AuditHistoryProps {
   history: AuditHistoryData;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 const labels: Record<string, string> = {
@@ -136,7 +139,11 @@ function AuditEventEntry({
 }
 
 /** Render immutable user history newest-first with expandable audit evidence. */
-export default function AuditHistory({ history }: AuditHistoryProps) {
+export default function AuditHistory({
+  history,
+  loadingMore = false,
+  onLoadMore,
+}: AuditHistoryProps) {
   const identityMap = new Map(history.identities.map((value) => [value.uid, value]));
   return (
     <Stack component="section" spacing={2} aria-labelledby="audit-history-heading">
@@ -159,6 +166,11 @@ export default function AuditHistory({ history }: AuditHistoryProps) {
             />
           );
         })
+      )}
+      {history.nextBeforeSequence !== undefined && onLoadMore !== undefined && (
+        <Button disabled={loadingMore} onClick={onLoadMore}>
+          {loadingMore ? "Loading older history…" : "Load older history"}
+        </Button>
       )}
     </Stack>
   );
