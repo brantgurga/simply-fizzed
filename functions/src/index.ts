@@ -41,10 +41,25 @@ const revealUserEmailServiceAccount = defineString("REVEAL_USER_EMAIL_SERVICE_AC
   description: "Least-privilege runtime identity for revealUserEmail.",
   input: { text: { nonEmpty: true } },
 });
+const saveMyProfileServiceAccount = defineString("SAVE_MY_PROFILE_SERVICE_ACCOUNT", {
+  description: "Least-privilege runtime identity for saveMyProfile.",
+  input: { text: { nonEmpty: true } },
+});
 const applyUserManagementServiceAccount = defineString("APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT", {
   description: "Least-privilege runtime identity for applyUserManagement.",
   input: { text: { nonEmpty: true } },
 });
+const getUserAuditHistoryServiceAccount = defineString("GET_USER_AUDIT_HISTORY_SERVICE_ACCOUNT", {
+  description: "Least-privilege runtime identity for getUserAuditHistory.",
+  input: { text: { nonEmpty: true } },
+});
+const recordAccountCreationServiceAccount = defineString(
+  "RECORD_ACCOUNT_CREATION_SERVICE_ACCOUNT",
+  {
+    description: "Least-privilege runtime identity for recordAccountCreation.",
+    input: { text: { nonEmpty: true } },
+  },
+);
 const app = initializeApp();
 const firestore = getFirestore(app);
 const auditStore = new FirestoreUserAuditStore(firestore);
@@ -115,7 +130,7 @@ export const revealUserEmail = onCall<{ targetUid: string }>(
 
 /** Persist a self-service public-profile change with one immutable audit event. */
 export const saveMyProfile = onCall<{ publicName: string }>(
-  { ...callableOptions, serviceAccount: applyUserManagementServiceAccount },
+  { ...callableOptions, serviceAccount: saveMyProfileServiceAccount },
   async (request) =>
     await translateErrors(
       async () => await service.saveMyProfile(request.auth?.uid, request.data?.publicName),
@@ -133,7 +148,7 @@ export const applyUserManagement = onCall<ApplyUserManagementInput>(
 
 /** Return one user's immutable audit history after current-authority checks. */
 export const getUserAuditHistory = onCall<{ targetUid: string }>(
-  { ...callableOptions, serviceAccount: applyUserManagementServiceAccount },
+  { ...callableOptions, serviceAccount: getUserAuditHistoryServiceAccount },
   async (request) =>
     await translateErrors(
       async () => await service.getAuditHistory(request.auth?.uid, request.data?.targetUid),
@@ -142,7 +157,7 @@ export const getUserAuditHistory = onCall<{ targetUid: string }>(
 
 /** Record post-rollout account creation with an explicit non-human system actor. */
 export const recordAccountCreation = onUserCreated(
-  { region: REGION, serviceAccount: applyUserManagementServiceAccount },
+  { region: REGION, serviceAccount: recordAccountCreationServiceAccount },
   async (event) => {
     const user = event.data;
     const expectedVersion = await auditStore.getVersion(user.uid);
