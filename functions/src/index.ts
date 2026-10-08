@@ -8,6 +8,9 @@ import { getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { defineBoolean, defineString } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { onUserCreated } from "firebase-functions/v2/identity";
+import { auditableSnapshot } from "./audit.js";
+import { FirestoreUserAuditStore } from "./firestore-audit-store.js";
 import { FirestoreManagementStore } from "./firestore-store.js";
 import {
   ServiceError,
@@ -42,11 +45,12 @@ const applyUserManagementServiceAccount = defineString("APPLY_USER_MANAGEMENT_SE
   description: "Least-privilege runtime identity for applyUserManagement.",
   input: { text: { nonEmpty: true } },
 });
-
 const app = initializeApp();
+const firestore = getFirestore(app);
+const auditStore = new FirestoreUserAuditStore(firestore);
 const service = new UserManagementService(
   getAuth(app),
-  new FirestoreManagementStore(getFirestore(app)),
+  new FirestoreManagementStore(firestore),
   () => {
     try {
       return operatorUids.value();
@@ -54,6 +58,9 @@ const service = new UserManagementService(
       return undefined;
     }
   },
+  undefined,
+  undefined,
+  auditStore,
 );
 const callableOptions = {
   region: REGION,
@@ -106,11 +113,56 @@ export const revealUserEmail = onCall<{ targetUid: string }>(
     ),
 );
 
-/** Apply staged restriction and/or Moderator changes using current server authority. */
+/** Persist a self-service public-profile change with one immutable audit event. */
+export const saveMyProfile = onCall<{ publicName: string }>(
+  { ...callableOptions, serviceAccount: applyUserManagementServiceAccount },
+  async (request) =>
+    await translateErrors(
+      async () => await service.saveMyProfile(request.auth?.uid, request.data?.publicName),
+    ),
+);
+
+/** Apply one versioned user-management operation using current server authority. */
 export const applyUserManagement = onCall<ApplyUserManagementInput>(
   { ...callableOptions, serviceAccount: applyUserManagementServiceAccount },
   async (request) =>
     await translateErrors(
       async () => await service.applyUserManagement(request.auth?.uid, request.data),
     ),
+);
+
+/** Return one user's immutable audit history after current-authority checks. */
+export const getUserAuditHistory = onCall<{ targetUid: string }>(
+  { ...callableOptions, serviceAccount: applyUserManagementServiceAccount },
+  async (request) =>
+    await translateErrors(
+      async () => await service.getAuditHistory(request.auth?.uid, request.data?.targetUid),
+    ),
+);
+
+/** Record post-rollout account creation with an explicit non-human system actor. */
+export const recordAccountCreation = onUserCreated(
+  { region: REGION, serviceAccount: applyUserManagementServiceAccount },
+  async (event) => {
+    const user = event.data;
+    const expectedVersion = await auditStore.getVersion(user.uid);
+    if (expectedVersion !== 0) return;
+    const operation = { id: event.id, subjectUid: user.uid, expectedVersion };
+    await auditStore.beginOperation(operation);
+    const profile = await auditStore.readProfile(user.uid);
+    const after = auditableSnapshot(user, profile, undefined, {});
+    await auditStore.completeOperation(
+      operation,
+      {
+        id: event.id,
+        actor: { kind: "system", id: "firebase-auth" },
+        subjectUid: user.uid,
+        type: "account.created",
+        before: null,
+        after,
+        changedFields: ["auth", ...(profile === null ? [] : ["profile"])],
+      },
+      new Date(),
+    );
+  },
 );

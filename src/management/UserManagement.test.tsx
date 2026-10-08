@@ -24,7 +24,10 @@ const managedFan: ManagedUser = {
   uid: "fan-uid",
   displayName: "Fiona Fan",
   obfuscatedEmail: "fa…@example.com",
+  disabled: false,
   moderator: false,
+  auditVersion: 0,
+  canManage: true,
   restriction: null,
 };
 
@@ -129,12 +132,47 @@ describe("UserManagement", () => {
     await interaction.click(screen.getByRole("button", { name: "Search" }));
     await interaction.click(await screen.findByText("Fiona Fan"));
     await interaction.click(screen.getByRole("switch", { name: "Moderator" }));
+    expect(screen.getByRole("switch", { name: "Moderator" })).toBeChecked();
     expect(saver).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    await interaction.type(screen.getByLabelText(/Action reason/), "Trusted contributor");
     expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
 
     await interaction.click(screen.getByRole("button", { name: "Save changes" }));
-    expect(saver).toHaveBeenCalledWith({ targetUid: "fan-uid", moderator: true });
+    expect(saver).toHaveBeenCalledWith({
+      targetUid: "fan-uid",
+      expectedVersion: 0,
+      reason: "Trusted contributor",
+      moderator: true,
+    });
     expect(await screen.findByText("User changes were applied.")).toBeVisible();
+  });
+
+  it("shows history without management controls for an inspect-only user", async () => {
+    const interaction = userEvent.setup();
+    const operatorUser: ManagedUser = {
+      ...managedFan,
+      uid: "operator-uid",
+      displayName: "Opal Operator",
+      canManage: false,
+    };
+    render(
+      <UserManagement
+        authorization={{ ...authorization, operator: false, moderator: true }}
+        searcher={vi.fn().mockResolvedValue([operatorUser])}
+        revealer={vi.fn()}
+        historyLoader={vi.fn().mockResolvedValue({ events: [], identities: [], version: 1 })}
+        saver={vi.fn()}
+      />,
+    );
+
+    await interaction.type(screen.getByLabelText("User search"), "Opal");
+    await interaction.click(screen.getByRole("button", { name: "Search" }));
+    await interaction.click(await screen.findByText("Opal Operator"));
+
+    expect(await screen.findByText("User change history")).toBeVisible();
+    expect(screen.queryByText("Restrict community contributions")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reveal full email" })).not.toBeInTheDocument();
   });
 
   it("reloads confirmed state after a failed save and disables operations offline", async () => {
@@ -157,6 +195,7 @@ describe("UserManagement", () => {
     await interaction.click(screen.getByRole("button", { name: "Search" }));
     await interaction.click(await screen.findByText("Fiona Fan"));
     await interaction.click(screen.getByRole("switch", { name: "Moderator" }));
+    await interaction.type(screen.getByLabelText(/Action reason/), "Role correction");
     await interaction.click(screen.getByRole("button", { name: "Save changes" }));
 
     expect(await screen.findByText(/latest server state was reloaded/i)).toBeVisible();

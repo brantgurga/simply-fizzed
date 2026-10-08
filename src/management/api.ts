@@ -29,8 +29,46 @@ export interface ManagedUser {
   uid: string;
   displayName: string | null;
   obfuscatedEmail: string | null;
+  disabled: boolean;
   moderator: boolean;
+  auditVersion: number;
+  canManage: boolean;
   restriction: RestrictionView | null;
+}
+
+export type AuditJson =
+  | null
+  | boolean
+  | number
+  | string
+  | AuditJson[]
+  | { [key: string]: AuditJson };
+export type AuditActor = { kind: "user"; uid: string } | { kind: "system"; id: "firebase-auth" };
+
+export interface AuditEvent {
+  id: string;
+  actor: AuditActor;
+  subjectUid: string;
+  type: string;
+  sequence: number;
+  occurredAt: string;
+  before: AuditJson;
+  after: AuditJson;
+  reason?: string;
+  changedFields?: string[];
+}
+
+export interface AuditIdentity {
+  uid: string;
+  displayName: string | null;
+  email: string | null;
+  unavailable: boolean;
+}
+
+export interface AuditHistory {
+  events: AuditEvent[];
+  identities: AuditIdentity[];
+  version: number;
 }
 
 export type SearchMode = "uid" | "email" | "displayName";
@@ -43,6 +81,9 @@ export interface RestrictionDraft {
 
 export interface ManagementChanges {
   targetUid: string;
+  expectedVersion: number;
+  reason: string;
+  disabled?: boolean;
   moderator?: boolean;
   restriction?: RestrictionDraft | null;
 }
@@ -88,6 +129,16 @@ export async function revealManagedUserEmail(targetUid: string): Promise<string 
     "revealUserEmail",
   );
   return (await callable({ targetUid })).data.email;
+}
+
+/** Load immutable history using current server-evaluated authority. */
+export async function loadUserAuditHistory(targetUid: string): Promise<AuditHistory> {
+  requireOnline();
+  const callable = httpsCallable<{ targetUid: string }, AuditHistory>(
+    functions,
+    "getUserAuditHistory",
+  );
+  return (await callable({ targetUid })).data;
 }
 
 /** Commit staged management changes and return only confirmed server state. */

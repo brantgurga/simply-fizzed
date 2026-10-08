@@ -212,12 +212,7 @@ service cloud.firestore {
 
     match /profiles/{userId} {
       allow get: if true;
-      allow list: if false;
-      allow create, update: if canWriteOwnData(userId)
-        && request.resource.data.keys().hasOnly(["publicName", "updatedAt"])
-        && isValidAttributionName(request.resource.data.publicName)
-        && request.resource.data.updatedAt == request.time;
-      allow delete: if false;
+      allow list, create, update, delete: if false;
 
       match /ratings/{ratingId} {
         allow read: if true;
@@ -246,6 +241,19 @@ service cloud.firestore {
     }
 
     match /userModeration/{userId} {
+      allow read, write: if false;
+    }
+
+    // Audit events and recovery state are available only through trusted functions.
+    match /userAudit/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /userAuditState/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /userAuditOperations/{document=**} {
       allow read, write: if false;
     }
 

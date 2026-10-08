@@ -4,6 +4,7 @@
 
 import { expect } from "expect";
 import * as sinon from "sinon";
+import type { AuditEvent, UserAuditStore } from "./audit.js";
 import {
   changeModeratorClaim,
   claimsWithModerator,
@@ -41,6 +42,7 @@ function gateways(events: string[], currentUser: AuthUser = fan) {
     getUserByEmail: sinon.stub(),
     listUsers: sinon.stub(),
     setCustomUserClaims,
+    updateUser: sinon.stub(),
   };
   const store: ManagementStore = {
     getRestriction: sinon.stub(),
@@ -146,6 +148,7 @@ describe("combined transition ordering", () => {
       getUserByEmail: sinon.stub(),
       listUsers: sinon.stub(),
       setCustomUserClaims,
+      updateUser: sinon.stub(),
     };
     const saveRestriction = sinon.stub().rejects(new Error("Firestore unavailable"));
     const store: ManagementStore = {
@@ -187,6 +190,7 @@ describe("combined transition ordering", () => {
       getUserByEmail: sinon.stub(),
       listUsers: sinon.stub(),
       setCustomUserClaims: sinon.stub().rejects(new Error("claim failed")),
+      updateUser: sinon.stub(),
     };
     const removeRestriction = sinon.stub();
     const store: ManagementStore = {
@@ -213,6 +217,170 @@ describe("combined transition ordering", () => {
       }),
     ).rejects.toThrow("claim failed");
     sinon.assert.notCalled(removeRestriction);
+  });
+});
+
+function auditGateway() {
+  return {
+    getVersion: sinon.stub().resolves(0),
+    beginOperation: sinon.stub().resolves(),
+    completeOperation: sinon.stub().resolves(),
+    completeProfileOperation: sinon.stub().resolves(),
+    cancelOperation: sinon.stub().resolves(),
+    listEvents: sinon.stub().resolves([]),
+    readProfile: sinon.stub().resolves({ publicName: "Fiona" }),
+  } satisfies UserAuditStore;
+}
+
+describe("audited management", () => {
+  it("creates one event for one restriction Save with complete reasons", async () => {
+    const planned: RestrictionRecord = {
+      ...restriction(),
+      publicReason: "Pause contributions",
+      originallyRestrictedBy: "operator-uid",
+      originallyRestrictedAt: NOW,
+      restrictionLastUpdatedBy: "operator-uid",
+      restrictionLastUpdatedAt: NOW,
+    };
+    const auth: AuthGateway = {
+      getUser: sinon
+        .stub()
+        .callsFake(async (uid: string) =>
+          uid === "operator-uid" ? { uid, disabled: false } : fan,
+        ),
+      getUserByEmail: sinon.stub(),
+      listUsers: sinon.stub(),
+      setCustomUserClaims: sinon.stub(),
+      updateUser: sinon.stub(),
+    };
+    const getRestriction = sinon.stub();
+    getRestriction.onFirstCall().resolves(undefined); // actor
+    getRestriction.onSecondCall().resolves(undefined); // target before
+    getRestriction.onThirdCall().resolves(planned); // target after
+    getRestriction.onCall(3).resolves(planned); // confirmed view
+    const store: ManagementStore = {
+      getRestriction,
+      getPrivateUserData: sinon.stub().resolves({ internalReason: "Repeated abuse" }),
+      saveRestriction: sinon.stub().resolves(),
+      removeRestriction: sinon.stub(),
+      writeModeratorGrant: sinon.stub(),
+      clearModeratorGrant: sinon.stub(),
+    };
+    const audit = auditGateway();
+    const service = new UserManagementService(
+      auth,
+      store,
+      () => '["operator-uid"]',
+      () => NOW,
+      () => "operation-one",
+      audit,
+    );
+
+    await service.applyUserManagement("operator-uid", {
+      targetUid: fan.uid,
+      expectedVersion: 0,
+      reason: "One deliberate restriction action",
+      restriction: {
+        publicReason: "Pause contributions",
+        internalReason: "Repeated abuse",
+      },
+    });
+
+    sinon.assert.calledOnce(audit.beginOperation);
+    sinon.assert.calledOnce(audit.completeOperation);
+    sinon.assert.calledWithMatch(
+      audit.completeOperation,
+      sinon.match.any,
+      sinon.match({
+        id: "operation-one",
+        actor: { kind: "user", uid: "operator-uid" },
+        subjectUid: fan.uid,
+        type: "user.restricted",
+        reason: "One deliberate restriction action",
+        changedFields: ["restriction"],
+      }),
+      NOW,
+    );
+  });
+
+  it("requires effective changes, an action reason, and a current version", async () => {
+    const { auth, store } = gateways([], fan);
+    auth.getUser = sinon
+      .stub()
+      .callsFake(async (uid: string) => (uid === "operator-uid" ? { uid, disabled: false } : fan));
+    store.getRestriction = sinon.stub().resolves(undefined);
+    store.getPrivateUserData = sinon.stub().resolves({});
+    const audit = auditGateway();
+    const service = new UserManagementService(
+      auth,
+      store,
+      () => '["operator-uid"]',
+      () => NOW,
+      () => "operation-one",
+      audit,
+    );
+
+    await expect(
+      service.applyUserManagement("operator-uid", {
+        targetUid: fan.uid,
+        expectedVersion: 0,
+        reason: "",
+        disabled: true,
+      }),
+    ).rejects.toMatchObject({ code: "invalid-argument" });
+    await expect(
+      service.applyUserManagement("operator-uid", {
+        targetUid: fan.uid,
+        expectedVersion: 0,
+        reason: "No-op",
+        moderator: false,
+      }),
+    ).rejects.toMatchObject({ code: "invalid-argument" });
+    sinon.assert.notCalled(audit.completeOperation);
+  });
+
+  it("enforces self-history visibility while retaining unresolved UIDs", async () => {
+    const { auth, store } = gateways([]);
+    auth.getUser = sinon.stub().callsFake(async (uid: string) => {
+      if (uid === "deleted-uid") {
+        throw Object.assign(new Error("gone"), { code: "auth/user-not-found" });
+      }
+      return uid === "moderator-uid"
+        ? { uid, disabled: false, customClaims: { moderator: true } }
+        : { uid, disabled: false };
+    });
+    const audit = auditGateway();
+    audit.listEvents.resolves([
+      {
+        id: "event-one",
+        actor: { kind: "user", uid: "deleted-uid" },
+        subjectUid: "fan-uid",
+        type: "profile.updated",
+        sequence: 1,
+        occurredAt: NOW.toISOString(),
+        before: null,
+        after: null,
+      },
+    ] satisfies AuditEvent[]);
+    const service = new UserManagementService(
+      auth,
+      store,
+      () => '["operator-uid"]',
+      () => NOW,
+      undefined,
+      audit,
+    );
+
+    await expect(service.getAuditHistory("moderator-uid", "moderator-uid")).rejects.toMatchObject({
+      code: "permission-denied",
+    });
+    const visible = await service.getAuditHistory("operator-uid", "fan-uid");
+    expect(visible.identities).toContainEqual({
+      uid: "deleted-uid",
+      displayName: null,
+      email: null,
+      unavailable: true,
+    });
   });
 });
 

@@ -21,16 +21,20 @@ import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import type { ClientAuthorization } from "../authorization";
+import AuditHistory from "./AuditHistory";
 import {
   applyManagementChanges,
+  loadUserAuditHistory,
   revealManagedUserEmail,
   searchManagedUsers,
+  type AuditHistory as AuditHistoryData,
   type ManagedUser,
   type ManagementChanges,
   type SearchMode,
 } from "./api";
 
 interface Draft {
+  disabled: boolean;
   moderator: boolean;
   restricted: boolean;
   publicReason: string;
@@ -42,6 +46,7 @@ interface UserManagementProps {
   authorization: ClientAuthorization;
   searcher?: typeof searchManagedUsers;
   revealer?: typeof revealManagedUserEmail;
+  historyLoader?: typeof loadUserAuditHistory;
   saver?: typeof applyManagementChanges;
 }
 
@@ -72,6 +77,7 @@ function localDateTime(iso: string | null): string {
 /** Create an editable draft from confirmed server state. */
 function draftFor(user: ManagedUser): Draft {
   return {
+    disabled: user.disabled,
     moderator: user.moderator,
     restricted: user.restriction !== null,
     publicReason: user.restriction?.publicReason ?? "",
@@ -90,6 +96,7 @@ export default function UserManagement({
   authorization,
   searcher = searchManagedUsers,
   revealer = revealManagedUserEmail,
+  historyLoader = loadUserAuditHistory,
   saver = applyManagementChanges,
 }: UserManagementProps) {
   const online = useOnline();
@@ -102,8 +109,12 @@ export default function UserManagement({
   const [revealedEmail, setRevealedEmail] = useState<string | null>();
   const [revealing, setRevealing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [actionReason, setActionReason] = useState("");
+  const [history, setHistory] = useState<AuditHistoryData>();
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [message, setMessage] = useState<{ severity: "error" | "success"; text: string }>();
   const revealRequest = useRef(0);
+  const auditRequest = useRef(0);
 
   const confirmedDraft = useMemo(
     () => (selected === undefined ? undefined : draftFor(selected)),
@@ -113,14 +124,31 @@ export default function UserManagement({
     draft !== undefined && confirmedDraft !== undefined && !sameDraft(draft, confirmedDraft);
   const validRestriction = draft?.restricted !== true || draft.publicReason.trim().length > 0;
 
+  /** Load history for the selected user while discarding stale responses. */
+  async function loadHistory(targetUid: string): Promise<void> {
+    const request = ++auditRequest.current;
+    setHistoryLoading(true);
+    try {
+      const loaded = await historyLoader(targetUid);
+      if (auditRequest.current === request) setHistory(loaded);
+    } catch {
+      if (auditRequest.current === request) setHistory(undefined);
+    } finally {
+      if (auditRequest.current === request) setHistoryLoading(false);
+    }
+  }
+
   /** Select a result and reset transient, user-specific state. */
   function choose(user: ManagedUser): void {
     revealRequest.current += 1;
     setSelected(user);
     setDraft(draftFor(user));
+    setActionReason("");
+    setHistory(undefined);
     setRevealedEmail(undefined);
     setRevealing(false);
     setMessage(undefined);
+    void loadHistory(user.uid);
   }
 
   /** Run an explicit bounded user search and replace the current results. */
@@ -128,12 +156,15 @@ export default function UserManagement({
     event.preventDefault();
     if (!online || query.trim().length === 0) return;
     revealRequest.current += 1;
+    auditRequest.current += 1;
     setSearching(true);
     setMessage(undefined);
     setSelected(undefined);
     setDraft(undefined);
     setRevealedEmail(undefined);
     setRevealing(false);
+    setHistory(undefined);
+    setHistoryLoading(false);
     try {
       setResults(await searcher(mode, query.trim()));
     } catch {
@@ -172,7 +203,14 @@ export default function UserManagement({
     if (!online || selected === undefined || draft === undefined || confirmedDraft === undefined) {
       return;
     }
-    const changes: ManagementChanges = { targetUid: selected.uid };
+    const changes: ManagementChanges = {
+      targetUid: selected.uid,
+      expectedVersion: selected.auditVersion,
+      reason: actionReason.trim(),
+    };
+    if (authorization.operator && draft.disabled !== confirmedDraft.disabled) {
+      changes.disabled = draft.disabled;
+    }
     if (authorization.operator && draft.moderator !== confirmedDraft.moderator) {
       changes.moderator = draft.moderator;
     }
@@ -201,6 +239,8 @@ export default function UserManagement({
       const confirmed = await saver(changes);
       setSelected(confirmed);
       setDraft(draftFor(confirmed));
+      setActionReason("");
+      void loadHistory(confirmed.uid);
       setResults((current) =>
         current.map((candidate) => (candidate.uid === confirmed.uid ? confirmed : candidate)),
       );
@@ -212,6 +252,8 @@ export default function UserManagement({
         if (reloaded !== undefined) {
           setSelected(reloaded);
           setDraft(draftFor(reloaded));
+          setActionReason("");
+          void loadHistory(reloaded.uid);
         } else {
           setSelected(undefined);
           setDraft(undefined);
@@ -319,87 +361,130 @@ export default function UserManagement({
             <Typography>
               Email: {revealedEmail ?? selected.obfuscatedEmail ?? "Unavailable"}
             </Typography>
-            {revealedEmail === undefined && (
+            {selected.canManage && revealedEmail === undefined && (
               <Button size="small" disabled={!online || revealing} onClick={() => void reveal()}>
                 {revealing ? "Revealing…" : "Reveal full email"}
               </Button>
             )}
           </Stack>
 
-          {authorization.operator && (
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={draft.moderator}
-                  disabled={saving}
-                  onChange={(_event, checked) => setDraft({ ...draft, moderator: checked })}
-                />
-              }
-              label="Moderator"
-            />
-          )}
-          {selected.restriction !== null && (
-            <Typography variant="body2" color="text.secondary">
-              Originally restricted by {selected.restriction.originallyRestrictedBy} at{" "}
-              {new Date(selected.restriction.originallyRestrictedAt).toLocaleString()}; last updated
-              by {selected.restriction.restrictionLastUpdatedBy} at{" "}
-              {new Date(selected.restriction.restrictionLastUpdatedAt).toLocaleString()}.
-            </Typography>
-          )}
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={draft.restricted}
-                disabled={saving}
-                onChange={(_event, checked) => setDraft({ ...draft, restricted: checked })}
+          {selected.canManage && (
+            <>
+              {authorization.operator && (
+                <>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={draft.disabled}
+                        disabled={saving}
+                        onChange={(_event, checked) => setDraft({ ...draft, disabled: checked })}
+                      />
+                    }
+                    label="Account disabled"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={draft.moderator}
+                        disabled={saving}
+                        onChange={(_event, checked) => setDraft({ ...draft, moderator: checked })}
+                      />
+                    }
+                    label="Moderator"
+                  />
+                </>
+              )}
+              {selected.restriction !== null && (
+                <Typography variant="body2" color="text.secondary">
+                  Originally restricted by {selected.restriction.originallyRestrictedBy} at{" "}
+                  {new Date(selected.restriction.originallyRestrictedAt).toLocaleString()}; last
+                  updated by {selected.restriction.restrictionLastUpdatedBy} at{" "}
+                  {new Date(selected.restriction.restrictionLastUpdatedAt).toLocaleString()}.
+                </Typography>
+              )}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={draft.restricted}
+                    disabled={saving}
+                    onChange={(_event, checked) => setDraft({ ...draft, restricted: checked })}
+                  />
+                }
+                label="Restrict community contributions"
               />
-            }
-            label="Restrict community contributions"
-          />
-          {draft.restricted && (
-            <Stack spacing={2}>
+              {draft.restricted && (
+                <Stack spacing={2}>
+                  <TextField
+                    label="User-visible reason"
+                    value={draft.publicReason}
+                    required
+                    disabled={saving}
+                    slotProps={{ htmlInput: { maxLength: 500 } }}
+                    onChange={(event) => setDraft({ ...draft, publicReason: event.target.value })}
+                  />
+                  <TextField
+                    label="Internal reason"
+                    value={draft.internalReason}
+                    multiline
+                    disabled={saving}
+                    slotProps={{ htmlInput: { maxLength: 2000 } }}
+                    onChange={(event) => setDraft({ ...draft, internalReason: event.target.value })}
+                  />
+                  <TextField
+                    label="Expires at"
+                    type="datetime-local"
+                    value={draft.expiresAt}
+                    disabled={saving}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                    onChange={(event) => setDraft({ ...draft, expiresAt: event.target.value })}
+                  />
+                </Stack>
+              )}
+
               <TextField
-                label="User-visible reason"
-                value={draft.publicReason}
+                label="Action reason"
+                value={actionReason}
                 required
-                disabled={saving}
-                slotProps={{ htmlInput: { maxLength: 500 } }}
-                onChange={(event) => setDraft({ ...draft, publicReason: event.target.value })}
-              />
-              <TextField
-                label="Internal reason"
-                value={draft.internalReason}
                 multiline
-                disabled={saving}
+                disabled={saving || !dirty}
                 slotProps={{ htmlInput: { maxLength: 2000 } }}
-                onChange={(event) => setDraft({ ...draft, internalReason: event.target.value })}
+                onChange={(event) => setActionReason(event.target.value)}
               />
-              <TextField
-                label="Expires at"
-                type="datetime-local"
-                value={draft.expiresAt}
-                disabled={saving}
-                slotProps={{ inputLabel: { shrink: true } }}
-                onChange={(event) => setDraft({ ...draft, expiresAt: event.target.value })}
-              />
-            </Stack>
+
+              <Stack direction="row" spacing={1}>
+                <Button
+                  variant="contained"
+                  disabled={
+                    !online ||
+                    saving ||
+                    !dirty ||
+                    !validRestriction ||
+                    actionReason.trim().length === 0
+                  }
+                  onClick={() => void save()}
+                >
+                  {saving ? "Saving…" : "Save changes"}
+                </Button>
+                <Button
+                  disabled={saving || !dirty}
+                  onClick={() => {
+                    if (confirmedDraft !== undefined) setDraft(confirmedDraft);
+                    setActionReason("");
+                  }}
+                >
+                  Reset
+                </Button>
+              </Stack>
+            </>
           )}
 
-          <Stack direction="row" spacing={1}>
-            <Button
-              variant="contained"
-              disabled={!online || saving || !dirty || !validRestriction}
-              onClick={() => void save()}
-            >
-              {saving ? "Saving…" : "Save changes"}
-            </Button>
-            <Button
-              disabled={saving || !dirty}
-              onClick={() => confirmedDraft !== undefined && setDraft(confirmedDraft)}
-            >
-              Reset
-            </Button>
-          </Stack>
+          {historyLoading ? (
+            <CircularProgress size={24} aria-label="Loading user change history" />
+          ) : history === undefined ? (
+            <Alert severity="info">User change history is unavailable.</Alert>
+          ) : (
+            <AuditHistory history={history} />
+          )}
         </Stack>
       )}
     </Stack>

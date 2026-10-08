@@ -635,13 +635,15 @@ describe("public profiles and rating inventories", () => {
     await assertFails(getDocs(collection(database, "profiles")));
   });
 
-  it("allows owners to maintain their profile", async () => {
+  it("requires trusted functions for profile and audit writes", async () => {
     const database = testEnvironment.authenticatedContext(USER_ID).firestore();
 
-    await assertSucceeds(setDoc(doc(database, "profiles", USER_ID), validProfile()));
-    await assertSucceeds(
+    await assertFails(setDoc(doc(database, "profiles", USER_ID), validProfile()));
+    await assertFails(
       updateDoc(doc(database, "profiles", USER_ID), validProfile({ publicName: "Updated Fan" })),
     );
+    await assertFails(getDocs(collection(database, "userAudit", USER_ID, "events")));
+    await assertFails(setDoc(doc(database, "userAudit", USER_ID, "events", "forged"), {}));
   });
 
   it("allows unrated and rated record creation", async () => {
@@ -744,12 +746,15 @@ describe("restrictions and authorization-document privacy", () => {
     await assertFails(batch.commit());
   });
 
-  it("keeps personal profile and rating writes available while restricted", async () => {
+  it("keeps ratings available while requiring trusted profile writes when restricted", async () => {
     await seedAvailabilityReferences();
     await seedRestriction(USER_ID);
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "profiles", USER_ID), validProfile());
+    });
     const database = testEnvironment.authenticatedContext(USER_ID).firestore();
 
-    await assertSucceeds(setDoc(doc(database, "profiles", USER_ID), validProfile()));
+    await assertFails(setDoc(doc(database, "profiles", USER_ID), validProfile()));
     await assertSucceeds(
       setDoc(doc(database, "profiles", USER_ID, "ratings", "existing-soda"), validRating()),
     );

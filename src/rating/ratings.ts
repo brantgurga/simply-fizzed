@@ -8,7 +8,6 @@ import {
   getDoc,
   getDocs,
   serverTimestamp,
-  setDoc,
   writeBatch,
   type Firestore,
 } from "firebase/firestore";
@@ -20,6 +19,8 @@ import {
   type ProfileDocument,
   type RatingDocument,
 } from "../model/firestore";
+import { httpsCallable } from "firebase/functions";
+import { functions } from "../firebase";
 import type { SodaDocument } from "../soda/sodas";
 
 export interface RatingRecord extends RatingDocument {
@@ -47,17 +48,17 @@ function parseRating(id: string, value: unknown): RatingRecord | undefined {
   return parsed.success ? { id, ...parsed.data } : undefined;
 }
 
-/** Ensure every authenticated account has a current public profile. */
+/** Ensure every authenticated account has a current, server-audited public profile. */
 export async function savePublicProfile(
-  db: Firestore,
-  userId: string,
+  _db: Firestore,
+  _userId: string,
   publicName: string,
 ): Promise<void> {
-  const reference = doc(db, COLLECTIONS.profiles, userId);
-  const snapshot = await getDoc(reference);
-  const existing = snapshot.exists() ? profileDocumentSchema.safeParse(snapshot.data()) : undefined;
-  if (existing?.success === true && existing.data.publicName === publicName) return;
-  await setDoc(reference, { publicName, updatedAt: serverTimestamp() }, { merge: true });
+  const callable = httpsCallable<{ publicName: string }, { version: number }>(
+    functions,
+    "saveMyProfile",
+  );
+  await callable({ publicName });
 }
 
 /** Load the signed-in user's rating record for one soda offering. */
@@ -87,10 +88,9 @@ export async function saveRating(
   value: RatingValue,
   create: boolean,
 ): Promise<void> {
-  const profileReference = doc(db, COLLECTIONS.profiles, userId);
   const ratingReference = doc(db, COLLECTIONS.profiles, userId, COLLECTIONS.ratings, soda.id);
   const batch = writeBatch(db);
-  batch.set(profileReference, { publicName, updatedAt: serverTimestamp() }, { merge: true });
+  void publicName;
 
   if (value === undefined) {
     batch.delete(ratingReference);
