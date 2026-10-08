@@ -33,33 +33,9 @@ const labels: Record<string, string> = {
   "user.management-updated": "User management updated",
 };
 
-/** Safely tokenize JSON text; React escapes every token before rendering it. */
-function highlightedJson(value: AuditJson): ReactNode[] {
-  const json = JSON.stringify(value, null, 2) ?? "null";
-  const token =
-    /("(?:\\.|[^"\\])*"(?=\s*:)|"(?:\\.|[^"\\])*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|\b(?:true|false|null)\b)/g;
-  const output: ReactNode[] = [];
-  let cursor = 0;
-  for (const match of json.matchAll(token)) {
-    const index = match.index;
-    if (index > cursor) output.push(json.slice(cursor, index));
-    const text = match[0];
-    const color = text.startsWith('"')
-      ? json.slice(index + text.length).match(/^\s*:/) === null
-        ? "success.main"
-        : "primary.main"
-      : text === "true" || text === "false" || text === "null"
-        ? "secondary.main"
-        : "warning.dark";
-    output.push(
-      <Typography key={`${index}-${text}`} component="span" sx={{ color, fontFamily: "inherit" }}>
-        {text}
-      </Typography>,
-    );
-    cursor = index + text.length;
-  }
-  if (cursor < json.length) output.push(json.slice(cursor));
-  return output;
+/** Format immutable snapshots as plain text; React escapes the result. */
+function prettyJson(value: AuditJson): string {
+  return JSON.stringify(value, null, 2) ?? "null";
 }
 
 function identity(identityMap: Map<string, AuditIdentity>, uid: string): ReactNode {
@@ -126,11 +102,11 @@ function AuditEventEntry({
         <Details>
           <Typography variant="subtitle2">Before</Typography>
           <Typography component="pre" sx={{ overflowX: "auto", fontFamily: "monospace" }}>
-            {highlightedJson(event.before)}
+            {prettyJson(event.before)}
           </Typography>
           <Typography variant="subtitle2">After</Typography>
           <Typography component="pre" sx={{ overflowX: "auto", fontFamily: "monospace" }}>
-            {highlightedJson(event.after)}
+            {prettyJson(event.after)}
           </Typography>
         </Details>
       </Accordion>
