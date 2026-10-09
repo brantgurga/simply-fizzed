@@ -5,6 +5,7 @@
 import { httpsCallable } from "firebase/functions";
 import { functions } from "../firebase";
 
+/** Represents moderator-visible restriction state returned by trusted callables. */
 export interface RestrictionView {
   publicReason: string;
   originallyRestrictedBy: string;
@@ -15,6 +16,7 @@ export interface RestrictionView {
   internalReason?: string;
 }
 
+/** Describes the current user's server-evaluated management authority. */
 export interface AuthorizationView {
   moderator: boolean;
   operator: boolean;
@@ -25,6 +27,7 @@ export interface AuthorizationView {
   restriction: RestrictionView | null;
 }
 
+/** Contains the bounded user state available to an authorized manager. */
 export interface ManagedUser {
   uid: string;
   displayName: string | null;
@@ -36,6 +39,7 @@ export interface ManagedUser {
   restriction: RestrictionView | null;
 }
 
+/** Represents immutable, JSON-compatible evidence returned by the audit API. */
 export type AuditJson =
   | null
   | boolean
@@ -43,8 +47,10 @@ export type AuditJson =
   | string
   | AuditJson[]
   | { [key: string]: AuditJson };
+/** Identifies the user or trusted system that caused an audited change. */
 export type AuditActor = { kind: "user"; uid: string } | { kind: "system"; id: "firebase-auth" };
 
+/** Represents one ordered, immutable user-change audit event. */
 export interface AuditEvent {
   id: string;
   actor: AuditActor;
@@ -58,6 +64,7 @@ export interface AuditEvent {
   changedFields?: string[];
 }
 
+/** Provides a best-effort display identity for an actor referenced by history. */
 export interface AuditIdentity {
   uid: string;
   displayName: string | null;
@@ -65,6 +72,7 @@ export interface AuditIdentity {
   unavailable: boolean;
 }
 
+/** Contains one newest-first audit page with identity and pagination metadata. */
 export interface AuditHistory {
   events: AuditEvent[];
   identities: AuditIdentity[];
@@ -72,14 +80,17 @@ export interface AuditHistory {
   nextBeforeSequence?: number;
 }
 
+/** Selects the privileged user attribute used by a management search. */
 export type SearchMode = "uid" | "email" | "displayName";
 
+/** Describes a staged restriction to apply through the management callable. */
 export interface RestrictionDraft {
   publicReason: string;
   internalReason?: string;
   expiresAt?: string;
 }
 
+/** Describes an optimistic set of staged changes for one managed user. */
 export interface ManagementChanges {
   targetUid: string;
   expectedVersion: number;
