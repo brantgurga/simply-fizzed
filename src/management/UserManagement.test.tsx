@@ -175,6 +175,39 @@ describe("UserManagement", () => {
     expect(screen.queryByRole("button", { name: "Reveal full email" })).not.toBeInTheDocument();
   });
 
+  it("reports a failed older-history page without discarding loaded evidence", async () => {
+    const interaction = userEvent.setup();
+    const historyLoader = vi
+      .fn()
+      .mockResolvedValueOnce({
+        events: [],
+        identities: [],
+        version: 1,
+        nextBeforeSequence: 1,
+      })
+      .mockRejectedValueOnce(new Error("history unavailable"));
+    render(
+      <UserManagement
+        authorization={authorization}
+        searcher={vi.fn().mockResolvedValue([managedFan])}
+        revealer={vi.fn()}
+        historyLoader={historyLoader}
+        saver={vi.fn()}
+      />,
+    );
+
+    await interaction.type(screen.getByLabelText("User search"), "Fiona");
+    await interaction.click(screen.getByRole("button", { name: "Search" }));
+    await interaction.click(await screen.findByText("Fiona Fan"));
+    await interaction.click(await screen.findByRole("button", { name: "Load older history" }));
+
+    expect(
+      await screen.findByText("Older user history failed to load. Confirm connectivity and retry."),
+    ).toBeVisible();
+    expect(screen.getByText("No post-rollout user changes are recorded.")).toBeVisible();
+    expect(historyLoader).toHaveBeenLastCalledWith("fan-uid", 1);
+  });
+
   it("reloads confirmed state after a failed save and disables operations offline", async () => {
     const interaction = userEvent.setup();
     const searcher = vi

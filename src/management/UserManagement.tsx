@@ -145,6 +145,7 @@ export default function UserManagement({
     if (selected === undefined || history?.nextBeforeSequence === undefined) return;
     const request = ++auditRequest.current;
     setHistoryLoadingMore(true);
+    setMessage(undefined);
     try {
       const loaded = await historyLoader(selected.uid, history.nextBeforeSequence);
       if (auditRequest.current !== request) return;
@@ -161,6 +162,13 @@ export default function UserManagement({
             : { nextBeforeSequence: loaded.nextBeforeSequence }),
         };
       });
+    } catch {
+      if (auditRequest.current === request) {
+        setMessage({
+          severity: "error",
+          text: "Older user history failed to load. Confirm connectivity and retry.",
+        });
+      }
     } finally {
       if (auditRequest.current === request) setHistoryLoadingMore(false);
     }
