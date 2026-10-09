@@ -27,6 +27,7 @@ import {
   loadUserAuditHistory,
   revealManagedUserEmail,
   searchManagedUsers,
+  toIsoTimestamp,
   type AuditHistory as AuditHistoryData,
   type ManagedUser,
   type ManagementChanges,
@@ -266,7 +267,7 @@ export default function UserManagement({
               : { internalReason: draft.internalReason.trim() }),
             ...(draft.expiresAt.length === 0
               ? {}
-              : { expiresAt: new Date(draft.expiresAt).toISOString() }),
+              : { expiresAt: toIsoTimestamp(new Date(draft.expiresAt)) }),
           }
         : null;
     }
