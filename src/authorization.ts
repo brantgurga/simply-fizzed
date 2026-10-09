@@ -8,7 +8,9 @@ import { doc, onSnapshot, Timestamp } from "firebase/firestore";
 import { db } from "./firebase";
 import {
   loadMyAuthorization,
+  toIsoTimestamp,
   type AuthorizationView,
+  type IsoTimestamp,
   type RestrictionView,
 } from "./management/api";
 
@@ -31,8 +33,8 @@ export interface AuthorizationState {
 }
 
 /** Convert a Firestore timestamp to ISO text with a fail-safe epoch fallback. */
-function timestampIso(value: unknown): string {
-  return value instanceof Timestamp ? value.toDate().toISOString() : new Date(0).toISOString();
+function timestampIso(value: unknown): IsoTimestamp {
+  return toIsoTimestamp(value instanceof Timestamp ? value.toDate() : new Date(0));
 }
 
 /** Decode a self-readable cached restriction conservatively. */
@@ -53,7 +55,7 @@ function cachedRestriction(data: Record<string, unknown>): RestrictionView {
         ? data["restrictionLastUpdatedBy"]
         : "unknown",
     restrictionLastUpdatedAt: timestampIso(data["restrictionLastUpdatedAt"]),
-    expiresAt: expiresAt instanceof Timestamp ? expiresAt.toDate().toISOString() : null,
+    expiresAt: expiresAt instanceof Timestamp ? toIsoTimestamp(expiresAt.toDate()) : null,
   };
 }
 
@@ -72,7 +74,7 @@ export function conservativeRestrictedAuthorization(
     restricted: true,
     canWriteCommunity: false,
     canManageUsers: operator,
-    evaluatedAt: previous?.evaluatedAt ?? "",
+    evaluatedAt: previous?.evaluatedAt ?? toIsoTimestamp(new Date(0)),
     restriction,
     source: "cachedRestriction",
   };
