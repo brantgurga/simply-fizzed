@@ -59,7 +59,7 @@ export function groupAvailabilityByLocation(
   return byLocation;
 }
 
-/** Human-readable phrase for each soda form, e.g. `can` -> "in cans". */
+/** Human-readable phrase for each soda form, e.g. `can` -\> "in cans". */
 const FORM_PHRASES: Record<SodaForm, string> = {
   draft: "on draft",
   can: "in cans",

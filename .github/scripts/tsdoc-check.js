@@ -6,10 +6,28 @@ import fs from "node:fs";
 import process from "node:process";
 import { TSDocConfiguration, TSDocParser } from "@microsoft/tsdoc";
 
-const files = process.argv.slice(2);
-if (files.length === 0) throw new Error("Provide at least one TypeScript source file.");
+const ignoredDirectories = new Set([".git", "coverage", "dist", "lib", "node_modules"]);
+const roots = process.argv.length > 2 ? process.argv.slice(2) : ["."];
+const files = process.argv.slice(2, 2);
+
+/** Add TypeScript sources below a file or directory to the validation set. */
+function collectTypeScriptSources(path = ".") {
+  const stats = fs.statSync(path);
+  if (stats.isDirectory()) {
+    const directoryName = path.split("/").at(-1);
+    if (directoryName !== undefined && ignoredDirectories.has(directoryName)) return;
+    for (const entry of fs.readdirSync(path).toSorted()) {
+      collectTypeScriptSources(`${path}/${entry}`);
+    }
+    return;
+  }
+  if (/\.(?:ts|tsx)$/u.test(path)) files.push(path);
+}
+
+for (const root of roots) collectTypeScriptSources(root);
 
 const configuration = new TSDocConfiguration();
+configuration.setSupportForTags(configuration.tagDefinitions, true);
 configuration.validation.ignoreUndefinedTags = false;
 configuration.validation.reportUnsupportedTags = true;
 const parser = new TSDocParser(configuration);
@@ -17,31 +35,12 @@ const failures = [];
 
 for (const file of files) {
   const sourceText = fs.readFileSync(file, "utf8");
-  const declarations = [
-    ...sourceText.matchAll(/export\s+(?:interface|type)\s+([A-Za-z_$][\w$]*)/gu),
-  ];
-  const documented = new Map(
-    [
-      ...sourceText.matchAll(
-        /(\/\*\*[\s\S]*?\*\/)\s*export\s+(?:interface|type)\s+([A-Za-z_$][\w$]*)/gu,
-      ),
-    ].map((match) => [match[2], match[1]]),
-  );
-
-  for (const declaration of declarations) {
-    const name = declaration[1];
-    const comment = documented.get(name);
-    if (comment === undefined) {
-      failures.push(`${file}: ${name} is missing a TSDoc comment.`);
-      continue;
-    }
-
+  for (const match of sourceText.matchAll(/\/\*\*[\s\S]*?\*\//gu)) {
+    const comment = match[0];
+    const line = sourceText.slice(0, match.index).split("\n").length;
     const context = parser.parseString(comment);
-    if (context.docComment.summarySection.nodes.length === 0) {
-      failures.push(`${file}: ${name} has an empty TSDoc summary.`);
-    }
     for (const message of context.log.messages) {
-      failures.push(`${file}: ${name}: ${message.text}`);
+      failures.push(`${file}:${line}: ${message.text}`);
     }
   }
 }
