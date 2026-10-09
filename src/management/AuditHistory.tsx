@@ -3,6 +3,7 @@
 // See LICENSE for copying terms.
 
 import Alert from "@mui/material/Alert";
+import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
 import Details from "@mui/material/AccordionDetails";
@@ -11,7 +12,9 @@ import Accordion from "@mui/material/Accordion";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import type { ReactNode } from "react";
+import { allExpanded, JsonView } from "react-json-view-lite";
 import type { AuditEvent, AuditHistory as AuditHistoryData, AuditIdentity, AuditJson } from "./api";
+import styles from "./AuditJsonView.module.css";
 
 interface AuditHistoryProps {
   history: AuditHistoryData;
@@ -33,9 +36,56 @@ const labels: Record<string, string> = {
   "user.management-updated": "User management updated",
 };
 
-/** Format immutable snapshots as plain text; React escapes the result. */
-function prettyJson(value: AuditJson): string {
-  return JSON.stringify(value, null, 2) ?? "null";
+const jsonStyles = {
+  container: styles["container"]!,
+  basicChildStyle: styles["child"]!,
+  childFieldsContainer: styles["childFields"]!,
+  collapseIcon: `${styles["icon"]!} ${styles["collapseIcon"]!}`,
+  expandIcon: `${styles["icon"]!} ${styles["expandIcon"]!}`,
+  collapsedContent: styles["collapsedContent"]!,
+  label: styles["label"]!,
+  clickableLabel: `${styles["label"]!} ${styles["clickableLabel"]!}`,
+  nullValue: styles["value"]!,
+  undefinedValue: styles["value"]!,
+  numberValue: styles["value"]!,
+  stringValue: styles["value"]!,
+  booleanValue: styles["value"]!,
+  otherValue: styles["value"]!,
+  punctuation: styles["punctuation"]!,
+  quotesForFieldNames: true,
+  stringifyStringValues: true,
+  ariaLables: { collapseJson: "Collapse JSON", expandJson: "Expand JSON" },
+};
+
+/** Render immutable snapshots as an accessible, read-only JSON tree. */
+function AuditJsonView({ label, value }: { label: string; value: AuditJson }) {
+  const expandable = typeof value === "object" && value !== null;
+  return (
+    <Box
+      sx={{
+        bgcolor: "action.hover",
+        borderRadius: 1,
+        overflowX: "auto",
+        p: 1.5,
+        [`& .${styles["label"]!}`]: { color: "text.primary", fontWeight: 600 },
+        [`& .${styles["value"]!}`]: { color: "secondary.main" },
+        [`& .${styles["punctuation"]!}`]: { color: "text.secondary" },
+      }}
+    >
+      {expandable ? (
+        <JsonView
+          aria-label={label}
+          data={value}
+          shouldExpandNode={allExpanded}
+          style={jsonStyles}
+        />
+      ) : (
+        <Box component="pre" aria-label={label} sx={{ fontFamily: "monospace", m: 0 }}>
+          {JSON.stringify(value, null, 2) ?? "null"}
+        </Box>
+      )}
+    </Box>
+  );
 }
 
 function identity(identityMap: Map<string, AuditIdentity>, uid: string): ReactNode {
@@ -101,13 +151,9 @@ function AuditEventEntry({
         <Summary>Inspect before and after snapshots</Summary>
         <Details>
           <Typography variant="subtitle2">Before</Typography>
-          <Typography component="pre" sx={{ overflowX: "auto", fontFamily: "monospace" }}>
-            {prettyJson(event.before)}
-          </Typography>
+          <AuditJsonView label="Before audit snapshot" value={event.before} />
           <Typography variant="subtitle2">After</Typography>
-          <Typography component="pre" sx={{ overflowX: "auto", fontFamily: "monospace" }}>
-            {prettyJson(event.after)}
-          </Typography>
+          <AuditJsonView label="After audit snapshot" value={event.after} />
         </Details>
       </Accordion>
     </Stack>

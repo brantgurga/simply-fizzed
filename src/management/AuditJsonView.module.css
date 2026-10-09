@@ -1,0 +1,51 @@
+/* Copyright (C) 2026 Brant Langer Gurganus
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * See LICENSE for copying terms.
+ */
+
+.container {
+  font-family: monospace;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.childFields {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+}
+
+.child,
+.label,
+.value,
+.punctuation {
+  margin: 0;
+}
+
+.label {
+  margin-inline-end: 0.3rem;
+}
+
+.clickableLabel {
+  cursor: pointer;
+}
+
+.icon {
+  cursor: pointer;
+  font-size: 1.1em;
+  margin-inline-end: 0.3rem;
+  user-select: none;
+}
+
+.expandIcon::after {
+  content: "▸";
+}
+
+.collapseIcon::after {
+  content: "▾";
+}
+
+.collapsedContent::after {
+  content: "…";
+  margin-inline-end: 0.3rem;
+}

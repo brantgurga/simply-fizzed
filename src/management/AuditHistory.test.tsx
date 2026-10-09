@@ -78,6 +78,8 @@ describe("AuditHistory", () => {
 
     await interaction.click(screen.getAllByText("Inspect before and after snapshots")[0]!);
     expect(screen.getAllByText("Before")[0]).toBeVisible();
+    expect(screen.getByRole("tree", { name: "Before audit snapshot" })).toBeVisible();
+    expect(screen.getByRole("tree", { name: "After audit snapshot" })).toBeVisible();
     expect(screen.getAllByText(/"displayName"/).length).toBeGreaterThan(0);
   });
 
