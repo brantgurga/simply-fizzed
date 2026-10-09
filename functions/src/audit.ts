@@ -60,11 +60,14 @@ export interface AuditOperation {
   expectedVersion: number;
 }
 
-export interface AuditRecoveryDraft {
-  actor: AuditActor;
-  before: AuditableUserSnapshot;
-  reason: string;
-}
+export type AuditRecoveryDraft =
+  | { kind: "cancel" }
+  | {
+      kind: "reconcile";
+      actor: AuditActor;
+      before: AuditableUserSnapshot;
+      reason: string;
+    };
 
 export interface AuditEventPage {
   events: AuditEvent[];

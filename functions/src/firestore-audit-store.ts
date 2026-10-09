@@ -275,10 +275,20 @@ export class FirestoreUserAuditStore implements UserAuditStore {
     ) {
       throw new ServiceError("failed-precondition", "Pending audit recovery data is invalid.");
     }
+    const operation = {
+      id: operationId,
+      subjectUid,
+      expectedVersion,
+    };
+    if (recovery["kind"] === "cancel") {
+      await this.cancelOperation(operation);
+      return true;
+    }
     const actor = auditActor(recovery["actor"]);
     const before = recovery["before"];
     const reason = recovery["reason"];
     if (
+      recovery["kind"] !== "reconcile" ||
       actor === undefined ||
       before === null ||
       !auditableUserSnapshot(before) ||
@@ -286,11 +296,6 @@ export class FirestoreUserAuditStore implements UserAuditStore {
     ) {
       throw new ServiceError("failed-precondition", "Pending audit recovery data is invalid.");
     }
-    const operation = {
-      id: operationId,
-      subjectUid,
-      expectedVersion,
-    };
     const changedFields = changedSnapshotFields(before, after);
     if (changedFields.length === 0) {
       await this.cancelOperation(operation);

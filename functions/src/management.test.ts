@@ -236,6 +236,30 @@ function auditGateway() {
 }
 
 describe("audited management", () => {
+  it("marks an interrupted atomic profile reservation as safe to cancel", async () => {
+    const { auth, store } = gateways([], fan);
+    store.getRestriction = sinon.stub().resolves(undefined);
+    store.getPrivateUserData = sinon.stub().resolves({});
+    const audit = auditGateway();
+    const service = new UserManagementService(
+      auth,
+      store,
+      () => undefined,
+      () => NOW,
+      () => "profile-operation",
+      audit,
+    );
+
+    await service.saveMyProfile(fan.uid, "Fiona Updated");
+
+    sinon.assert.calledWithExactly(
+      audit.beginOperation,
+      { id: "profile-operation", subjectUid: fan.uid, expectedVersion: 0 },
+      { kind: "cancel" },
+    );
+    sinon.assert.calledOnce(audit.completeProfileOperation);
+  });
+
   it("creates one event for one restriction Save with complete reasons", async () => {
     const planned: RestrictionRecord = {
       ...restriction(),

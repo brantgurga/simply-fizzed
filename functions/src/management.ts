@@ -637,7 +637,7 @@ export class UserManagementService {
     const before = auditableSnapshot(actor.user, profile, restriction, privateData);
     const nextProfile = { publicName, updatedAt: now.toISOString() };
     const after = auditableSnapshot(actor.user, nextProfile, restriction, privateData);
-    await this.#audit.beginOperation(operation);
+    await this.#audit.beginOperation(operation, { kind: "cancel" });
     try {
       await this.#audit.completeProfileOperation(
         operation,
@@ -794,6 +794,7 @@ export class UserManagementService {
         existingPrivateData,
       );
       await this.#audit.beginOperation(operation, {
+        kind: "reconcile",
         actor: { kind: "user", uid: actor.user.uid },
         before: beforeSnapshot,
         reason: actionReason,
