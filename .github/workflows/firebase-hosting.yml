@@ -101,6 +101,7 @@ jobs:
             firebase.json
             firestore.indexes.json
             firestore.rules
+            scripts/firebase-deploy.sh
             functions/lib/
             functions/src/
             functions/package.json
@@ -215,10 +216,7 @@ jobs:
           service_account: github-deployer@simply-fizzed-prod.iam.gserviceaccount.com
 
       - name: Deploy Functions, Firestore rules, and indexes
-        run: >-
-          npx --no-install firebase deploy
-          --only functions,firestore:rules,firestore:indexes
-          --project simply-fizzed-prod --non-interactive
+        run: bash scripts/firebase-deploy.sh
 
       - name: Deploy staging channel
         id: deploy

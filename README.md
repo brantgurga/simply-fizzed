@@ -353,6 +353,12 @@ before writing the Functions environment file. Grant each Function's identity on
 Firebase Auth and Firestore operations that callable needs; do not grant broad project
 ownership to any runtime or deployment identity.
 
+When enabling retries for a background Function, add its export name to
+`retry_bootstrap_functions` in `scripts/firebase-deploy.sh` in the same change.
+Firebase requires confirmation the first time it persists a retry policy; the script
+responds only to that diagnostic and scopes `--force` to the allowlist. Never add
+`--force` to the full deployment because it would also approve Function deletions.
+
 ### Environment variables
 
 Configuration is provided through Vite environment variables (only
