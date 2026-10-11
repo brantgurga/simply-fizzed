@@ -215,10 +215,28 @@ jobs:
           service_account: github-deployer@simply-fizzed-prod.iam.gserviceaccount.com
 
       - name: Deploy Functions, Firestore rules, and indexes
-        run: >-
-          npx --no-install firebase deploy
-          --only functions,firestore:rules,firestore:indexes
-          --project simply-fizzed-prod --non-interactive
+        run: |
+          set -o pipefail
+          deploy_log="$RUNNER_TEMP/firebase-deploy.log"
+          if npx --no-install firebase deploy \
+            --only functions,firestore:rules,firestore:indexes \
+            --project simply-fizzed-prod --non-interactive 2>&1 | tee "$deploy_log"; then
+            exit 0
+          fi
+
+          retry_policy_error="Pass the --force option to deploy functions with a failure policy"
+          if ! grep -Fq "$retry_policy_error" "$deploy_log"; then
+            exit 1
+          fi
+
+          # Firebase requires confirmation the first time retries are enabled. Scope
+          # --force to this idempotent function so it cannot approve other deletions.
+          npx --no-install firebase deploy \
+            --only functions:recordAccountCreation \
+            --project simply-fizzed-prod --non-interactive --force
+          npx --no-install firebase deploy \
+            --only functions,firestore:rules,firestore:indexes \
+            --project simply-fizzed-prod --non-interactive
 
       - name: Deploy staging channel
         id: deploy
