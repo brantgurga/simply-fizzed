@@ -28,6 +28,8 @@ concurrency:
 
 env:
   HUSKY: 0
+  # Fail delivery when a dependency install script has not been explicitly reviewed.
+  NPM_CONFIG_STRICT_ALLOW_SCRIPTS: true
 
 jobs:
   build-staging:
