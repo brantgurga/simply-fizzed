@@ -17,6 +17,8 @@ concurrency:
 env:
   # `npm ci` triggers the `prepare` script (husky); skip hook installation in CI.
   HUSKY: 0
+  # Fail CI when a dependency install script has not been explicitly reviewed.
+  NPM_CONFIG_STRICT_ALLOW_SCRIPTS: true
 
 jobs:
   build-and-test:
