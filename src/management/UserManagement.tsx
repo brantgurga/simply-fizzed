@@ -336,10 +336,14 @@ export default function UserManagement({
         onSubmit={(event) => void search(event)}
       >
         <FormControl sx={{ minWidth: 170 }}>
-          <InputLabel id="user-search-mode-label">Search by</InputLabel>
+          <InputLabel id="user-search-mode-label" htmlFor="user-search-mode-input">
+            Search by
+          </InputLabel>
           <Select<SearchMode>
+            id="user-search-mode-select"
             labelId="user-search-mode-label"
             label="Search by"
+            inputProps={{ id: "user-search-mode-input" }}
             value={mode}
             disabled={!online || searching}
             onChange={(event) => setMode(event.target.value)}

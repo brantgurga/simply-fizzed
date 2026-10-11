@@ -4,8 +4,18 @@
 
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { afterEach, expect } from "vitest";
 
+/** Catch labels that trigger browser accessibility warnings because they reference no form field. */
 afterEach(() => {
-  cleanup();
+  try {
+    for (const label of document.querySelectorAll("label")) {
+      expect(
+        label.control,
+        `Label “${label.textContent ?? ""}” must reference a form field`,
+      ).not.toBeNull();
+    }
+  } finally {
+    cleanup();
+  }
 });

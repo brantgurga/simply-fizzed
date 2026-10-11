@@ -41,7 +41,7 @@ describe("AvailabilityForm", () => {
     expect(onAdd).not.toHaveBeenCalled();
 
     await user.click(options[1]!);
-    await user.click(screen.getByLabelText("Form"));
+    await user.click(screen.getByRole("combobox", { name: "Form" }));
     await user.click(screen.getByRole("option", { name: "Bottle" }));
     await user.click(screen.getByRole("button", { name: "Add soda" }));
 
@@ -105,7 +105,7 @@ describe("AvailabilityForm", () => {
     await user.click(screen.getByRole("button", { name: "Add soda" }));
 
     expect(input).toBeDisabled();
-    expect(screen.getByLabelText("Form")).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("combobox", { name: "Form" })).toHaveAttribute("aria-disabled", "true");
     finish?.();
     await screen.findByText("Availability added.");
   });
@@ -154,7 +154,7 @@ describe("AvailabilityForm", () => {
     );
     await user.click(await screen.findByLabelText("Catalog soda"));
     await user.click(await screen.findByRole("option", { name: "Sprecher Root Beer — Original" }));
-    await user.click(screen.getByLabelText("Form"));
+    await user.click(screen.getByRole("combobox", { name: "Form" }));
     await user.click(screen.getByRole("option", { name: "Bottle" }));
     await user.click(screen.getByRole("button", { name: "Add soda" }));
 
@@ -168,9 +168,9 @@ describe("AvailabilityForm", () => {
 
     await user.click(await screen.findByLabelText("Catalog soda"));
     await user.click((await screen.findAllByRole("option"))[0]!);
-    await user.click(screen.getByLabelText("Can sample"));
+    await user.click(screen.getByRole("combobox", { name: "Can sample" }));
     await user.click(screen.getByRole("option", { name: "Yes" }));
-    await user.click(screen.getByLabelText("Can purchase"));
+    await user.click(screen.getByRole("combobox", { name: "Can purchase" }));
     await user.click(screen.getByRole("option", { name: "No" }));
     await user.click(screen.getByRole("button", { name: "Add soda" }));
 
