@@ -9,8 +9,10 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 const script = resolve("scripts/firebase-deploy.sh");
+/** @type {string[]} */
 const temporaryDirectories = [];
 
+/** @param {"success" | "generic" | "bootstrap"} scenario */
 function runDeployment(scenario) {
   const directory = mkdtempSync(join(tmpdir(), "firebase-deploy-test-"));
   temporaryDirectories.push(directory);
@@ -42,7 +44,7 @@ esac
     encoding: "utf8",
     env: {
       ...process.env,
-      PATH: `${binDirectory}:${process.env.PATH}`,
+      PATH: `${binDirectory}:${process.env["PATH"]}`,
       RUNNER_TEMP: runnerDirectory,
       SCENARIO: scenario,
     },
