@@ -17,6 +17,45 @@ const installAssets = [
 
 // https://vite.dev/config/
 export default defineConfig({
+  build: {
+    // Firestore is the largest intentionally isolated dependency. The service
+    // worker precaches every chunk, so retain a warning for unexpected growth
+    // without flagging the SDK's current 552 kB minified bundle.
+    chunkSizeWarningLimit: 600,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: "firestore",
+              test: /node_modules[\\/]@firebase[\\/]firestore[\\/]/u,
+              priority: 50,
+            },
+            {
+              name: "firebase-auth",
+              test: /node_modules[\\/]@firebase[\\/]auth[\\/]/u,
+              priority: 40,
+            },
+            {
+              name: "firebase",
+              test: /node_modules[\\/](@firebase|firebase)[\\/]/u,
+              priority: 30,
+            },
+            {
+              name: "mui",
+              test: /node_modules[\\/](@emotion|@mui)[\\/]/u,
+              priority: 20,
+            },
+            {
+              name: "react",
+              test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/u,
+              priority: 10,
+            },
+          ],
+        },
+      },
+    },
+  },
   plugins: [
     {
       name: "brand-html",
