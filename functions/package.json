@@ -44,5 +44,11 @@
     "@firebase/util": false,
     "fsevents": false,
     "protobufjs": false
+  },
+  "allowScriptsNotes": {
+    "esbuild@0.25.12": "Approved: tsx requires esbuild's validated native binary to run the Functions test suite.",
+    "@firebase/util": "Denied: Functions do not use Firebase web configuration or App Hosting postinstall injection.",
+    "fsevents": "Denied: this optional macOS watcher is not required for Functions builds, tests, or non-watch development workflows.",
+    "protobufjs": "Denied: the postinstall only warns about dependency version syntax and produces no required runtime artifacts."
   }
 }
