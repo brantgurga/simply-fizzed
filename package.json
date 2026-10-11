@@ -28,6 +28,7 @@
     "test:functions": "npm --prefix functions test",
     "test:functions:integration": "npm run build:functions && firebase emulators:exec --only auth,firestore,functions --project demo-simply-fizzed \"npm --prefix functions run test:integration\"",
     "check:licenses": "node .github/scripts/license-policy.js",
+    "check:tsdoc": "node .github/scripts/tsdoc-check.js",
     "test:license": "vitest run .github/scripts/license-policy.test.js"
   },
   "dependencies": {
@@ -43,11 +44,13 @@
     "geofire-common": "^6.0.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "react-json-view-lite": "^2.5.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@actions/github": "^9.1.1",
     "@firebase/rules-unit-testing": "^5.0.2",
+    "@microsoft/tsdoc": "^0.17.1",
     "@playwright/test": "^1.63.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",

@@ -78,8 +78,24 @@ async function createClient(name: AccountName): Promise<Client> {
 async function call<T>(name: AccountName, functionName: string, data: unknown = {}): Promise<T> {
   const client = clients.get(name);
   if (client === undefined) throw new Error(`Missing client ${name}`);
+  let request = data;
+  if (
+    functionName === "applyUserManagement" &&
+    typeof data === "object" &&
+    data !== null &&
+    typeof Reflect.get(data, "targetUid") === "string"
+  ) {
+    const targetUid: unknown = Reflect.get(data, "targetUid");
+    if (typeof targetUid !== "string") throw new Error("Invalid integration target UID.");
+    const state = await adminDb.collection("userAuditState").doc(targetUid).get();
+    request = {
+      expectedVersion: state.get("version") ?? 0,
+      reason: "Integration test administrative action",
+      ...data,
+    };
+  }
   const callable = httpsCallable<unknown, T>(client.functions, functionName);
-  return (await callable(data)).data;
+  return (await callable(request)).data;
 }
 
 before(async () => {
@@ -151,7 +167,7 @@ describe("callable authorization boundary", () => {
     ).rejects.toMatchObject({ code: "functions/permission-denied" });
   });
 
-  it("lets an unrestricted Moderator find Fans but not another Moderator", async () => {
+  it("lets an unrestricted Moderator find users while marking peers unmanageable", async () => {
     const fans = await call<Array<Record<string, unknown>>>("moderator", "searchUsers", {
       mode: "displayName",
       query: "Fan",
@@ -168,7 +184,7 @@ describe("callable authorization boundary", () => {
         mode: "uid",
         query: accounts.restrictedModerator.uid,
       }),
-    ).resolves.toEqual([]);
+    ).resolves.toMatchObject([{ uid: accounts.restrictedModerator.uid, canManage: false }]);
     await expect(
       call("moderator", "applyUserManagement", {
         targetUid: accounts.restrictedModerator.uid,
@@ -177,13 +193,13 @@ describe("callable authorization boundary", () => {
     ).rejects.toMatchObject({ code: "functions/permission-denied" });
   });
 
-  it("prevents a Moderator from discovering or managing a configured Operator", async () => {
+  it("lets a Moderator inspect but not manage a configured Operator", async () => {
     await expect(
       call<unknown[]>("moderator", "searchUsers", {
         mode: "uid",
         query: accounts.operator.uid,
       }),
-    ).resolves.toEqual([]);
+    ).resolves.toMatchObject([{ uid: accounts.operator.uid, canManage: false }]);
     await expect(
       call("moderator", "revealUserEmail", { targetUid: accounts.operator.uid }),
     ).rejects.toMatchObject({ code: "functions/permission-denied" });
@@ -373,6 +389,116 @@ describe("callable authorization boundary", () => {
     await expect(
       adminDb.collection("restrictions").doc(accounts.fan.uid).get(),
     ).resolves.toMatchObject({ exists: false });
+  });
+
+  it("records system-authored account creation and one self-service profile event", async () => {
+    const initial = await call<Record<string, unknown>>("operator", "getUserAuditHistory", {
+      targetUid: accounts.fan.uid,
+    });
+    const initialEvents: unknown = initial["events"];
+    const initialVersion: unknown = initial["version"];
+    if (!Array.isArray(initialEvents) || typeof initialVersion !== "number") {
+      throw new Error("Expected initial audit history.");
+    }
+    const accountEvent = initialEvents.find(
+      (event) =>
+        typeof event === "object" &&
+        event !== null &&
+        Reflect.get(event, "type") === "account.created",
+    );
+    expect(accountEvent).toMatchObject({
+      actor: { kind: "system", id: "firebase-auth" },
+      subjectUid: accounts.fan.uid,
+      type: "account.created",
+      sequence: 1,
+      before: null,
+    });
+
+    await call("fan", "saveMyProfile", { publicName: "Fiona Public" });
+    await call("fan", "saveMyProfile", { publicName: "Fiona Public" });
+    const updated = await call<Record<string, unknown>>("moderator", "getUserAuditHistory", {
+      targetUid: accounts.fan.uid,
+    });
+    expect(updated["version"]).toBe(initialVersion + 1);
+    const updatedEvents: unknown = updated["events"];
+    if (!Array.isArray(updatedEvents)) throw new Error("Expected audit events.");
+    expect(updatedEvents[0]).toMatchObject({
+      actor: { kind: "user", uid: accounts.fan.uid },
+      subjectUid: accounts.fan.uid,
+      type: "profile.updated",
+      sequence: initialVersion + 1,
+    });
+    expect(updatedEvents).toHaveLength(initialEvents.length + 1);
+  });
+
+  it("rejects stale concurrent moderation and records exactly one winning event", async () => {
+    const state = await adminDb.collection("userAuditState").doc(accounts.fan.uid).get();
+    const expectedVersion: unknown = state.get("version");
+    if (typeof expectedVersion !== "number") throw new Error("Expected an audit version.");
+    const first = call("moderator", "applyUserManagement", {
+      targetUid: accounts.fan.uid,
+      expectedVersion,
+      reason: "Concurrent action one",
+      restriction: { publicReason: "First concurrent restriction" },
+    });
+    const second = call("moderator", "applyUserManagement", {
+      targetUid: accounts.fan.uid,
+      expectedVersion,
+      reason: "Concurrent action two",
+      restriction: { publicReason: "Second concurrent restriction" },
+    });
+    const results = await Promise.allSettled([first, second]);
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+
+    const events = await adminDb
+      .collection("userAudit")
+      .doc(accounts.fan.uid)
+      .collection("events")
+      .where("sequence", "==", expectedVersion + 1)
+      .get();
+    expect(events.size).toBe(1);
+    await call("moderator", "applyUserManagement", {
+      targetUid: accounts.fan.uid,
+      restriction: null,
+    });
+  });
+
+  it("audits disablement and re-enablement with required reasons", async () => {
+    await call("operator", "applyUserManagement", {
+      targetUid: accounts.secondFan.uid,
+      reason: "Emergency abuse response",
+      disabled: true,
+    });
+    expect((await adminAuth.getUser(accounts.secondFan.uid)).disabled).toBe(true);
+    await call("operator", "applyUserManagement", {
+      targetUid: accounts.secondFan.uid,
+      reason: "Appeal accepted",
+      disabled: false,
+    });
+    expect((await adminAuth.getUser(accounts.secondFan.uid)).disabled).toBe(false);
+
+    const history = await call<Record<string, unknown>>("operator", "getUserAuditHistory", {
+      targetUid: accounts.secondFan.uid,
+    });
+    const events: unknown = history["events"];
+    if (!Array.isArray(events)) throw new Error("Expected audit events.");
+    expect(events.slice(0, 2)).toMatchObject([
+      { type: "user.enabled", reason: "Appeal accepted" },
+      { type: "user.disabled", reason: "Emergency abuse response" },
+    ]);
+  });
+
+  it("uses current authority for history and denies a Moderator their own history", async () => {
+    await expect(
+      call("moderator", "getUserAuditHistory", { targetUid: accounts.moderator.uid }),
+    ).rejects.toMatchObject({ code: "functions/permission-denied" });
+    await expect(
+      call("operator", "getUserAuditHistory", { targetUid: accounts.operator.uid }),
+    ).resolves.toMatchObject({ events: expect.any(Array) });
+    await expect(
+      call("fan", "getUserAuditHistory", { targetUid: accounts.operator.uid }),
+    ).rejects.toMatchObject({ code: "functions/permission-denied" });
   });
 
   it("rejects an unauthenticated direct callable request", async () => {

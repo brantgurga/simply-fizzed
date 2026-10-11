@@ -6,10 +6,20 @@ export const SEARCH_RESULT_LIMIT = 10;
 export const DISPLAY_NAME_PAGE_LIMIT = 5;
 export const AUTH_PAGE_SIZE = 1_000;
 
+import {
+  auditableSnapshot,
+  changedSnapshotFields,
+  type AuditEvent,
+  type AuditEventType,
+  type AuditOperation,
+  type UserAuditStore,
+} from "./audit.js";
+
 export type ServiceErrorCode =
   | "unauthenticated"
   | "permission-denied"
   | "invalid-argument"
+  | "failed-precondition"
   | "not-found"
   | "internal";
 
@@ -29,6 +39,7 @@ export interface AuthUser {
   disabled: boolean;
   displayName?: string;
   email?: string;
+  photoURL?: string;
   customClaims?: Readonly<Record<string, unknown>>;
 }
 
@@ -43,6 +54,7 @@ export interface AuthGateway {
     pageToken?: string;
   }>;
   setCustomUserClaims(uid: string, claims: Record<string, unknown>): Promise<void>;
+  updateUser(uid: string, properties: { disabled?: boolean }): Promise<AuthUser>;
 }
 
 export interface RestrictionRecord {
@@ -102,8 +114,25 @@ export interface ManagedUserView {
   uid: string;
   displayName: string | null;
   obfuscatedEmail: string | null;
+  disabled: boolean;
   moderator: boolean;
+  auditVersion: number;
+  canManage: boolean;
   restriction: RestrictionView | null;
+}
+
+export interface AuditIdentityView {
+  uid: string;
+  displayName: string | null;
+  email: string | null;
+  unavailable: boolean;
+}
+
+export interface AuditHistoryView {
+  events: AuditEvent[];
+  identities: AuditIdentityView[];
+  version: number;
+  nextBeforeSequence?: number;
 }
 
 export interface SearchUsersInput {
@@ -119,6 +148,9 @@ export interface RestrictionInput {
 
 export interface ApplyUserManagementInput {
   targetUid: string;
+  expectedVersion?: number;
+  reason?: string;
+  disabled?: boolean;
   moderator?: boolean;
   restriction?: RestrictionInput | null;
 }
@@ -316,6 +348,7 @@ export class UserManagementService {
   readonly #auth: AuthGateway;
   readonly #store: ManagementStore;
   readonly #operatorConfiguration: () => string | undefined;
+  readonly #audit: UserAuditStore | undefined;
   readonly #now: () => Date;
   readonly #operationId: () => string;
 
@@ -325,12 +358,14 @@ export class UserManagementService {
     operatorConfiguration: () => string | undefined,
     now: () => Date = () => new Date(),
     operationId: () => string = () => crypto.randomUUID(),
+    audit?: UserAuditStore,
   ) {
     this.#auth = auth;
     this.#store = store;
     this.#operatorConfiguration = operatorConfiguration;
     this.#now = now;
     this.#operationId = operationId;
+    this.#audit = audit;
   }
 
   /** Resolve current Auth, Operator configuration, and restriction state for a caller. */
@@ -394,9 +429,12 @@ export class UserManagementService {
   }
 
   /** Build a privacy-preserving management view from authoritative server records. */
-  async #managedUser(target: AuthUser): Promise<ManagedUserView> {
-    const restriction = await this.#store.getRestriction(target.uid);
-    const privateData = await this.#store.getPrivateUserData(target.uid);
+  async #managedUser(target: AuthUser, canManage = true): Promise<ManagedUserView> {
+    const [restriction, privateData, auditVersion] = await Promise.all([
+      this.#store.getRestriction(target.uid),
+      this.#store.getPrivateUserData(target.uid),
+      this.#audit?.getVersion(target.uid) ?? 0,
+    ]);
     const activeRestriction = isRestrictionActive(restriction, this.#now())
       ? restriction
       : undefined;
@@ -404,8 +442,91 @@ export class UserManagementService {
       uid: target.uid,
       displayName: target.displayName?.trim() || null,
       obfuscatedEmail: obfuscateEmail(target.email),
+      disabled: target.disabled,
       moderator: moderatorClaim(target),
+      auditVersion,
+      canManage,
       restriction: restrictionView(activeRestriction, privateData.internalReason),
+    };
+  }
+
+  /** Finish an interrupted cross-system operation from its durable recovery draft. */
+  async #recoverPendingAudit(subjectUid: string, user?: AuthUser): Promise<boolean> {
+    if (this.#audit === undefined || !(await this.#audit.hasPendingOperation(subjectUid))) {
+      return false;
+    }
+    const currentUser = user ?? (await this.#auth.getUser(subjectUid));
+    const [profile, restriction, privateData] = await Promise.all([
+      this.#audit.readProfile(subjectUid),
+      this.#store.getRestriction(subjectUid),
+      this.#store.getPrivateUserData(subjectUid),
+    ]);
+    const after = auditableSnapshot(
+      currentUser,
+      profile,
+      isRestrictionActive(restriction, this.#now()) ? restriction : undefined,
+      privateData,
+    );
+    return await this.#audit.recoverPendingOperation(subjectUid, after);
+  }
+
+  /** Return one bounded page of online-only history after checking current authority. */
+  async getAuditHistory(
+    uid: string | undefined,
+    targetUidValue: unknown,
+    beforeSequenceValue?: unknown,
+  ): Promise<AuditHistoryView> {
+    const actor = await this.#requireManager(uid);
+    if (this.#audit === undefined)
+      throw new ServiceError("internal", "Audit storage is unavailable.");
+    const targetUid = requiredString(targetUidValue, "Target UID", 128);
+    if (!actor.operator && actor.user.uid === targetUid) {
+      throw new ServiceError(
+        "permission-denied",
+        "Moderators cannot view their own audit history.",
+      );
+    }
+    let beforeSequence: number | undefined;
+    if (beforeSequenceValue !== undefined) {
+      if (
+        typeof beforeSequenceValue !== "number" ||
+        !Number.isSafeInteger(beforeSequenceValue) ||
+        beforeSequenceValue <= 0
+      ) {
+        throw new ServiceError("invalid-argument", "Audit history cursor is invalid.");
+      }
+      beforeSequence = beforeSequenceValue;
+    }
+    const [page, version] = await Promise.all([
+      this.#audit.listEvents(targetUid, beforeSequence),
+      this.#audit.getVersion(targetUid),
+    ]);
+    const userUids = new Set<string>([targetUid]);
+    for (const event of page.events) if (event.actor.kind === "user") userUids.add(event.actor.uid);
+    const identities: AuditIdentityView[] = [];
+    for (const identityUid of userUids) {
+      try {
+        // Sequential resolution prevents audit pages from creating Auth request bursts.
+        // oxlint-disable-next-line eslint/no-await-in-loop
+        const user = await this.#auth.getUser(identityUid);
+        identities.push({
+          uid: identityUid,
+          displayName: user.displayName?.trim() || null,
+          email: user.email?.trim() || null,
+          unavailable: false,
+        });
+      } catch (error) {
+        if (!isNotFoundError(error)) throw error;
+        identities.push({ uid: identityUid, displayName: null, email: null, unavailable: true });
+      }
+    }
+    return {
+      events: page.events,
+      identities,
+      version,
+      ...(page.nextBeforeSequence === undefined
+        ? {}
+        : { nextBeforeSequence: page.nextBeforeSequence }),
     };
   }
 
@@ -441,10 +562,7 @@ export class UserManagementService {
         // oxlint-disable-next-line eslint/no-await-in-loop
         const result = await this.#auth.listUsers(AUTH_PAGE_SIZE, pageToken);
         for (const candidate of result.users) {
-          if (
-            candidate.displayName?.toLocaleLowerCase("en-US").includes(needle) === true &&
-            this.#canManageTarget(actor, candidate)
-          ) {
+          if (candidate.displayName?.toLocaleLowerCase("en-US").includes(needle) === true) {
             targets.push(candidate);
             if (targets.length === SEARCH_RESULT_LIMIT) break;
           }
@@ -454,10 +572,12 @@ export class UserManagementService {
       }
     }
 
-    const manageable = targets
-      .filter((target) => this.#canManageTarget(actor, target))
-      .slice(0, SEARCH_RESULT_LIMIT);
-    return await Promise.all(manageable.map(async (target) => await this.#managedUser(target)));
+    const visible = targets.slice(0, SEARCH_RESULT_LIMIT);
+    return await Promise.all(
+      visible.map(
+        async (target) => await this.#managedUser(target, this.#canManageTarget(actor, target)),
+      ),
+    );
   }
 
   /** Reveal one manageable user's email without persisting it in public data. */
@@ -480,7 +600,67 @@ export class UserManagementService {
     return { email: target.email ?? null };
   }
 
-  /** Apply validated role and restriction changes in fail-safe authority order. */
+  /** Save the caller's public profile and its audit event in one Firestore transaction. */
+  async saveMyProfile(
+    uid: string | undefined,
+    publicNameValue: unknown,
+  ): Promise<{ version: number }> {
+    const actor = await this.#actor(uid);
+    if (this.#audit === undefined)
+      throw new ServiceError("internal", "Audit storage is unavailable.");
+    if (typeof publicNameValue !== "string") {
+      throw new ServiceError("invalid-argument", "Public name must be a string.");
+    }
+    const publicName = publicNameValue.trim();
+    if (publicName.length > 320) {
+      throw new ServiceError("invalid-argument", "Public name must not exceed 320 characters.");
+    }
+    const now = this.#now();
+    await this.#recoverPendingAudit(actor.user.uid, actor.user);
+    const [profile, restriction, privateData, expectedVersion] = await Promise.all([
+      this.#audit.readProfile(actor.user.uid),
+      this.#store.getRestriction(actor.user.uid),
+      this.#store.getPrivateUserData(actor.user.uid),
+      this.#audit.getVersion(actor.user.uid),
+    ]);
+    const currentPublicName =
+      typeof profile === "object" && profile !== null && !Array.isArray(profile)
+        ? Reflect.get(profile, "publicName")
+        : undefined;
+    if (currentPublicName === publicName) return { version: expectedVersion };
+
+    const operation = {
+      id: this.#operationId(),
+      subjectUid: actor.user.uid,
+      expectedVersion,
+    };
+    const before = auditableSnapshot(actor.user, profile, restriction, privateData);
+    const nextProfile = { publicName, updatedAt: now.toISOString() };
+    const after = auditableSnapshot(actor.user, nextProfile, restriction, privateData);
+    await this.#audit.beginOperation(operation, { kind: "cancel" });
+    try {
+      await this.#audit.completeProfileOperation(
+        operation,
+        {
+          id: operation.id,
+          actor: { kind: "user", uid: actor.user.uid },
+          subjectUid: actor.user.uid,
+          type: "profile.updated",
+          before,
+          after,
+          changedFields: changedSnapshotFields(before, after),
+        },
+        publicName,
+        now,
+      );
+    } catch (error) {
+      await this.#audit.cancelOperation(operation);
+      throw error;
+    }
+    return { version: expectedVersion + 1 };
+  }
+
+  /** Apply one logical, versioned management operation and append one audit event. */
   async applyUserManagement(
     uid: string | undefined,
     input: ApplyUserManagementInput,
@@ -489,13 +669,27 @@ export class UserManagementService {
     if (!isRecord(input))
       throw new ServiceError("invalid-argument", "Management input is required.");
     const targetUid = requiredString(input["targetUid"], "Target UID", 128);
+    const requestedDisabled = input["disabled"];
     const requestedModerator = input["moderator"];
     const requestedRestriction = input["restriction"];
+    if (requestedDisabled !== undefined && typeof requestedDisabled !== "boolean") {
+      throw new ServiceError("invalid-argument", "Disabled must be true or false.");
+    }
     if (requestedModerator !== undefined && typeof requestedModerator !== "boolean") {
       throw new ServiceError("invalid-argument", "Moderator must be true or false.");
     }
-    if (requestedModerator === undefined && requestedRestriction === undefined) {
+    if (
+      requestedDisabled === undefined &&
+      requestedModerator === undefined &&
+      requestedRestriction === undefined
+    ) {
       throw new ServiceError("invalid-argument", "No management changes were supplied.");
+    }
+    if ((requestedDisabled !== undefined || requestedModerator !== undefined) && !actor.operator) {
+      throw new ServiceError(
+        "permission-denied",
+        "Only an Operator can change disabled or Moderator status.",
+      );
     }
 
     let target: AuthUser;
@@ -511,11 +705,16 @@ export class UserManagementService {
         "Moderators cannot manage another Moderator or Operator.",
       );
     }
-    if (requestedModerator !== undefined && !actor.operator) {
-      throw new ServiceError("permission-denied", "Only an Operator can change Moderator status.");
-    }
 
     const now = this.#now();
+    await this.#recoverPendingAudit(targetUid, target);
+    const [existingRestriction, existingPrivateData] = await Promise.all([
+      this.#store.getRestriction(targetUid),
+      this.#store.getPrivateUserData(targetUid),
+    ]);
+    const activeExisting = isRestrictionActive(existingRestriction, now)
+      ? existingRestriction
+      : undefined;
     let plannedRestriction:
       | { record: RestrictionRecord; internalReason?: string }
       | null
@@ -544,9 +743,6 @@ export class UserManagementService {
           throw new ServiceError("invalid-argument", "Expiration must be a future date and time.");
         }
       }
-
-      const existing = await this.#store.getRestriction(targetUid);
-      const activeExisting = isRestrictionActive(existing, now) ? existing : undefined;
       plannedRestriction = {
         record: {
           publicReason,
@@ -560,45 +756,151 @@ export class UserManagementService {
       };
     }
 
-    // Validate the complete request before changing authority. Adding/editing a
-    // restriction happens before role changes so a later failure remains suppressed;
-    // revocation happens before removing a restriction so that transition also fails safe.
-    if (plannedRestriction !== undefined && plannedRestriction !== null) {
-      await this.#store.saveRestriction(
-        targetUid,
-        plannedRestriction.record,
-        plannedRestriction.internalReason,
-      );
-    }
-    if (requestedModerator === false) {
-      await changeModeratorClaim(
-        this.#auth,
-        this.#store,
-        target.uid,
-        false,
-        actor.user.uid,
-        now,
-        this.#operationId(),
-      );
-    }
-    if (requestedModerator === true) {
-      await changeModeratorClaim(
-        this.#auth,
-        this.#store,
-        target.uid,
-        true,
-        actor.user.uid,
-        now,
-        this.#operationId(),
-      );
-    }
-    // Remove the write-suppressing restriction only after every requested role
-    // transition succeeds, including a combined unrestrict-and-promote request.
-    if (plannedRestriction === null) {
-      await this.#store.removeRestriction(targetUid);
+    const restrictionChanged =
+      plannedRestriction !== undefined &&
+      (plannedRestriction === null
+        ? activeExisting !== undefined
+        : activeExisting === undefined ||
+          plannedRestriction.record.publicReason !== activeExisting.publicReason ||
+          plannedRestriction.internalReason !== existingPrivateData.internalReason ||
+          plannedRestriction.record.expiresAt?.getTime() !== activeExisting.expiresAt?.getTime());
+    const moderatorChanged =
+      requestedModerator !== undefined && requestedModerator !== moderatorClaim(target);
+    const disabledChanged =
+      requestedDisabled !== undefined && requestedDisabled !== target.disabled;
+    if (!restrictionChanged && !moderatorChanged && !disabledChanged) {
+      throw new ServiceError("invalid-argument", "The request does not change current user state.");
     }
 
-    const confirmedTarget = await this.#auth.getUser(targetUid);
+    let operation: AuditOperation | undefined;
+    let beforeSnapshot;
+    let actionReason: string | undefined;
+    if (this.#audit !== undefined) {
+      const expectedVersion = input["expectedVersion"];
+      if (
+        typeof expectedVersion !== "number" ||
+        !Number.isSafeInteger(expectedVersion) ||
+        expectedVersion < 0
+      ) {
+        throw new ServiceError("invalid-argument", "A valid audit version is required.");
+      }
+      actionReason = requiredString(input["reason"], "Action reason", 2_000);
+      const id = this.#operationId();
+      operation = { id, subjectUid: targetUid, expectedVersion };
+      beforeSnapshot = auditableSnapshot(
+        target,
+        await this.#audit.readProfile(targetUid),
+        activeExisting,
+        existingPrivateData,
+      );
+      await this.#audit.beginOperation(operation, {
+        kind: "reconcile",
+        actor: { kind: "user", uid: actor.user.uid },
+        before: beforeSnapshot,
+        reason: actionReason,
+      });
+    }
+
+    let sideEffectAttempted = false;
+    try {
+      if (plannedRestriction !== undefined && plannedRestriction !== null) {
+        sideEffectAttempted = true;
+        await this.#store.saveRestriction(
+          targetUid,
+          plannedRestriction.record,
+          plannedRestriction.internalReason,
+        );
+      }
+      if (requestedModerator !== undefined && moderatorChanged) {
+        sideEffectAttempted = true;
+        await changeModeratorClaim(
+          this.#auth,
+          this.#store,
+          target.uid,
+          requestedModerator,
+          actor.user.uid,
+          now,
+          this.#operationId(),
+        );
+      }
+      if (requestedDisabled !== undefined && disabledChanged) {
+        sideEffectAttempted = true;
+        await this.#auth.updateUser(targetUid, { disabled: requestedDisabled });
+      }
+      if (plannedRestriction === null && restrictionChanged) {
+        sideEffectAttempted = true;
+        await this.#store.removeRestriction(targetUid);
+      }
+    } catch (error) {
+      if (operation !== undefined) {
+        if (sideEffectAttempted) {
+          try {
+            await this.#recoverPendingAudit(targetUid);
+          } catch {
+            // Recovery data remains durable for the next request.
+          }
+        } else {
+          await this.#audit?.cancelOperation(operation);
+        }
+      }
+      throw error;
+    }
+
+    let confirmedTarget: AuthUser;
+    try {
+      confirmedTarget = await this.#auth.getUser(targetUid);
+      if (operation !== undefined && beforeSnapshot !== undefined && this.#audit !== undefined) {
+        const [confirmedRestriction, confirmedPrivateData, profile] = await Promise.all([
+          this.#store.getRestriction(targetUid),
+          this.#store.getPrivateUserData(targetUid),
+          this.#audit.readProfile(targetUid),
+        ]);
+        const afterSnapshot = auditableSnapshot(
+          confirmedTarget,
+          profile,
+          isRestrictionActive(confirmedRestriction, now) ? confirmedRestriction : undefined,
+          confirmedPrivateData,
+        );
+        let type: AuditEventType = "user.management-updated";
+        const changeCount =
+          Number(restrictionChanged) + Number(moderatorChanged) + Number(disabledChanged);
+        if (changeCount === 1 && restrictionChanged) {
+          type =
+            activeExisting === undefined
+              ? "user.restricted"
+              : plannedRestriction === null
+                ? "user.unrestricted"
+                : "user.restriction-updated";
+        } else if (changeCount === 1 && moderatorChanged) {
+          type = requestedModerator ? "user.moderator-promoted" : "user.moderator-demoted";
+        } else if (changeCount === 1 && disabledChanged) {
+          type = requestedDisabled ? "user.disabled" : "user.enabled";
+        }
+        await this.#audit.completeOperation(
+          operation,
+          {
+            id: operation.id,
+            actor: { kind: "user", uid: actor.user.uid },
+            subjectUid: targetUid,
+            type,
+            before: beforeSnapshot,
+            after: afterSnapshot,
+            ...(actionReason === undefined ? {} : { reason: actionReason }),
+            changedFields: changedSnapshotFields(beforeSnapshot, afterSnapshot),
+          },
+          now,
+        );
+      }
+    } catch (error) {
+      if (operation !== undefined) {
+        try {
+          await this.#recoverPendingAudit(targetUid);
+        } catch {
+          // Recovery data remains durable for the next request.
+        }
+      }
+      throw error;
+    }
     return await this.#managedUser(confirmedTarget);
   }
 }
