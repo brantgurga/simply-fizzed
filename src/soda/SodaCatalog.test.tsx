@@ -71,7 +71,7 @@ vi.mock("../location/geocoder", () => ({
             Map: mapMocks.mapConstructor,
           };
         }
-        return { Marker: mapMocks.markerConstructor };
+        return { AdvancedMarkerElement: mapMocks.markerConstructor };
       }),
     },
   }),
@@ -240,7 +240,7 @@ describe("SodaCatalog", () => {
     expect(mapMocks.fitBounds).toHaveBeenCalledTimes(1);
     expect(mapMocks.mapConstructor).toHaveBeenCalledWith(
       expect.any(HTMLElement),
-      expect.objectContaining({ zoom: 8 }),
+      expect.objectContaining({ mapId: "DEMO_MAP_ID", zoom: 8 }),
     );
 
     mapMocks.getCenter.mockReturnValue({ lat: () => 39.78, lng: () => -86.17 });

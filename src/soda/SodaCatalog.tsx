@@ -109,7 +109,11 @@ type MapsLibrary = {
   Map: new (element: HTMLElement, options: google.maps.MapOptions) => google.maps.Map;
   OverlayView: typeof google.maps.OverlayView;
 };
-type MarkerLibrary = { Marker: new (options: google.maps.MarkerOptions) => google.maps.Marker };
+type MarkerLibrary = {
+  AdvancedMarkerElement: new (
+    options: google.maps.marker.AdvancedMarkerElementOptions,
+  ) => google.maps.marker.AdvancedMarkerElement;
+};
 
 function hasConstructor(value: unknown, property: string): boolean {
   return (
@@ -129,7 +133,7 @@ function isMapsLibrary(value: unknown): value is MapsLibrary {
 }
 
 function isMarkerLibrary(value: unknown): value is MarkerLibrary {
-  return hasConstructor(value, "Marker");
+  return hasConstructor(value, "AdvancedMarkerElement");
 }
 
 function createCatalogPopup(
@@ -278,12 +282,16 @@ function CatalogMap({ locations, items, filters, center, onCenterChange }: Catal
         }
         const fallback = locations[0]?.geo ?? { lat: 39.0997, lng: -94.5786 };
         const initialCenter = centerReference.current;
-        const map = new mapsLibrary.Map(element, { center: initialCenter ?? fallback, zoom: 8 });
+        const map = new mapsLibrary.Map(element, {
+          center: initialCenter ?? fallback,
+          mapId: "DEMO_MAP_ID",
+          zoom: 8,
+        });
         mapReference.current = map;
         let popup: google.maps.OverlayView | undefined;
         closePopup = () => popup?.setMap(null);
         const markers = locations.map((location) => {
-          const marker = new markerLibrary.Marker({
+          const marker = new markerLibrary.AdvancedMarkerElement({
             position: location.geo,
             title: location.name,
           });
