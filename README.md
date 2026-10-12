@@ -116,7 +116,10 @@ plugins and resolution as the app. The `test` block there enables `globals`, the
 matchers and cleans up the DOM after each test.
 
 Unit and component tests live next to the code they cover as `*.test.tsx` /
-`*.test.ts` files.
+`*.test.ts` files. Follow Testing Library's
+[query priority](https://testing-library.com/docs/queries/about#priority): prefer
+`getByRole` with an accessible name over `getByLabelText` or `getByLabel`, which
+can ambiguously match both a visible widget and its hidden form input.
 
 Run `npm test` for a single run (used in CI) or `npm run test:watch` while
 developing.
