@@ -2,8 +2,55 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // See LICENSE for copying terms.
 
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const mapMocks = vi.hoisted(() => {
+  const setCenter = vi.fn();
+  const mapConstructor = vi.fn(function MapConstructor() {
+    return {
+      addListener: vi.fn(),
+      fitBounds: vi.fn(),
+      getCenter: vi.fn(),
+      setCenter,
+    };
+  });
+  const markerConstructor = vi.fn(function MarkerConstructor() {
+    return { addListener: vi.fn() };
+  });
+  return { mapConstructor, markerConstructor, setCenter };
+});
+
+vi.mock("@googlemaps/markerclusterer", () => ({
+  MarkerClusterer: vi.fn(function MarkerClusterer() {
+    return { clearMarkers: vi.fn(), setMap: vi.fn() };
+  }),
+}));
+vi.mock("../location/geocoder", () => ({
+  loadGoogleMapsApi: vi.fn().mockResolvedValue({
+    maps: {
+      importLibrary: vi.fn((name: string) => {
+        if (name === "core")
+          return {
+            LatLngBounds: class {
+              extend = vi.fn();
+            },
+          };
+        if (name === "maps") {
+          return {
+            InfoWindow: class {
+              open = vi.fn();
+              setContent = vi.fn();
+            },
+            Map: mapMocks.mapConstructor,
+          };
+        }
+        return { Marker: mapMocks.markerConstructor };
+      }),
+    },
+  }),
+}));
+
 import SodaCatalog from "./SodaCatalog";
 
 const loader = vi.fn().mockResolvedValue({
@@ -32,6 +79,11 @@ const loader = vi.fn().mockResolvedValue({
 });
 
 describe("SodaCatalog", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.clearAllMocks();
+  });
+
   it("renders compact catalog entries with rating evidence", async () => {
     render(<SodaCatalog parameters={new URLSearchParams()} loader={loader} />);
 
@@ -50,6 +102,63 @@ describe("SodaCatalog", () => {
 
     expect(await screen.findByText("1 matching soda variety")).toBeVisible();
     expect(screen.queryByText("Lemon-Up")).not.toBeInTheDocument();
+  });
+
+  it("keeps the map instance when its reported center changes", async () => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_API_KEY", "test-key");
+    const parameters = new URLSearchParams({ view: "map" });
+    const mapLoader = vi.fn().mockResolvedValue({
+      locations: [
+        {
+          id: "shop",
+          name: "Soda Shop",
+          address: { street: "1 Main St", city: "Indy", state: "IN", postalCode: "46204" },
+          geo: { lat: 39.77, lng: -86.16 },
+          geohash: "dp4dpr",
+        },
+      ],
+      items: [
+        {
+          id: "sprecher-root",
+          brand: "Sprecher",
+          name: "Root Beer",
+          flavor: "Root Beer",
+          ratingCount: 0,
+          tried: false,
+          availability: [
+            {
+              id: "available",
+              locationId: "shop",
+              sodaId: "sprecher-root",
+              form: "draft",
+              canSample: "yes",
+              canPurchase: "yes",
+            },
+          ],
+        },
+      ],
+    });
+    const { rerender } = render(
+      <SodaCatalog
+        parameters={parameters}
+        center={{ lat: 39.77, lng: -86.16 }}
+        loader={mapLoader}
+      />,
+    );
+    await waitFor(() => expect(mapMocks.mapConstructor).toHaveBeenCalledTimes(1));
+
+    rerender(
+      <SodaCatalog
+        parameters={parameters}
+        center={{ lat: 39.78, lng: -86.17 }}
+        loader={mapLoader}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(mapMocks.setCenter).toHaveBeenCalledWith({ lat: 39.78, lng: -86.17 }),
+    );
+    expect(mapMocks.mapConstructor).toHaveBeenCalledTimes(1);
   });
 
   it("disables and ignores personal tried filtering for guests", async () => {

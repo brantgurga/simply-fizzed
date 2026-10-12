@@ -182,7 +182,18 @@ interface CatalogMapProps {
 
 function CatalogMap({ locations, items, filters, center, onCenterChange }: CatalogMapProps) {
   const container = useRef<HTMLDivElement>(null);
+  const mapReference = useRef<google.maps.Map | undefined>(undefined);
+  const centerReference = useRef(center);
+  const onCenterChangeReference = useRef(onCenterChange);
   const [error, setError] = useState(false);
+
+  useEffect(() => {
+    centerReference.current = center;
+  }, [center]);
+
+  useEffect(() => {
+    onCenterChangeReference.current = onCenterChange;
+  }, [onCenterChange]);
 
   useEffect(() => {
     if (container.current === null || locations.length === 0) return () => undefined;
@@ -207,7 +218,9 @@ function CatalogMap({ locations, items, filters, center, onCenterChange }: Catal
           throw new Error("Google Maps returned an incomplete map library");
         }
         const fallback = locations[0]?.geo ?? { lat: 39.0997, lng: -94.5786 };
-        const map = new mapsLibrary.Map(element, { center: center ?? fallback, zoom: 8 });
+        const initialCenter = centerReference.current;
+        const map = new mapsLibrary.Map(element, { center: initialCenter ?? fallback, zoom: 8 });
+        mapReference.current = map;
         const infoWindow = new mapsLibrary.InfoWindow();
         const markers = locations.map((location) => {
           const marker = new markerLibrary.Marker({
@@ -221,7 +234,7 @@ function CatalogMap({ locations, items, filters, center, onCenterChange }: Catal
           return marker;
         });
         clusterer = new MarkerClusterer({ map, markers });
-        if (center === undefined) {
+        if (initialCenter === undefined) {
           const bounds = new coreLibrary.LatLngBounds();
           for (const location of locations) bounds.extend(location.geo);
           map.fitBounds(bounds);
@@ -230,7 +243,9 @@ function CatalogMap({ locations, items, filters, center, onCenterChange }: Catal
           const nextCenter = map.getCenter();
           const lat = nextCenter?.lat();
           const lng = nextCenter?.lng();
-          if (typeof lat === "number" && typeof lng === "number") onCenterChange({ lat, lng });
+          if (typeof lat === "number" && typeof lng === "number") {
+            onCenterChangeReference.current({ lat, lng });
+          }
         });
       } catch {
         if (active) setError(true);
@@ -240,9 +255,14 @@ function CatalogMap({ locations, items, filters, center, onCenterChange }: Catal
       active = false;
       clusterer?.clearMarkers();
       clusterer?.setMap(null);
+      mapReference.current = undefined;
       element.replaceChildren();
     };
-  }, [center, filters, items, locations, onCenterChange]);
+  }, [filters, items, locations]);
+
+  useEffect(() => {
+    if (center !== undefined) mapReference.current?.setCenter(center);
+  }, [center]);
 
   if (locations.length === 0) return <Alert severity="info">No matching locations to map.</Alert>;
   if (error) return <Alert severity="error">The map could not be loaded.</Alert>;
@@ -317,6 +337,10 @@ export default function SodaCatalog({
   const pageCount = Math.max(1, Math.ceil(matches.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
   const pageItems = matches.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const mapLocations = useMemo(
+    () => (data === undefined ? [] : catalogResultLocations(matches, data.locations, filters)),
+    [data, filters, matches],
+  );
   const brands = [...new Set(data?.items.map((item) => item.brand) ?? [])].toSorted();
   const flavors = [...new Set(data?.items.map((item) => item.flavor) ?? [])].toSorted();
 
@@ -530,7 +554,7 @@ export default function SodaCatalog({
       </Stack>
       {view === "map" ? (
         <CatalogMap
-          locations={catalogResultLocations(matches, data.locations, filters)}
+          locations={mapLocations}
           items={matches}
           filters={filters}
           center={center}
