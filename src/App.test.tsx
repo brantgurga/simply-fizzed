@@ -228,6 +228,25 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Sign in" })).toBeVisible();
   });
 
+  it("offers Locations and Sodas as primary app bar navigation", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Open navigation menu" }));
+
+    expect(screen.getByRole("menuitem", { name: "Locations" })).toHaveAttribute("href", "#/");
+    expect(screen.getByRole("menuitem", { name: "Locations" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByRole("menuitem", { name: "Sodas" })).toHaveAttribute("href", "#/sodas");
+    expect(screen.getByRole("menuitem", { name: "Sodas" })).not.toHaveAttribute("aria-current");
+
+    await user.click(screen.getByRole("menuitem", { name: "Locations" }));
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
   it("surfaces an unavailable Firestore backend before a search starts", async () => {
     auth.isFirestoreAvailable.mockResolvedValue(false);
 
