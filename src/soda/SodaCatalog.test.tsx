@@ -41,6 +41,7 @@ vi.mock("../location/geocoder", () => ({
       importLibrary: vi.fn((name: string) => {
         if (name === "core")
           return {
+            ColorScheme: { FOLLOW_SYSTEM: "FOLLOW_SYSTEM" },
             LatLngBounds: class {
               extend = vi.fn();
             },
@@ -242,7 +243,11 @@ describe("SodaCatalog", () => {
     expect(mapMocks.fitBounds).toHaveBeenCalledTimes(1);
     expect(mapMocks.mapConstructor).toHaveBeenCalledWith(
       expect.any(HTMLElement),
-      expect.objectContaining({ mapId: "test-map-id", zoom: 8 }),
+      expect.objectContaining({
+        colorScheme: "FOLLOW_SYSTEM",
+        mapId: "test-map-id",
+        zoom: 8,
+      }),
     );
 
     mapMocks.getCenter.mockReturnValue({ lat: () => 39.78, lng: () => -86.17 });
