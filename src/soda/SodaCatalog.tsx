@@ -107,7 +107,7 @@ function updateRoute(
 type CoreLibrary = { LatLngBounds: new () => google.maps.LatLngBounds };
 type MapsLibrary = {
   Map: new (element: HTMLElement, options: google.maps.MapOptions) => google.maps.Map;
-  InfoWindow: new (options?: google.maps.InfoWindowOptions) => google.maps.InfoWindow;
+  OverlayView: typeof google.maps.OverlayView;
 };
 type MarkerLibrary = { Marker: new (options: google.maps.MarkerOptions) => google.maps.Marker };
 
@@ -125,11 +125,69 @@ function isCoreLibrary(value: unknown): value is CoreLibrary {
 }
 
 function isMapsLibrary(value: unknown): value is MapsLibrary {
-  return hasConstructor(value, "Map") && hasConstructor(value, "InfoWindow");
+  return hasConstructor(value, "Map") && hasConstructor(value, "OverlayView");
 }
 
 function isMarkerLibrary(value: unknown): value is MarkerLibrary {
   return hasConstructor(value, "Marker");
+}
+
+function createCatalogPopup(
+  OverlayView: typeof google.maps.OverlayView,
+  position: google.maps.LatLngLiteral,
+  content: HTMLElement,
+  label: string,
+): google.maps.OverlayView {
+  class CatalogPopup extends OverlayView {
+    readonly container = document.createElement("div");
+
+    constructor() {
+      super();
+      this.container.className = "catalog-map-popup__container";
+      const anchor = document.createElement("div");
+      anchor.className = "catalog-map-popup__anchor";
+      const popup = document.createElement("section");
+      popup.className = "catalog-map-popup";
+      popup.setAttribute("aria-label", label);
+
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "catalog-map-popup__close";
+      close.setAttribute("aria-label", "Close location details");
+      close.textContent = "×";
+      close.addEventListener("click", () => this.setMap(null));
+      this.container.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") this.setMap(null);
+      });
+
+      popup.append(close, content);
+      anchor.append(popup);
+      this.container.append(anchor);
+      CatalogPopup.preventMapHitsAndGesturesFrom(this.container);
+    }
+
+    override onAdd() {
+      this.getPanes()?.floatPane.append(this.container);
+      this.container.querySelector<HTMLButtonElement>("button")?.focus();
+    }
+
+    override onRemove() {
+      this.container.remove();
+    }
+
+    override draw() {
+      const point = this.getProjection().fromLatLngToDivPixel(position);
+      if (point === null) return;
+      const visible = Math.abs(point.x) < 4000 && Math.abs(point.y) < 4000;
+      this.container.style.display = visible ? "block" : "none";
+      if (visible) {
+        this.container.style.left = `${point.x}px`;
+        this.container.style.top = `${point.y}px`;
+      }
+    }
+  }
+
+  return new CatalogPopup();
 }
 
 function markerDetails(
@@ -200,6 +258,7 @@ function CatalogMap({ locations, items, filters, center, onCenterChange }: Catal
     if (import.meta.env.VITE_GOOGLE_MAPS_API_KEY.startsWith("demo-")) return () => undefined;
     let active = true;
     let clusterer: MarkerClusterer | undefined;
+    let closePopup: () => void = () => undefined;
     const element = container.current;
     void (async () => {
       try {
@@ -221,15 +280,22 @@ function CatalogMap({ locations, items, filters, center, onCenterChange }: Catal
         const initialCenter = centerReference.current;
         const map = new mapsLibrary.Map(element, { center: initialCenter ?? fallback, zoom: 8 });
         mapReference.current = map;
-        const infoWindow = new mapsLibrary.InfoWindow();
+        let popup: google.maps.OverlayView | undefined;
+        closePopup = () => popup?.setMap(null);
         const markers = locations.map((location) => {
           const marker = new markerLibrary.Marker({
             position: location.geo,
             title: location.name,
           });
           marker.addListener("click", () => {
-            infoWindow.setContent(markerDetails(location, items, filters));
-            infoWindow.open({ map, anchor: marker });
+            popup?.setMap(null);
+            popup = createCatalogPopup(
+              mapsLibrary.OverlayView,
+              location.geo,
+              markerDetails(location, items, filters),
+              `${location.name} details`,
+            );
+            popup.setMap(map);
           });
           return marker;
         });
@@ -253,6 +319,7 @@ function CatalogMap({ locations, items, filters, center, onCenterChange }: Catal
     })();
     return () => {
       active = false;
+      closePopup();
       clusterer?.clearMarkers();
       clusterer?.setMap(null);
       mapReference.current = undefined;
