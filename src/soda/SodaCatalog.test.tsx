@@ -6,19 +6,17 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mapMocks = vi.hoisted(() => {
+  const addListener = vi.fn();
+  const fitBounds = vi.fn();
+  const getCenter = vi.fn();
   const setCenter = vi.fn();
   const mapConstructor = vi.fn(function MapConstructor() {
-    return {
-      addListener: vi.fn(),
-      fitBounds: vi.fn(),
-      getCenter: vi.fn(),
-      setCenter,
-    };
+    return { addListener, fitBounds, getCenter, setCenter };
   });
   const markerConstructor = vi.fn(function MarkerConstructor() {
     return { addListener: vi.fn() };
   });
-  return { mapConstructor, markerConstructor, setCenter };
+  return { addListener, fitBounds, getCenter, mapConstructor, markerConstructor, setCenter };
 });
 
 vi.mock("@googlemaps/markerclusterer", () => ({
@@ -104,7 +102,7 @@ describe("SodaCatalog", () => {
     expect(screen.queryByText("Lemon-Up")).not.toBeInTheDocument();
   });
 
-  it("keeps the map instance when its reported center changes", async () => {
+  it("fits once and keeps the map instance after an idle center update", async () => {
     vi.stubEnv("VITE_GOOGLE_MAPS_API_KEY", "test-key");
     const parameters = new URLSearchParams({ view: "map" });
     const mapLoader = vi.fn().mockResolvedValue({
@@ -138,20 +136,29 @@ describe("SodaCatalog", () => {
         },
       ],
     });
+    const onCenterChange = vi.fn();
     const { rerender } = render(
-      <SodaCatalog
-        parameters={parameters}
-        center={{ lat: 39.77, lng: -86.16 }}
-        loader={mapLoader}
-      />,
+      <SodaCatalog parameters={parameters} loader={mapLoader} onCenterChange={onCenterChange} />,
     );
     await waitFor(() => expect(mapMocks.mapConstructor).toHaveBeenCalledTimes(1));
+    expect(mapMocks.fitBounds).toHaveBeenCalledTimes(1);
+    expect(mapMocks.mapConstructor).toHaveBeenCalledWith(
+      expect.any(HTMLElement),
+      expect.objectContaining({ zoom: 8 }),
+    );
+
+    mapMocks.getCenter.mockReturnValue({ lat: () => 39.78, lng: () => -86.17 });
+    const idleHandler = mapMocks.addListener.mock.calls.find(([event]) => event === "idle")?.[1];
+    if (typeof idleHandler !== "function") throw new Error("Map idle listener was not registered");
+    idleHandler();
+    expect(onCenterChange).toHaveBeenCalledWith({ lat: 39.78, lng: -86.17 });
 
     rerender(
       <SodaCatalog
         parameters={parameters}
         center={{ lat: 39.78, lng: -86.17 }}
         loader={mapLoader}
+        onCenterChange={onCenterChange}
       />,
     );
 
@@ -159,6 +166,7 @@ describe("SodaCatalog", () => {
       expect(mapMocks.setCenter).toHaveBeenCalledWith({ lat: 39.78, lng: -86.17 }),
     );
     expect(mapMocks.mapConstructor).toHaveBeenCalledTimes(1);
+    expect(mapMocks.fitBounds).toHaveBeenCalledTimes(1);
   });
 
   it("disables and ignores personal tried filtering for guests", async () => {
