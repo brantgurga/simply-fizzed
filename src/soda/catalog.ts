@@ -62,27 +62,25 @@ export async function loadSodaCatalogData(
     return parsed === undefined ? [] : [parsed];
   });
 
-  return {
-    locations,
-    // Copying preserves canonical soda values while adding catalog-only projections.
-    // oxlint-disable-next-line no-map-spread
-    items: sodas.map((soda) => {
-      const sodaAvailability = availability.filter((item) => item.sodaId === soda.id);
-      const sodaRatings = ratings.filter(
-        (rating) => rating.sodaOfferingId === soda.id && rating.rating !== null,
-      );
-      const ratingTotal = sodaRatings.reduce((total, rating) => total + (rating.rating ?? 0), 0);
-      return {
-        ...soda,
-        availability: sodaAvailability,
-        ratingCount: sodaRatings.length,
-        ...(sodaRatings.length === 0 ? {} : { averageRating: ratingTotal / sodaRatings.length }),
-        tried: ratings.some(
-          (rating) => rating.sodaOfferingId === soda.id && rating.userId === userId,
-        ),
-      };
-    }),
-  };
+  const items: SodaCatalogItem[] = [];
+  for (const soda of sodas) {
+    const sodaAvailability = availability.filter((item) => item.sodaId === soda.id);
+    const sodaRatings = ratings.filter(
+      (rating) => rating.sodaOfferingId === soda.id && rating.rating !== null,
+    );
+    const ratingTotal = sodaRatings.reduce((total, rating) => total + (rating.rating ?? 0), 0);
+    items.push({
+      ...soda,
+      availability: sodaAvailability,
+      ratingCount: sodaRatings.length,
+      ...(sodaRatings.length === 0 ? {} : { averageRating: ratingTotal / sodaRatings.length }),
+      tried: ratings.some(
+        (rating) => rating.sodaOfferingId === soda.id && rating.userId === userId,
+      ),
+    });
+  }
+
+  return { items, locations };
 }
 
 const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
