@@ -18,6 +18,7 @@ import Pagination from "@mui/material/Pagination";
 import Select from "@mui/material/Select";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
+import { useColorScheme } from "@mui/material/styles";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Typography from "@mui/material/Typography";
@@ -104,7 +105,10 @@ function updateRoute(
   } else window.location.hash = url.slice(1);
 }
 
-type CoreLibrary = { LatLngBounds: new () => google.maps.LatLngBounds };
+type CoreLibrary = {
+  ColorScheme: typeof google.maps.ColorScheme;
+  LatLngBounds: new () => google.maps.LatLngBounds;
+};
 type MapsLibrary = {
   Map: new (element: HTMLElement, options: google.maps.MapOptions) => google.maps.Map;
   OverlayView: typeof google.maps.OverlayView;
@@ -125,7 +129,12 @@ function hasConstructor(value: unknown, property: string): boolean {
 }
 
 function isCoreLibrary(value: unknown): value is CoreLibrary {
-  return hasConstructor(value, "LatLngBounds");
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof Reflect.get(value, "ColorScheme") === "object" &&
+    hasConstructor(value, "LatLngBounds")
+  );
 }
 
 function isMapsLibrary(value: unknown): value is MapsLibrary {
@@ -243,6 +252,7 @@ interface CatalogMapProps {
 }
 
 function CatalogMap({ locations, items, filters, center, onCenterChange }: CatalogMapProps) {
+  const { colorScheme } = useColorScheme();
   const container = useRef<HTMLDivElement>(null);
   const mapReference = useRef<google.maps.Map | undefined>(undefined);
   const centerReference = useRef(center);
@@ -284,6 +294,8 @@ function CatalogMap({ locations, items, filters, center, onCenterChange }: Catal
         const initialCenter = centerReference.current;
         const map = new mapsLibrary.Map(element, {
           center: initialCenter ?? fallback,
+          colorScheme:
+            colorScheme === "dark" ? coreLibrary.ColorScheme.DARK : coreLibrary.ColorScheme.LIGHT,
           mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID,
           zoom: 8,
         });
@@ -333,7 +345,7 @@ function CatalogMap({ locations, items, filters, center, onCenterChange }: Catal
       mapReference.current = undefined;
       element.replaceChildren();
     };
-  }, [filters, items, locations]);
+  }, [colorScheme, filters, items, locations]);
 
   useEffect(() => {
     if (center !== undefined) mapReference.current?.setCenter(center);
