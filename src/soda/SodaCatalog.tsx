@@ -18,6 +18,7 @@ import Pagination from "@mui/material/Pagination";
 import Select from "@mui/material/Select";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
+import { useColorScheme } from "@mui/material/styles";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Typography from "@mui/material/Typography";
@@ -251,6 +252,7 @@ interface CatalogMapProps {
 }
 
 function CatalogMap({ locations, items, filters, center, onCenterChange }: CatalogMapProps) {
+  const { colorScheme } = useColorScheme();
   const container = useRef<HTMLDivElement>(null);
   const mapReference = useRef<google.maps.Map | undefined>(undefined);
   const centerReference = useRef(center);
@@ -292,7 +294,8 @@ function CatalogMap({ locations, items, filters, center, onCenterChange }: Catal
         const initialCenter = centerReference.current;
         const map = new mapsLibrary.Map(element, {
           center: initialCenter ?? fallback,
-          colorScheme: coreLibrary.ColorScheme.FOLLOW_SYSTEM,
+          colorScheme:
+            colorScheme === "dark" ? coreLibrary.ColorScheme.DARK : coreLibrary.ColorScheme.LIGHT,
           mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID,
           zoom: 8,
         });
@@ -342,7 +345,7 @@ function CatalogMap({ locations, items, filters, center, onCenterChange }: Catal
       mapReference.current = undefined;
       element.replaceChildren();
     };
-  }, [filters, items, locations]);
+  }, [colorScheme, filters, items, locations]);
 
   useEffect(() => {
     if (center !== undefined) mapReference.current?.setCenter(center);

@@ -3,6 +3,7 @@
 // See LICENSE for copying terms.
 
 import { render, screen, waitFor, within } from "@testing-library/react";
+import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mapMocks = vi.hoisted(() => {
@@ -41,7 +42,7 @@ vi.mock("../location/geocoder", () => ({
       importLibrary: vi.fn((name: string) => {
         if (name === "core")
           return {
-            ColorScheme: { FOLLOW_SYSTEM: "FOLLOW_SYSTEM" },
+            ColorScheme: { DARK: "DARK", LIGHT: "LIGHT" },
             LatLngBounds: class {
               extend = vi.fn();
             },
@@ -236,15 +237,21 @@ describe("SodaCatalog", () => {
       ],
     });
     const onCenterChange = vi.fn();
+    const darkTheme = createTheme({
+      cssVariables: { colorSchemeSelector: "data" },
+      colorSchemes: { light: true, dark: true },
+    });
     const { rerender } = render(
-      <SodaCatalog parameters={parameters} loader={mapLoader} onCenterChange={onCenterChange} />,
+      <ThemeProvider theme={darkTheme} defaultMode="dark" noSsr>
+        <SodaCatalog parameters={parameters} loader={mapLoader} onCenterChange={onCenterChange} />
+      </ThemeProvider>,
     );
     await waitFor(() => expect(mapMocks.mapConstructor).toHaveBeenCalledTimes(1));
     expect(mapMocks.fitBounds).toHaveBeenCalledTimes(1);
     expect(mapMocks.mapConstructor).toHaveBeenCalledWith(
       expect.any(HTMLElement),
       expect.objectContaining({
-        colorScheme: "FOLLOW_SYSTEM",
+        colorScheme: "DARK",
         mapId: "test-map-id",
         zoom: 8,
       }),
@@ -257,12 +264,14 @@ describe("SodaCatalog", () => {
     expect(onCenterChange).toHaveBeenCalledWith({ lat: 39.78, lng: -86.17 });
 
     rerender(
-      <SodaCatalog
-        parameters={parameters}
-        center={{ lat: 39.78, lng: -86.17 }}
-        loader={mapLoader}
-        onCenterChange={onCenterChange}
-      />,
+      <ThemeProvider theme={darkTheme} defaultMode="dark" noSsr>
+        <SodaCatalog
+          parameters={parameters}
+          center={{ lat: 39.78, lng: -86.17 }}
+          loader={mapLoader}
+          onCenterChange={onCenterChange}
+        />
+      </ThemeProvider>,
     );
 
     await waitFor(() =>
