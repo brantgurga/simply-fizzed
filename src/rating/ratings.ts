@@ -43,7 +43,7 @@ export type InventoryLoad =
 
 export type RatingValue = MugRating | null | undefined;
 
-function parseRating(id: string, value: unknown): RatingRecord | undefined {
+export function parseRating(id: string, value: unknown): RatingRecord | undefined {
   const parsed = ratingDocumentSchema.safeParse(value);
   return parsed.success ? { id, ...parsed.data } : undefined;
 }

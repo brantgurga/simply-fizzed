@@ -40,9 +40,9 @@ interface GoogleMapsSettingsConstructor {
   getInstance(): GoogleMapsSettings;
 }
 
-interface GoogleMapsApi {
+export interface GoogleMapsApi {
   maps: {
-    importLibrary(name: "core" | "geocoding"): Promise<unknown>;
+    importLibrary(name: string): Promise<unknown>;
   };
 }
 
@@ -83,7 +83,10 @@ function clearGoogleMapsCallbacks(): void {
   delete window.simplyFizzedGoogleMapsLoaded;
 }
 
-async function loadGoogleMapsGeocoder(apiKey: string): Promise<GoogleMapsGeocoderConstructor> {
+/** Load the shared Google Maps API and configure its App Check token provider. */
+export async function loadGoogleMapsApi(
+  apiKey: string = import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+): Promise<GoogleMapsApi> {
   let api = currentGoogleMapsApi();
   if (!api) {
     if (typeof document === "undefined") {
@@ -141,7 +144,11 @@ async function loadGoogleMapsGeocoder(apiKey: string): Promise<GoogleMapsGeocode
     }
     Settings.getInstance().fetchAppCheckToken = () => getToken(appCheckInstance, false);
   }
+  return api;
+}
 
+async function loadGoogleMapsGeocoder(apiKey: string): Promise<GoogleMapsGeocoderConstructor> {
+  const api = await loadGoogleMapsApi(apiKey);
   const library = await api.maps.importLibrary("geocoding");
   if (typeof library !== "object" || library === null || !("Geocoder" in library)) {
     throw new Error("Google Maps loaded without the geocoding library");

@@ -129,12 +129,14 @@ function matchScore(soda: SodaDocument, query: string): number | undefined {
   const names = searchableNames(soda);
   if (names.includes(query)) return 0;
   if (names.some((name) => name.startsWith(query))) return 1;
+  const compactQuery = query.replaceAll(" ", "");
+  if (names.some((name) => name.replaceAll(" ", "").includes(compactQuery))) return 2;
 
   const queryTokens = query.split(" ");
   if (names.some((name) => tokensContainQuery(name.split(" "), queryTokens))) {
-    return 2;
+    return 3;
   }
-  if (names.some((name) => name.includes(query))) return 3;
+  if (names.some((name) => name.includes(query))) return 4;
 
   if (
     queryTokens.every((token) => token.length >= 4) &&
@@ -146,7 +148,7 @@ function matchScore(soda: SodaDocument, query: string): number | undefined {
       );
     })
   ) {
-    return 4;
+    return 5;
   }
   return undefined;
 }

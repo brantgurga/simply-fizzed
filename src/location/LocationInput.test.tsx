@@ -44,10 +44,31 @@ describe("LocationInput", () => {
     expect(screen.getByLabelText("City or postal code")).toBeInTheDocument();
   });
 
-  it("gives the location progress indicator an accessible name", () => {
-    const geolocation: GeolocationProvider = {
-      getCurrentPosition: vi.fn(),
-    };
+  it("does not request geolocation until the user asks", async () => {
+    const user = userEvent.setup();
+    const onResolve = vi.fn();
+    const getCurrentPosition = vi.fn((success: PositionCallback) =>
+      success(positionAt(39.1, -94.6)),
+    );
+
+    render(
+      <LocationInput
+        geocoder={new FakeGeocoder()}
+        onResolve={onResolve}
+        onResolveError={vi.fn()}
+        geolocation={{ getCurrentPosition }}
+      />,
+    );
+
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Use my current location" }));
+    await waitFor(() => expect(onResolve).toHaveBeenCalledWith({ lat: 39.1, lng: -94.6 }));
+    expect(screen.getByText(/using your current location/i)).toBeInTheDocument();
+  });
+
+  it("shows progress while an interactive geolocation request is pending", async () => {
+    const user = userEvent.setup();
+    const geolocation: GeolocationProvider = { getCurrentPosition: vi.fn() };
 
     render(
       <LocationInput
@@ -58,28 +79,8 @@ describe("LocationInput", () => {
       />,
     );
 
-    expect(
-      screen.getByRole("progressbar", { name: "Detecting your location" }),
-    ).toBeInTheDocument();
-  });
-
-  it("resolves automatically when geolocation is granted", async () => {
-    const onResolve = vi.fn();
-    const geolocation: GeolocationProvider = {
-      getCurrentPosition: (success) => success(positionAt(39.1, -94.6)),
-    };
-
-    render(
-      <LocationInput
-        geocoder={new FakeGeocoder()}
-        onResolve={onResolve}
-        onResolveError={vi.fn()}
-        geolocation={geolocation}
-      />,
-    );
-
-    await waitFor(() => expect(onResolve).toHaveBeenCalledWith({ lat: 39.1, lng: -94.6 }));
-    expect(await screen.findByText(/using your current location/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Use my current location" }));
+    expect(screen.getByRole("button", { name: "Detecting your location…" })).toBeDisabled();
   });
 
   it("falls back to manual entry when permission is denied", async () => {
@@ -95,6 +96,7 @@ describe("LocationInput", () => {
       getCurrentPosition: (_success, error) => error?.(denied),
     };
 
+    const user = userEvent.setup();
     render(
       <LocationInput
         geocoder={new FakeGeocoder()}
@@ -104,6 +106,7 @@ describe("LocationInput", () => {
       />,
     );
 
+    await user.click(screen.getByRole("button", { name: "Use my current location" }));
     expect(await screen.findByText(/location permission denied/i)).toBeInTheDocument();
     expect(onResolve).not.toHaveBeenCalled();
   });

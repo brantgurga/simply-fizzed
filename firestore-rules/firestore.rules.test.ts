@@ -10,6 +10,7 @@ import {
 } from "@firebase/rules-unit-testing";
 import {
   collection,
+  collectionGroup,
   deleteDoc,
   doc,
   getDoc,
@@ -632,6 +633,7 @@ describe("public profiles and rating inventories", () => {
 
     await assertSucceeds(getDoc(doc(database, "profiles", USER_ID)));
     await assertSucceeds(getDocs(collection(database, "profiles", USER_ID, "ratings")));
+    await assertSucceeds(getDocs(collectionGroup(database, "ratings")));
     await assertFails(getDocs(collection(database, "profiles")));
   });
 

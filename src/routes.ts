@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 export type AppRoute =
   | { page: "home" }
+  | { page: "catalog"; parameters: URLSearchParams }
   | { page: "location"; id: string }
   | { page: "soda"; id: string }
   | { page: "profile"; id: string }
@@ -25,6 +26,9 @@ function decodeId(value: string): string | undefined {
 export function parseHashRoute(hash: string): AppRoute {
   if (hash === "" || hash === "#" || hash === "#/") return { page: "home" };
   if (hash === "#/manage/users") return { page: "manageUsers" };
+  const catalogMatch = /^#\/sodas(?:\?(.*))?$/.exec(hash);
+  if (catalogMatch !== null)
+    return { page: "catalog", parameters: new URLSearchParams(catalogMatch[1]) };
 
   const match = /^#\/(locations|sodas|profiles)\/([^/]+)$/.exec(hash);
   if (match === null) return { page: "notFound" };
@@ -41,6 +45,11 @@ export function locationRoute(id: string): string {
 
 export function sodaRoute(id: string): string {
   return `#/sodas/${encodeURIComponent(id)}`;
+}
+
+export function sodaCatalogRoute(parameters = new URLSearchParams()): string {
+  const query = parameters.toString();
+  return query.length === 0 ? "#/sodas" : `#/sodas?${query}`;
 }
 
 export function profileRoute(id: string): string {
