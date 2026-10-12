@@ -13,12 +13,16 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import MenuIcon from "@mui/icons-material/Menu";
 import Alert from "@mui/material/Alert";
 import AppBar from "@mui/material/AppBar";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Container from "@mui/material/Container";
+import IconButton from "@mui/material/IconButton";
 import Link from "@mui/material/Link";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
@@ -122,6 +126,19 @@ const LoginScreen = lazy(async () => {
 
 function App() {
   const route = useHashRoute();
+  const [navigationAnchor, setNavigationAnchor] = useState<HTMLElement | null>(null);
+  const navigationPages = [
+    {
+      label: "Locations",
+      href: "#/",
+      current: route.page === "home" || route.page === "location",
+    },
+    {
+      label: "Sodas",
+      href: sodaCatalogRoute(),
+      current: route.page === "catalog" || route.page === "soda",
+    },
+  ];
   const geocoder = useMemo(() => createGeocoder(), []);
   const [location, setLocation] = useState<GeoPoint | undefined>(loadLastSearchCenter);
   const [user, setUser] = useState<User | null>(null);
@@ -272,14 +289,59 @@ function App() {
     <>
       <AppBar position="static">
         <Toolbar sx={{ gap: 2 }}>
-          <Typography variant="h6" component="h1" sx={{ flexGrow: 1 }}>
+          <Box component="nav" aria-label="Main" sx={{ display: { xs: "flex", md: "none" } }}>
+            <IconButton
+              color="inherit"
+              aria-label="Open navigation menu"
+              aria-controls={navigationAnchor === null ? undefined : "navigation-menu"}
+              aria-haspopup="true"
+              aria-expanded={navigationAnchor === null ? undefined : "true"}
+              edge="start"
+              onClick={(event) => setNavigationAnchor(event.currentTarget)}
+            >
+              <MenuIcon />
+            </IconButton>
+            <Menu
+              id="navigation-menu"
+              anchorEl={navigationAnchor}
+              open={navigationAnchor !== null}
+              onClose={() => setNavigationAnchor(null)}
+            >
+              {navigationPages.map((page) => (
+                <MenuItem
+                  key={page.label}
+                  component="a"
+                  href={page.href}
+                  selected={page.current}
+                  aria-current={page.current ? "page" : undefined}
+                  onClick={() => setNavigationAnchor(null)}
+                >
+                  {page.label}
+                </MenuItem>
+              ))}
+            </Menu>
+          </Box>
+          <Typography variant="h6" component="h1" sx={{ flexGrow: { xs: 1, md: 0 } }}>
             <Link href="#/" color="inherit" underline="none">
               {brand.name}
             </Link>
           </Typography>
-          <Link href={sodaCatalogRoute()} color="inherit" variant="body2">
-            Soda catalog
-          </Link>
+          <Box
+            component="nav"
+            aria-label="Main"
+            sx={{ display: { xs: "none", md: "flex" }, flexGrow: 1, gap: 1 }}
+          >
+            {navigationPages.map((page) => (
+              <Button
+                key={page.label}
+                color="inherit"
+                href={page.href}
+                aria-current={page.current ? "page" : undefined}
+              >
+                {page.label}
+              </Button>
+            ))}
+          </Box>
           {user === null ? (
             <Button color="inherit" onClick={requestSignIn}>
               Sign in

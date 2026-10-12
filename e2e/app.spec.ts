@@ -392,8 +392,13 @@ test.describe("App", () => {
   });
 
   test("browses, filters, and maps the soda catalog", async ({ page }) => {
-    await page.goto("/#/sodas");
+    await page.goto("/");
+    await page
+      .getByRole("navigation", { name: "Main" })
+      .getByRole("link", { name: "Sodas" })
+      .click();
 
+    await expect(page).toHaveURL(/#\/sodas$/u);
     await expect(page.getByRole("heading", { name: "Soda varieties" })).toBeVisible();
     await expect(page.getByText("4 matching soda varieties")).toBeVisible();
     await page.getByLabel("Search brand, name, or flavor").fill("rootbeer");
