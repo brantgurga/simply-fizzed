@@ -133,6 +133,7 @@ describe("SodaCatalog", () => {
 
   it("owns the accessible popup DOM through the documented overlay API", async () => {
     vi.stubEnv("VITE_GOOGLE_MAPS_API_KEY", "test-key");
+    vi.stubEnv("VITE_GOOGLE_MAPS_MAP_ID", "test-map-id");
     const mapLoader = vi.fn().mockResolvedValue({
       locations: [
         {
@@ -200,6 +201,7 @@ describe("SodaCatalog", () => {
 
   it("fits once and keeps the map instance after an idle center update", async () => {
     vi.stubEnv("VITE_GOOGLE_MAPS_API_KEY", "test-key");
+    vi.stubEnv("VITE_GOOGLE_MAPS_MAP_ID", "test-map-id");
     const parameters = new URLSearchParams({ view: "map" });
     const mapLoader = vi.fn().mockResolvedValue({
       locations: [
@@ -240,7 +242,7 @@ describe("SodaCatalog", () => {
     expect(mapMocks.fitBounds).toHaveBeenCalledTimes(1);
     expect(mapMocks.mapConstructor).toHaveBeenCalledWith(
       expect.any(HTMLElement),
-      expect.objectContaining({ mapId: "DEMO_MAP_ID", zoom: 8 }),
+      expect.objectContaining({ mapId: "test-map-id", zoom: 8 }),
     );
 
     mapMocks.getCenter.mockReturnValue({ lat: () => 39.78, lng: () => -86.17 });

@@ -409,8 +409,9 @@ and stricter rules, then publish the stricter rules in a subsequent staging run.
 The workflow exchanges GitHub OIDC tokens for short-lived Google credentials
 through `google-github-actions/auth`; it stores no service-account key. Build
 scripts run in a separate job without OIDC access. Configure `VITE_FIREBASE_API_KEY`,
-`VITE_FIREBASE_APPCHECK_SITE_KEY`, and `VITE_GOOGLE_MAPS_API_KEY` as `production`
-environment variables. Configure `GCP_WORKLOAD_IDENTITY_PROVIDER` as a repository
+`VITE_FIREBASE_APPCHECK_SITE_KEY`, `VITE_GOOGLE_MAPS_API_KEY`, and
+`VITE_GOOGLE_MAPS_MAP_ID` as `production` environment variables. Configure
+`GCP_WORKLOAD_IDENTITY_PROVIDER` as a repository
 variable (the provider's full resource name).
 
 The dedicated `github-deployer@simply-fizzed-prod.iam.gserviceaccount.com`

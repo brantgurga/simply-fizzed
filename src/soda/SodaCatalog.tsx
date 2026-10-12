@@ -284,7 +284,7 @@ function CatalogMap({ locations, items, filters, center, onCenterChange }: Catal
         const initialCenter = centerReference.current;
         const map = new mapsLibrary.Map(element, {
           center: initialCenter ?? fallback,
-          mapId: "DEMO_MAP_ID",
+          mapId: import.meta.env.VITE_GOOGLE_MAPS_MAP_ID,
           zoom: 8,
         });
         mapReference.current = map;
