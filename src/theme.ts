@@ -53,17 +53,17 @@ const theme = createTheme({
           "--fui-input": "var(--mui-palette-divider)",
           "--fui-error": "var(--mui-palette-error-main)",
         },
-        ".gm-style .gm-style-iw-c": {
+        ".gm-style .gm-style-iw-c.gm-style-iw-c": {
           backgroundColor: "var(--mui-palette-background-paper)",
           color: "var(--mui-palette-text-primary)",
         },
-        ".gm-style .gm-style-iw-tc::after": {
+        ".gm-style .gm-style-iw-tc.gm-style-iw-tc::after": {
           backgroundColor: "var(--mui-palette-background-paper)",
         },
-        ".gm-style .gm-style-iw-c a": {
+        ".gm-style .gm-style-iw-c.gm-style-iw-c a": {
           color: "var(--mui-palette-primary-main)",
         },
-        ".gm-style .gm-style-iw-c button.gm-ui-hover-effect > span": {
+        ".gm-style .gm-style-iw-c.gm-style-iw-c button.gm-ui-hover-effect > span": {
           backgroundColor: "var(--mui-palette-text-primary)",
         },
       },
