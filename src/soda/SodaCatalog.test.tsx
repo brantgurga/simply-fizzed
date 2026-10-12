@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // See LICENSE for copying terms.
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mapMocks = vi.hoisted(() => {
@@ -16,7 +16,18 @@ const mapMocks = vi.hoisted(() => {
   const markerConstructor = vi.fn(function MarkerConstructor() {
     return { addListener: vi.fn() };
   });
-  return { addListener, fitBounds, getCenter, mapConstructor, markerConstructor, setCenter };
+  const floatPane = document.createElement("div");
+  const preventMapHitsAndGesturesFrom = vi.fn();
+  return {
+    addListener,
+    fitBounds,
+    floatPane,
+    getCenter,
+    mapConstructor,
+    markerConstructor,
+    preventMapHitsAndGesturesFrom,
+    setCenter,
+  };
 });
 
 vi.mock("@googlemaps/markerclusterer", () => ({
@@ -36,9 +47,26 @@ vi.mock("../location/geocoder", () => ({
           };
         if (name === "maps") {
           return {
-            InfoWindow: class {
-              open = vi.fn();
-              setContent = vi.fn();
+            OverlayView: class {
+              static preventMapHitsAndGesturesFrom(element: Element) {
+                mapMocks.preventMapHitsAndGesturesFrom(element);
+              }
+              onAdd() {}
+              onRemove() {}
+              draw() {}
+              getPanes() {
+                return { floatPane: mapMocks.floatPane };
+              }
+              getProjection() {
+                return { fromLatLngToDivPixel: () => ({ x: 120, y: 80 }) };
+              }
+              setMap(map: unknown) {
+                if (map === null) this.onRemove();
+                else {
+                  this.onAdd();
+                  this.draw();
+                }
+              }
             },
             Map: mapMocks.mapConstructor,
           };
@@ -80,6 +108,7 @@ describe("SodaCatalog", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.clearAllMocks();
+    mapMocks.floatPane.replaceChildren();
   });
 
   it("renders compact catalog entries with rating evidence", async () => {
@@ -100,6 +129,62 @@ describe("SodaCatalog", () => {
 
     expect(await screen.findByText("1 matching soda variety")).toBeVisible();
     expect(screen.queryByText("Lemon-Up")).not.toBeInTheDocument();
+  });
+
+  it("owns the accessible popup DOM through the documented overlay API", async () => {
+    vi.stubEnv("VITE_GOOGLE_MAPS_API_KEY", "test-key");
+    const mapLoader = vi.fn().mockResolvedValue({
+      locations: [
+        {
+          id: "shop",
+          name: "Soda Shop",
+          address: { street: "1 Main St", city: "Indy", state: "IN", postalCode: "46204" },
+          geo: { lat: 39.77, lng: -86.16 },
+          geohash: "dp4dpr",
+        },
+      ],
+      items: [
+        {
+          id: "sprecher-root",
+          brand: "Sprecher",
+          name: "Root Beer",
+          flavor: "Root Beer",
+          ratingCount: 0,
+          tried: false,
+          availability: [
+            {
+              id: "available",
+              locationId: "shop",
+              sodaId: "sprecher-root",
+              form: "draft",
+              canSample: "yes",
+              canPurchase: "yes",
+            },
+          ],
+        },
+      ],
+    });
+    render(<SodaCatalog parameters={new URLSearchParams({ view: "map" })} loader={mapLoader} />);
+    await waitFor(() => expect(mapMocks.markerConstructor).toHaveBeenCalledTimes(1));
+    const marker = mapMocks.markerConstructor.mock.results[0]?.value;
+    const click = marker?.addListener.mock.calls.find(
+      (call: unknown[]) => call[0] === "click",
+    )?.[1];
+    if (typeof click !== "function") throw new Error("Marker click listener was not registered");
+
+    click();
+
+    const surface = mapMocks.floatPane.querySelector<HTMLElement>(".catalog-map-popup");
+    expect(surface).not.toBeNull();
+    expect(surface).toHaveAttribute("aria-label", "Soda Shop details");
+    expect(surface).toHaveTextContent("Soda Shop");
+    const popupContainer = mapMocks.floatPane.querySelector<HTMLElement>(
+      ".catalog-map-popup__container",
+    );
+    expect(mapMocks.preventMapHitsAndGesturesFrom).toHaveBeenCalledWith(popupContainer);
+    expect(popupContainer?.style.left).toBe("120px");
+    within(mapMocks.floatPane).getByRole("button", { name: "Close location details" }).click();
+    expect(mapMocks.floatPane).toBeEmptyDOMElement();
   });
 
   it("associates each catalog filter label with its form input", async () => {

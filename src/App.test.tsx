@@ -5,7 +5,8 @@
 import type { ReactNode } from "react";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { getContrastRatio } from "@mui/material/styles";
+import CssBaseline from "@mui/material/CssBaseline";
+import { createTheme, getContrastRatio, ThemeProvider } from "@mui/material/styles";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { brand } from "./branding";
@@ -211,6 +212,59 @@ describe("App", () => {
         "--fui-error": "var(--mui-palette-error-main)",
       },
     });
+  });
+
+  it("maps the custom map popup onto the active MUI color scheme", () => {
+    expect(theme.components?.MuiCssBaseline?.styleOverrides).toMatchObject({
+      ".catalog-map-popup": {
+        backgroundColor: "var(--mui-palette-background-paper)",
+        color: "var(--mui-palette-text-primary)",
+      },
+      ".catalog-map-popup__anchor::after": {
+        borderTop: "10px solid var(--mui-palette-background-paper)",
+      },
+      ".catalog-map-popup a": {
+        color: "var(--mui-palette-primary-main)",
+      },
+      ".catalog-map-popup__close": {
+        color: "var(--mui-palette-text-primary)",
+      },
+    });
+
+    for (const mode of ["light", "dark"] as const) {
+      const schemeTheme = createTheme({
+        cssVariables: true,
+        palette: rootBeerPalettes[mode].palette,
+        components: theme.components,
+      });
+      const { unmount } = render(
+        <ThemeProvider theme={schemeTheme}>
+          <CssBaseline />
+          <section className="catalog-map-popup" aria-label={`${mode} popup`}>
+            <a href="#test">Test link</a>
+            <button className="catalog-map-popup__close">×</button>
+          </section>
+        </ThemeProvider>,
+      );
+      const surface = screen.getByRole("region", { name: `${mode} popup` });
+      const surfaceStyle = getComputedStyle(surface);
+      expect(surfaceStyle.backgroundColor).toBe("var(--mui-palette-background-paper)");
+      expect(surfaceStyle.color).toBe("var(--mui-palette-text-primary)");
+      expect(getComputedStyle(screen.getByRole("link")).color).toBe(
+        "var(--mui-palette-primary-main)",
+      );
+      expect(getComputedStyle(screen.getByRole("button")).color).toBe(
+        "var(--mui-palette-text-primary)",
+      );
+      const rootStyle = getComputedStyle(document.documentElement);
+      expect(rootStyle.getPropertyValue("--mui-palette-background-paper")).toBe(
+        rootBeerPalettes[mode].palette.background.paper,
+      );
+      expect(rootStyle.getPropertyValue("--mui-palette-text-primary")).toBe(
+        rootBeerPalettes[mode].palette.text.primary,
+      );
+      unmount();
+    }
   });
 
   it("keeps browsing available without signing in", () => {
