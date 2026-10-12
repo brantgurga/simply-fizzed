@@ -102,6 +102,17 @@ describe("SodaCatalog", () => {
     expect(screen.queryByText("Lemon-Up")).not.toBeInTheDocument();
   });
 
+  it("associates each catalog filter label with its form input", async () => {
+    render(<SodaCatalog parameters={new URLSearchParams()} loader={loader} />);
+
+    await screen.findByRole("heading", { name: "Soda varieties" });
+    const labels = document.querySelectorAll<HTMLLabelElement>('label[for^="catalog-"]');
+    expect(labels).toHaveLength(8);
+    for (const label of labels) {
+      expect(document.getElementById(label.htmlFor)).toBeInstanceOf(HTMLInputElement);
+    }
+  });
+
   it("fits once and keeps the map instance after an idle center update", async () => {
     vi.stubEnv("VITE_GOOGLE_MAPS_API_KEY", "test-key");
     const parameters = new URLSearchParams({ view: "map" });
