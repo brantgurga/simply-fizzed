@@ -90,7 +90,19 @@ describe("AuditHistory", () => {
     expect(screen.getByText(/Deleted or unavailable user · deleted-uid/)).toBeVisible();
     expect(screen.getByText(/unexplained break exists/i)).toBeVisible();
 
-    await interaction.click(screen.getAllByText("Inspect snapshots")[0]!);
+    const restrictedSnapshotsName = `Inspect snapshots for Restricted on ${new Date(
+      history.events[0]!.occurredAt,
+    ).toLocaleString()}`;
+    expect(screen.getByRole("button", { name: restrictedSnapshotsName })).toBeVisible();
+    expect(
+      screen.getByRole("button", {
+        name: `Inspect snapshots for Account created on ${new Date(
+          history.events[1]!.occurredAt,
+        ).toLocaleString()}`,
+      }),
+    ).toBeVisible();
+
+    await interaction.click(screen.getByRole("button", { name: restrictedSnapshotsName }));
     expect(screen.getAllByText("Before")[0]).toBeVisible();
     expect(screen.getByRole("tree", { name: "Before audit snapshot" })).toBeVisible();
     expect(screen.getByRole("tree", { name: "After audit snapshot" })).toBeVisible();

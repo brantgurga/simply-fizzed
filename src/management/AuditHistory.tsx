@@ -123,13 +123,15 @@ function AuditEventEntry({
   const details = restriction(event.after) ?? restriction(event.before);
   const internalReason = details?.["internalReason"];
   const publicReason = details?.["publicReason"];
+  const eventLabel = labels[event.type] ?? event.type;
+  const occurredAt = new Date(event.occurredAt).toLocaleString();
   return (
     <Fragment>
       <TableRow>
         <TableCell component="th" scope="row">
-          {labels[event.type] ?? event.type}
+          {eventLabel}
         </TableCell>
-        <TableCell>{new Date(event.occurredAt).toLocaleString()}</TableCell>
+        <TableCell>{occurredAt}</TableCell>
         <TableCell>
           {event.actor.kind === "system" ? (
             <Chip size="small" label="Firebase Auth system" />
@@ -144,7 +146,9 @@ function AuditEventEntry({
         <TableCell>{event.changedFields?.join(", ") || "—"}</TableCell>
         <TableCell sx={{ minWidth: 320 }}>
           <Accordion disableGutters>
-            <Summary>Inspect snapshots</Summary>
+            <Summary aria-label={`Inspect snapshots for ${eventLabel} on ${occurredAt}`}>
+              Inspect snapshots
+            </Summary>
             <Details>
               <Typography variant="subtitle2">Before</Typography>
               <AuditJsonView label="Before audit snapshot" value={event.before} />
