@@ -10,8 +10,14 @@ import Details from "@mui/material/AccordionDetails";
 import Summary from "@mui/material/AccordionSummary";
 import Accordion from "@mui/material/Accordion";
 import Stack from "@mui/material/Stack";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { allExpanded, JsonView } from "react-json-view-lite";
 import type { AuditEvent, AuditHistory as AuditHistoryData, AuditIdentity, AuditJson } from "./api";
 import styles from "./AuditJsonView.module.css";
@@ -115,48 +121,53 @@ function AuditEventEntry({
   discontinuity: boolean;
 }) {
   const details = restriction(event.after) ?? restriction(event.before);
+  const internalReason = details?.["internalReason"];
+  const publicReason = details?.["publicReason"];
+  const eventLabel = labels[event.type] ?? event.type;
+  const occurredAt = new Date(event.occurredAt).toLocaleString();
   return (
-    <Stack
-      component="article"
-      spacing={1}
-      sx={{ borderBlockEnd: 1, borderColor: "divider", pb: 2 }}
-    >
-      <Typography variant="h6">{labels[event.type] ?? event.type}</Typography>
-      <Typography variant="body2">{new Date(event.occurredAt).toLocaleString()}</Typography>
-      <Typography component="div">
-        Actor:{" "}
-        {event.actor.kind === "system" ? (
-          <Chip label="Firebase Auth system" />
-        ) : (
-          identity(identityMap, event.actor.uid)
-        )}
-      </Typography>
-      <Typography component="div">Subject: {identity(identityMap, event.subjectUid)}</Typography>
-      {event.reason !== undefined && <Typography>Action reason: {event.reason}</Typography>}
-      {typeof details?.["internalReason"] === "string" && (
-        <Typography>Internal restriction reason: {details["internalReason"]}</Typography>
-      )}
-      {typeof details?.["publicReason"] === "string" && (
-        <Typography>User-visible restriction reason: {details["publicReason"]}</Typography>
-      )}
-      {event.changedFields !== undefined && event.changedFields.length > 0 && (
-        <Typography>Changed: {event.changedFields.join(", ")}</Typography>
-      )}
+    <Fragment>
+      <TableRow>
+        <TableCell component="th" scope="row">
+          {eventLabel}
+        </TableCell>
+        <TableCell>{occurredAt}</TableCell>
+        <TableCell>
+          {event.actor.kind === "system" ? (
+            <Chip size="small" label="Firebase Auth system" />
+          ) : (
+            identity(identityMap, event.actor.uid)
+          )}
+        </TableCell>
+        <TableCell>{identity(identityMap, event.subjectUid)}</TableCell>
+        <TableCell>{event.reason ?? "—"}</TableCell>
+        <TableCell>{typeof internalReason === "string" ? internalReason : "—"}</TableCell>
+        <TableCell>{typeof publicReason === "string" ? publicReason : "—"}</TableCell>
+        <TableCell>{event.changedFields?.join(", ") || "—"}</TableCell>
+        <TableCell sx={{ minWidth: 320 }}>
+          <Accordion disableGutters>
+            <Summary aria-label={`Inspect snapshots for ${eventLabel} on ${occurredAt}`}>
+              Inspect snapshots
+            </Summary>
+            <Details>
+              <Typography variant="subtitle2">Before</Typography>
+              <AuditJsonView label="Before audit snapshot" value={event.before} />
+              <Typography variant="subtitle2">After</Typography>
+              <AuditJsonView label="After audit snapshot" value={event.after} />
+            </Details>
+          </Accordion>
+        </TableCell>
+      </TableRow>
       {discontinuity && (
-        <Alert severity="warning">
-          An unexplained break exists between this event and the preceding observed history.
-        </Alert>
+        <TableRow>
+          <TableCell colSpan={9}>
+            <Alert severity="warning">
+              An unexplained break exists between this event and the preceding observed history.
+            </Alert>
+          </TableCell>
+        </TableRow>
       )}
-      <Accordion disableGutters>
-        <Summary>Inspect before and after snapshots</Summary>
-        <Details>
-          <Typography variant="subtitle2">Before</Typography>
-          <AuditJsonView label="Before audit snapshot" value={event.before} />
-          <Typography variant="subtitle2">After</Typography>
-          <AuditJsonView label="After audit snapshot" value={event.after} />
-        </Details>
-      </Accordion>
-    </Stack>
+    </Fragment>
   );
 }
 
@@ -175,19 +186,39 @@ export default function AuditHistory({
       {history.events.length === 0 ? (
         <Typography color="text.secondary">No post-rollout user changes are recorded.</Typography>
       ) : (
-        history.events.map((event, index) => {
-          const older = history.events[index + 1];
-          const discontinuity =
-            older !== undefined && JSON.stringify(event.before) !== JSON.stringify(older.after);
-          return (
-            <AuditEventEntry
-              key={event.id}
-              event={event}
-              identityMap={identityMap}
-              discontinuity={discontinuity}
-            />
-          );
-        })
+        <TableContainer>
+          <Table size="small" aria-label="User change history">
+            <TableHead>
+              <TableRow>
+                <TableCell>Event</TableCell>
+                <TableCell>Occurred</TableCell>
+                <TableCell>Actor</TableCell>
+                <TableCell>Subject</TableCell>
+                <TableCell>Action reason</TableCell>
+                <TableCell>Internal restriction reason</TableCell>
+                <TableCell>User-visible restriction reason</TableCell>
+                <TableCell>Changed fields</TableCell>
+                <TableCell>Evidence</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {history.events.map((event, index) => {
+                const older = history.events[index + 1];
+                const discontinuity =
+                  older !== undefined &&
+                  JSON.stringify(event.before) !== JSON.stringify(older.after);
+                return (
+                  <AuditEventEntry
+                    key={event.id}
+                    event={event}
+                    identityMap={identityMap}
+                    discontinuity={discontinuity}
+                  />
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
       {history.nextBeforeSequence !== undefined && onLoadMore !== undefined && (
         <Button disabled={loadingMore} onClick={onLoadMore}>

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // See LICENSE for copying terms.
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { AuditHistory as AuditHistoryData } from "./api";
@@ -63,20 +63,46 @@ describe("AuditHistory", () => {
     const interaction = userEvent.setup();
     render(<AuditHistory history={history} />);
 
-    const headings = screen.getAllByRole("heading", { level: 6 });
-    expect(headings.map((heading) => heading.textContent)).toEqual([
-      "Restricted",
-      "Account created",
-    ]);
-    expect(screen.getByText("Action reason: Moderator action with full context")).toBeVisible();
-    expect(screen.getByText("Internal restriction reason: Repeated abuse")).toBeVisible();
+    const table = screen.getByRole("table", { name: "User change history" });
     expect(
-      screen.getByText("User-visible restriction reason: Please pause contributions"),
-    ).toBeVisible();
+      within(table)
+        .getAllByRole("columnheader")
+        .map((cell) => cell.textContent),
+    ).toEqual([
+      "Event",
+      "Occurred",
+      "Actor",
+      "Subject",
+      "Action reason",
+      "Internal restriction reason",
+      "User-visible restriction reason",
+      "Changed fields",
+      "Evidence",
+    ]);
+    expect(
+      within(table)
+        .getAllByRole("rowheader")
+        .map((cell) => cell.textContent),
+    ).toEqual(["Restricted", "Account created"]);
+    expect(screen.getByText("Moderator action with full context")).toBeVisible();
+    expect(screen.getByText("Repeated abuse")).toBeVisible();
+    expect(screen.getByText("Please pause contributions")).toBeVisible();
     expect(screen.getByText(/Deleted or unavailable user · deleted-uid/)).toBeVisible();
     expect(screen.getByText(/unexplained break exists/i)).toBeVisible();
 
-    await interaction.click(screen.getAllByText("Inspect before and after snapshots")[0]!);
+    const restrictedSnapshotsName = `Inspect snapshots for Restricted on ${new Date(
+      history.events[0]!.occurredAt,
+    ).toLocaleString()}`;
+    expect(screen.getByRole("button", { name: restrictedSnapshotsName })).toBeVisible();
+    expect(
+      screen.getByRole("button", {
+        name: `Inspect snapshots for Account created on ${new Date(
+          history.events[1]!.occurredAt,
+        ).toLocaleString()}`,
+      }),
+    ).toBeVisible();
+
+    await interaction.click(screen.getByRole("button", { name: restrictedSnapshotsName }));
     expect(screen.getAllByText("Before")[0]).toBeVisible();
     expect(screen.getByRole("tree", { name: "Before audit snapshot" })).toBeVisible();
     expect(screen.getByRole("tree", { name: "After audit snapshot" })).toBeVisible();
