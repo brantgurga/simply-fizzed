@@ -33,11 +33,9 @@ export interface LocationInputProps {
 }
 
 /**
- * Lets the user provide a search location. On mount it requests browser
- * geolocation and, when permitted, resolves immediately with those coordinates.
- * If geolocation is denied or unavailable it falls back to manual city /
- * postal-code entry, geocoded through the injected `Geocoder`. Denied
- * permission and geocoding failures surface as clear messages.
+ * Lets the user explicitly detect their current position or provide a manual
+ * city / postal-code search. Geolocation is never requested during page load,
+ * preserving back/forward cache eligibility and avoiding surprise prompts.
  */
 export default function LocationInput({
   geocoder,
@@ -45,7 +43,7 @@ export default function LocationInput({
   onResolveError,
   geolocation = defaultGeolocation,
 }: LocationInputProps) {
-  const [locating, setLocating] = useState(geolocation !== undefined);
+  const [locating, setLocating] = useState(false);
   const [info, setInfo] = useState<string | undefined>(
     geolocation === undefined
       ? "Location access isn't available. Enter a city or postal code."
@@ -63,31 +61,30 @@ export default function LocationInput({
     [],
   );
 
-  useEffect(() => {
-    let active = true;
-    if (geolocation !== undefined) {
-      geolocation.getCurrentPosition(
-        (position) => {
-          if (!active) return;
-          setLocating(false);
-          setInfo("Using your current location.");
-          onResolve({ lat: position.coords.latitude, lng: position.coords.longitude });
-        },
-        (positionError) => {
-          if (!active) return;
-          setLocating(false);
-          setInfo(
-            positionError.code === positionError.PERMISSION_DENIED
-              ? "Location permission denied. Enter a city or postal code."
-              : "We couldn't detect your location. Enter a city or postal code.",
-          );
-        },
-      );
-    }
-    return () => {
-      active = false;
-    };
-  }, [geolocation, onResolve]);
+  function detectCurrentLocation() {
+    if (geolocation === undefined || locating) return;
+    const requestId = ++requestIdRef.current;
+    setLocating(true);
+    setError(undefined);
+    setInfo(undefined);
+    geolocation.getCurrentPosition(
+      (position) => {
+        if (requestId !== requestIdRef.current) return;
+        setLocating(false);
+        setInfo("Using your current location.");
+        onResolve({ lat: position.coords.latitude, lng: position.coords.longitude });
+      },
+      (positionError) => {
+        if (requestId !== requestIdRef.current) return;
+        setLocating(false);
+        setInfo(
+          positionError.code === positionError.PERMISSION_DENIED
+            ? "Location permission denied. Enter a city or postal code."
+            : "We couldn't detect your location. Enter a city or postal code.",
+        );
+      },
+    );
+  }
 
   async function resolveQuery() {
     const trimmed = query.trim();
@@ -118,20 +115,23 @@ export default function LocationInput({
     void resolveQuery();
   }
 
-  if (locating) {
-    return (
-      <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
-        <CircularProgress size={20} aria-label="Detecting your location" />
-        <span>Detecting your location…</span>
-      </Stack>
-    );
-  }
-
   return (
     <Box component="form" onSubmit={handleSubmit} noValidate>
       <Stack spacing={2}>
         {info !== undefined && <Alert severity="info">{info}</Alert>}
         {error !== undefined && <Alert severity="error">{error}</Alert>}
+        {geolocation !== undefined && (
+          <Button
+            type="button"
+            variant="outlined"
+            onClick={detectCurrentLocation}
+            disabled={locating || searching}
+            sx={{ alignSelf: "flex-start" }}
+            startIcon={locating ? <CircularProgress size={16} /> : undefined}
+          >
+            {locating ? "Detecting your location…" : "Use my current location"}
+          </Button>
+        )}
         <Stack direction="row" spacing={2} sx={{ alignItems: "flex-start" }}>
           <TextField
             label="City or postal code"

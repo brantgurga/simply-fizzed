@@ -3,7 +3,14 @@
 // See LICENSE for copying terms.
 
 import { describe, expect, it } from "vitest";
-import { locationRoute, manageUsersRoute, parseHashRoute, profileRoute, sodaRoute } from "./routes";
+import {
+  locationRoute,
+  manageUsersRoute,
+  parseHashRoute,
+  profileRoute,
+  sodaCatalogRoute,
+  sodaRoute,
+} from "./routes";
 
 describe("hash routes", () => {
   it("preserves the browse home", () => {
@@ -13,6 +20,13 @@ describe("hash routes", () => {
 
   it("recognizes the exact privileged management route", () => {
     expect(parseHashRoute(manageUsersRoute)).toEqual({ page: "manageUsers" });
+  });
+
+  it("round-trips URL-addressable catalog state", () => {
+    const parameters = new URLSearchParams({ q: "root beer", page: "2", view: "map" });
+    const route = parseHashRoute(sodaCatalogRoute(parameters));
+    expect(route.page).toBe("catalog");
+    if (route.page === "catalog") expect(route.parameters.toString()).toBe(parameters.toString());
   });
 
   it("round-trips safely encoded exact document ids", () => {

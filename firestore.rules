@@ -210,6 +210,11 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Aggregate catalog ratings require a collection-group query across public inventories.
+    match /{profilePath=**}/ratings/{ratingId} {
+      allow read: if true;
+    }
+
     match /profiles/{userId} {
       allow get: if true;
       allow list, create, update, delete: if false;

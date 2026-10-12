@@ -329,6 +329,7 @@ test.describe("App", () => {
     await context.grantPermissions(["geolocation"]);
     await context.setGeolocation(INDIANAPOLIS);
     await page.goto("/");
+    await page.getByRole("button", { name: "Use my current location" }).click();
 
     const manifestResponse = await page.request.get("/manifest.webmanifest");
     expect(manifestResponse.ok()).toBe(true);
@@ -388,6 +389,23 @@ test.describe("App", () => {
     await expect(page.getByText("Searching near 39.0997, -94.5786.")).toBeVisible();
     await expect(page.getByText(/No soda found within/)).toBeVisible();
     await context.setOffline(false);
+  });
+
+  test("browses, filters, and maps the soda catalog", async ({ page }) => {
+    await page.goto("/#/sodas");
+
+    await expect(page.getByRole("heading", { name: "Soda varieties" })).toBeVisible();
+    await expect(page.getByText("4 matching soda varieties")).toBeVisible();
+    await page.getByLabel("Search brand, name, or flavor").fill("rootbeer");
+    await expect(page.getByText("2 matching soda varieties")).toBeVisible();
+    await expect(page).toHaveURL(/q=rootbeer/u);
+
+    await page.getByRole("combobox", { name: "Form" }).click();
+    await page.getByRole("option", { name: "Draft" }).click();
+    await expect(page.getByText("1 matching soda variety")).toBeVisible();
+    await page.getByRole("button", { name: "Map" }).click();
+    await expect(page.getByText(/interactive maps are disabled/i)).toBeVisible();
+    await expect(page.getByRole("link", { name: TIMS_BREWERY.name })).toBeVisible();
   });
 
   test("loads exact location and soda hash routes", async ({ page }) => {
@@ -607,6 +625,8 @@ test.describe("App", () => {
     await context.grantPermissions(["geolocation"]);
     await context.setGeolocation(INDIANAPOLIS);
     await page.goto("/");
+    await expect(page.getByText("Searching near", { exact: false })).toHaveCount(0);
+    await page.getByRole("button", { name: "Use my current location" }).click();
 
     // Location names are the only level-2 headings; their DOM order is the
     // nearest-first sort. Kroger sits at the search point, Tim's Brewery ~14

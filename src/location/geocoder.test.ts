@@ -176,7 +176,7 @@ describe("GoogleMapsGeocoder", () => {
       expect(url.origin + url.pathname).toBe("https://maps.googleapis.com/maps/api/js");
       expect(url.searchParams.get("key")).toBe("browser-key");
       expect(url.searchParams.get("callback")).toBe("simplyFizzedGoogleMapsLoaded");
-      window.google = { maps: { importLibrary } };
+      Reflect.set(window, "google", { maps: { importLibrary } });
       queueMicrotask(() => window.simplyFizzedGoogleMapsLoaded?.());
     });
 

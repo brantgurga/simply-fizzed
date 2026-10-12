@@ -39,8 +39,9 @@ import UserManagement from "./management/UserManagement";
 import NearbySearch from "./nearby/NearbySearch";
 import { searchNearby } from "./nearby/nearby";
 import UserProfile from "./profile/UserProfile";
-import { manageUsersRoute, profileRoute, useHashRoute } from "./routes";
+import { manageUsersRoute, profileRoute, sodaCatalogRoute, useHashRoute } from "./routes";
 import { savePublicProfile } from "./rating/ratings";
+import SodaCatalog from "./soda/SodaCatalog";
 import SodaDetail from "./soda/SodaDetail";
 
 type LoginScreenProps = {
@@ -143,8 +144,11 @@ function App() {
   }>();
   const search = useCallback((center: GeoPoint) => searchNearby(db, center), []);
   const resolveLocation = useCallback((center: GeoPoint) => {
-    saveLastSearchCenter(center);
-    setLocation(center);
+    setLocation((current) => {
+      if (current?.lat === center.lat && current.lng === center.lng) return current;
+      saveLastSearchCenter(center);
+      return center;
+    });
   }, []);
   const clearLocation = useCallback(() => setLocation(undefined), []);
   const closeLogin = useCallback(() => setShowLogin(false), []);
@@ -273,6 +277,9 @@ function App() {
               {brand.name}
             </Link>
           </Typography>
+          <Link href={sodaCatalogRoute()} color="inherit" variant="body2">
+            Soda catalog
+          </Link>
           {user === null ? (
             <Button color="inherit" onClick={requestSignIn}>
               Sign in
@@ -341,7 +348,14 @@ function App() {
               )}
             </Alert>
           )}
-          {route.page === "location" ? (
+          {route.page === "catalog" ? (
+            <SodaCatalog
+              parameters={route.parameters}
+              userId={user?.uid}
+              center={location}
+              onCenterChange={resolveLocation}
+            />
+          ) : route.page === "location" ? (
             <LocationDetail
               locationId={route.id}
               user={user}

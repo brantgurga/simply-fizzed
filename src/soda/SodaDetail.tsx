@@ -18,6 +18,7 @@ import Typography from "@mui/material/Typography";
 import { publicContributorName, type ContributorIdentity } from "../contributor";
 import { db } from "../firebase";
 import { loadRating, saveRating, type RatingLoad, type RatingValue } from "../rating/ratings";
+import { sodaCatalogRoute } from "../routes";
 import { formatSodaUpdatedAt, loadSoda, type DocumentLoad, type SodaDocument } from "./sodas";
 
 interface SodaDetailProps {
@@ -259,9 +260,13 @@ export default function SodaDetail({
   }
 
   const soda = state.value;
+  const mapParameters = new URLSearchParams({
+    q: `${soda.brand} ${soda.name} ${soda.flavor}`,
+    view: "map",
+  });
   return (
     <Stack spacing={2}>
-      <Link href="#/">← Back to browse</Link>
+      <Link href={sodaCatalogRoute()}>← Back to soda catalog</Link>
       <Typography variant="h4" component="h2">
         {soda.brand} {soda.name}
       </Typography>
@@ -274,6 +279,7 @@ export default function SodaDetail({
       <Typography>
         <strong>Flavor:</strong> {soda.flavor}
       </Typography>
+      <Link href={sodaCatalogRoute(mapParameters)}>Find locations carrying this soda</Link>
       <RatingControls
         soda={soda}
         user={user}
