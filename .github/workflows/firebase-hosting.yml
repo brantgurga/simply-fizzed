@@ -54,6 +54,7 @@ jobs:
       VITE_FIREBASE_APP_ID: "1:562151439154:web:9216391ad8dd574951352b"
       VITE_FIREBASE_MEASUREMENT_ID: G-TYWXP7PBJG
       VITE_GOOGLE_MAPS_API_KEY: ${{ vars.VITE_GOOGLE_MAPS_API_KEY }}
+      VITE_GOOGLE_MAPS_MAP_ID: ${{ vars.VITE_GOOGLE_MAPS_MAP_ID }}
     steps:
       - name: Checkout tested commit
         uses: actions/checkout@v7
@@ -86,6 +87,10 @@ jobs:
           }
           test -n "$VITE_GOOGLE_MAPS_API_KEY" || {
             echo "::error::Set the VITE_GOOGLE_MAPS_API_KEY production environment variable"
+            exit 1
+          }
+          test -n "$VITE_GOOGLE_MAPS_MAP_ID" || {
+            echo "::error::Set the VITE_GOOGLE_MAPS_MAP_ID production environment variable"
             exit 1
           }
 
