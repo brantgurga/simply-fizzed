@@ -39,10 +39,14 @@ export function AvailabilityDetailFields({
   return (
     <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
       <FormControl size="small" sx={{ minWidth: 150 }}>
-        <InputLabel id={`${idPrefix}-sample-label`}>Can sample</InputLabel>
+        <InputLabel id={`${idPrefix}-sample-label`} htmlFor={`${idPrefix}-sample-input`}>
+          Can sample
+        </InputLabel>
         <Select
+          id={`${idPrefix}-sample-select`}
           labelId={`${idPrefix}-sample-label`}
           label="Can sample"
+          inputProps={{ id: `${idPrefix}-sample-input` }}
           value={value.canSample}
           disabled={disabled}
           onChange={(event) => onChange({ ...value, canSample: event.target.value })}
@@ -55,10 +59,14 @@ export function AvailabilityDetailFields({
         </Select>
       </FormControl>
       <FormControl size="small" sx={{ minWidth: 150 }}>
-        <InputLabel id={`${idPrefix}-purchase-label`}>Can purchase</InputLabel>
+        <InputLabel id={`${idPrefix}-purchase-label`} htmlFor={`${idPrefix}-purchase-input`}>
+          Can purchase
+        </InputLabel>
         <Select
+          id={`${idPrefix}-purchase-select`}
           labelId={`${idPrefix}-purchase-label`}
           label="Can purchase"
+          inputProps={{ id: `${idPrefix}-purchase-input` }}
           value={value.canPurchase}
           disabled={disabled}
           onChange={(event) => onChange({ ...value, canPurchase: event.target.value })}

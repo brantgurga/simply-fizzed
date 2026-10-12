@@ -95,10 +95,14 @@ export default function UserProfile({ userId, loader = defaultLoader }: UserProf
       <Typography color="text.secondary">Sampled soda inventory</Typography>
 
       <FormControl size="small" sx={{ maxWidth: 240 }}>
-        <InputLabel id="inventory-sort-label">Sort by</InputLabel>
+        <InputLabel id="inventory-sort-label" htmlFor="inventory-sort-input">
+          Sort by
+        </InputLabel>
         <Select<SortOrder>
+          id="inventory-sort-select"
           labelId="inventory-sort-label"
           label="Sort by"
+          inputProps={{ id: "inventory-sort-input" }}
           value={sortOrder}
           onChange={(event) => setSortOrder(event.target.value)}
         >

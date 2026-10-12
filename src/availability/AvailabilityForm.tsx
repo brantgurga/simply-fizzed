@@ -217,10 +217,14 @@ export default function AvailabilityForm({
         </Stack>
       )}
       <FormControl>
-        <InputLabel id="soda-form-label">Form</InputLabel>
+        <InputLabel id="soda-form-label" htmlFor="soda-form-input">
+          Form
+        </InputLabel>
         <Select
+          id="soda-form-select"
           labelId="soda-form-label"
           label="Form"
+          inputProps={{ id: "soda-form-input" }}
           value={form}
           disabled={saving}
           onChange={(event) => {

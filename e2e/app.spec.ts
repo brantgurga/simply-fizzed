@@ -481,9 +481,9 @@ test.describe("App", () => {
         .getByRole("listitem")
         .filter({ has: page.getByRole("link", { name: "Big K Root Beer in cans" }) });
       await row.getByRole("button", { name: "Edit availability details" }).click();
-      await row.getByLabel("Can sample").click();
+      await row.getByRole("combobox", { name: "Can sample" }).click();
       await page.getByRole("option", { name: "Yes" }).click();
-      await row.getByLabel("Can purchase").click();
+      await row.getByRole("combobox", { name: "Can purchase" }).click();
       await page.getByRole("option", { name: "No", exact: true }).click();
       await row.getByRole("button", { name: "Save details" }).click();
       await expect(row.getByRole("button", { name: "Saving…" })).toBeDisabled();
@@ -531,9 +531,9 @@ test.describe("App", () => {
       await expect(row.getByRole("button", { name: "Edit availability details" })).toBeVisible();
       await context.setOffline(true);
       await row.getByRole("button", { name: "Edit availability details" }).click();
-      await row.getByLabel("Can sample").click();
+      await row.getByRole("combobox", { name: "Can sample" }).click();
       await page.getByRole("option", { name: "Yes" }).click();
-      await row.getByLabel("Can purchase").click();
+      await row.getByRole("combobox", { name: "Can purchase" }).click();
       await page.getByRole("option", { name: "No", exact: true }).click();
       await row.getByRole("button", { name: "Save details" }).click();
       await expect(row.getByRole("button", { name: "Saving…" })).toBeDisabled();
@@ -583,7 +583,7 @@ test.describe("App", () => {
       const options = page.getByRole("option");
       await expect(options).toHaveCount(2);
       await page.getByRole("option", { name: "Pepsi-Cola Cola — Original" }).click();
-      await page.getByLabel("Form").click();
+      await page.getByRole("combobox", { name: "Form" }).click();
       await page.getByRole("option", { name: "Bottle" }).click();
       await page.getByRole("button", { name: "Add soda" }).click();
 
