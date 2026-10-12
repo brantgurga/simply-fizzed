@@ -213,6 +213,24 @@ describe("App", () => {
     });
   });
 
+  it("maps Google Maps popups onto the active MUI color scheme", () => {
+    expect(theme.components?.MuiCssBaseline?.styleOverrides).toMatchObject({
+      ".gm-style .gm-style-iw-c": {
+        backgroundColor: "var(--mui-palette-background-paper)",
+        color: "var(--mui-palette-text-primary)",
+      },
+      ".gm-style .gm-style-iw-tc::after": {
+        backgroundColor: "var(--mui-palette-background-paper)",
+      },
+      ".gm-style .gm-style-iw-c a": {
+        color: "var(--mui-palette-primary-main)",
+      },
+      ".gm-style .gm-style-iw-c button.gm-ui-hover-effect > span": {
+        backgroundColor: "var(--mui-palette-text-primary)",
+      },
+    });
+  });
+
   it("keeps browsing available without signing in", () => {
     render(<App />);
 
