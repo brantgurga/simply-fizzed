@@ -378,13 +378,13 @@ export default function SodaCatalog({
         }}
       >
         <FormControl>
-          <InputLabel id="catalog-brand-label" htmlFor="catalog-brand">
+          <InputLabel id="catalog-brand-label" htmlFor="catalog-brand-input">
             Brand
           </InputLabel>
           <Select
-            id="catalog-brand"
+            id="catalog-brand-select"
             labelId="catalog-brand-label"
-            inputProps={{ "aria-labelledby": "catalog-brand-label" }}
+            inputProps={{ id: "catalog-brand-input" }}
             label="Brand"
             value={filters.brand}
             onChange={(event) => setFilter("brand", event.target.value)}
@@ -398,13 +398,13 @@ export default function SodaCatalog({
           </Select>
         </FormControl>
         <FormControl>
-          <InputLabel id="catalog-flavor-label" htmlFor="catalog-flavor">
+          <InputLabel id="catalog-flavor-label" htmlFor="catalog-flavor-input">
             Flavor
           </InputLabel>
           <Select
-            id="catalog-flavor"
+            id="catalog-flavor-select"
             labelId="catalog-flavor-label"
-            inputProps={{ "aria-labelledby": "catalog-flavor-label" }}
+            inputProps={{ id: "catalog-flavor-input" }}
             label="Flavor"
             value={filters.flavor}
             onChange={(event) => setFilter("flavor", event.target.value)}
@@ -418,13 +418,13 @@ export default function SodaCatalog({
           </Select>
         </FormControl>
         <FormControl>
-          <InputLabel id="catalog-rating-label" htmlFor="catalog-rating">
+          <InputLabel id="catalog-rating-label" htmlFor="catalog-rating-input">
             Minimum rating
           </InputLabel>
           <Select
-            id="catalog-rating"
+            id="catalog-rating-select"
             labelId="catalog-rating-label"
-            inputProps={{ "aria-labelledby": "catalog-rating-label" }}
+            inputProps={{ id: "catalog-rating-input" }}
             label="Minimum rating"
             value={filters.minimumRating}
             onChange={(event) => setFilter("minimumRating", event.target.value)}
@@ -438,13 +438,13 @@ export default function SodaCatalog({
           </Select>
         </FormControl>
         <FormControl>
-          <InputLabel id="catalog-tried-label" htmlFor="catalog-tried">
+          <InputLabel id="catalog-tried-label" htmlFor="catalog-tried-input">
             Tried
           </InputLabel>
           <Select
-            id="catalog-tried"
+            id="catalog-tried-select"
             labelId="catalog-tried-label"
-            inputProps={{ "aria-labelledby": "catalog-tried-label" }}
+            inputProps={{ id: "catalog-tried-input" }}
             label="Tried"
             value={filters.tried}
             disabled={userId === undefined}
@@ -456,13 +456,13 @@ export default function SodaCatalog({
           </Select>
         </FormControl>
         <FormControl>
-          <InputLabel id="catalog-form-label" htmlFor="catalog-form">
+          <InputLabel id="catalog-form-label" htmlFor="catalog-form-input">
             Form
           </InputLabel>
           <Select
-            id="catalog-form"
+            id="catalog-form-select"
             labelId="catalog-form-label"
-            inputProps={{ "aria-labelledby": "catalog-form-label" }}
+            inputProps={{ id: "catalog-form-input" }}
             label="Form"
             value={filters.form}
             onChange={(event) =>
@@ -476,13 +476,13 @@ export default function SodaCatalog({
           </Select>
         </FormControl>
         <FormControl>
-          <InputLabel id="catalog-sampling-label" htmlFor="catalog-sampling">
+          <InputLabel id="catalog-sampling-label" htmlFor="catalog-sampling-input">
             Sampling
           </InputLabel>
           <Select
-            id="catalog-sampling"
+            id="catalog-sampling-select"
             labelId="catalog-sampling-label"
-            inputProps={{ "aria-labelledby": "catalog-sampling-label" }}
+            inputProps={{ id: "catalog-sampling-input" }}
             label="Sampling"
             value={filters.canSample}
             onChange={(event) =>
@@ -495,13 +495,13 @@ export default function SodaCatalog({
           </Select>
         </FormControl>
         <FormControl>
-          <InputLabel id="catalog-purchase-label" htmlFor="catalog-purchase">
+          <InputLabel id="catalog-purchase-label" htmlFor="catalog-purchase-input">
             Purchase
           </InputLabel>
           <Select
-            id="catalog-purchase"
+            id="catalog-purchase-select"
             labelId="catalog-purchase-label"
-            inputProps={{ "aria-labelledby": "catalog-purchase-label" }}
+            inputProps={{ id: "catalog-purchase-input" }}
             label="Purchase"
             value={filters.canPurchase}
             onChange={(event) =>
@@ -514,13 +514,13 @@ export default function SodaCatalog({
           </Select>
         </FormControl>
         <FormControl>
-          <InputLabel id="catalog-sort-label" htmlFor="catalog-sort">
+          <InputLabel id="catalog-sort-label" htmlFor="catalog-sort-input">
             Sort
           </InputLabel>
           <Select
-            id="catalog-sort"
+            id="catalog-sort-select"
             labelId="catalog-sort-label"
-            inputProps={{ "aria-labelledby": "catalog-sort-label" }}
+            inputProps={{ id: "catalog-sort-input" }}
             label="Sort"
             value={filters.sort}
             onChange={(event) => setFilter("sort", event.target.value)}
