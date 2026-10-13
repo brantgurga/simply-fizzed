@@ -43,7 +43,8 @@ Additional tooling (linting, formatting, testing, Firebase, and CI/CD) is tracke
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) 20 or newer (developed against v24)
+- [Node.js](https://nodejs.org/) 20 or newer for the app; the standalone
+  Firestore rules test package requires Node 24.12 or newer
 - npm 10 or newer
 - A Java 25 runtime for the Firestore emulator. Authentication and Hosting do
   not require Java, but the security-rule and end-to-end suites start Firestore.
