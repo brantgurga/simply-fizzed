@@ -15,6 +15,22 @@ and [contribution requirements](CONTRIBUTING.md) before opening a pull request.
 External human contributions require the copyright assignment described in
 [`COPYRIGHT_ASSIGNMENT.md`](COPYRIGHT_ASSIGNMENT.md).
 
+### License-policy workflow administration
+
+The license-policy workflow deliberately uses `pull_request_target` so its
+validation code comes from the trusted default branch while pull-request files
+are inspected only as data. It has read-only permissions and must never check out
+or execute contributor-controlled code.
+
+GitHub's default Actions policy for public repositories will block
+`pull_request_target` beginning November 2, 2026. A repository administrator must
+open **Settings > Actions > Policies** and create or update an applicable active
+workflow-execution policy that permits the `pull_request_target` event for
+[`.github/workflows/license-policy.yml`](./.github/workflows/license-policy.yml).
+Keep that exception scoped to this workflow and review policy insights before
+enforcement. See GitHub's
+[`pull_request_target` security guidance](https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target#default-policy-for-pull_request_target).
+
 ## Tech stack
 
 This repository is being bootstrapped with the professional stack tracked in issue #6:
