@@ -24,13 +24,12 @@ or execute contributor-controlled code.
 
 GitHub's default Actions policy for public repositories will block
 `pull_request_target` beginning November 2, 2026. A repository administrator must
-open **Settings > Actions > Policies**, import
-[`license-policy-pull-request-target.json`](./.github/policies/license-policy-pull-request-target.json),
-review it, and create the active policy. The import permits only
-`pull_request_target` and applies only to the license-policy workflow. See
-GitHub's
+open **Settings > Actions > Policies** and create an active policy scoped to
+`.github/workflows/license-policy.yml` that allows only the
+`pull_request_target` event. GitHub Actions policies do not use the repository
+ruleset JSON import flow. See GitHub's
 [`pull_request_target` security guidance](https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target#default-policy-for-pull_request_target)
-and [ruleset import instructions](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/managing-rulesets-for-a-repository#importing-a-ruleset).
+and [workflow execution policy instructions](https://docs.github.com/en/actions/how-tos/administer/control-workflow-execution#creating-a-workflow-execution-policy).
 
 ## Tech stack
 
