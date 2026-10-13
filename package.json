@@ -50,7 +50,7 @@
   },
   "devDependencies": {
     "@actions/github": "^9.1.1",
-    "@firebase/rules-unit-testing": "^5.0.2",
+    "@firebase/rules-unit-testing": "^6.0.0",
     "@microsoft/tsdoc": "^0.17.1",
     "@playwright/test": "^1.64.0",
     "@testing-library/dom": "^10.4.2",
