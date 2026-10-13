@@ -1,0 +1,25 @@
+{
+  "name": "@simply-fizzed/firestore-rules-tests",
+  "version": "1.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^6.0.0",
+    "firebase": "^13.0.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "1.14.6"
+  },
+  "allowScripts": {
+    "@firebase/util": false,
+    "protobufjs": false
+  },
+  "allowScriptsNotes": {
+    "@firebase/util": "Denied: rules tests do not use App Hosting postinstall injection.",
+    "protobufjs": "Denied: the postinstall only warns about dependency version syntax and produces no required runtime artifacts."
+  },
+  "overrideNotes": {
+    "@grpc/grpc-js": "Temporary security pin for GHSA-m9gg-hp2v-232j and GHSA-f596-whhp-79r4; remove when Firebase installs @grpc/grpc-js >=1.14.5."
+  }
+}

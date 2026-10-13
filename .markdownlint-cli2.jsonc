@@ -31,6 +31,7 @@
   "ignores": [
     "node_modules",
     "functions/node_modules",
+    "firestore-rules/node_modules",
     "dist",
     "playwright-report",
     "test-results",

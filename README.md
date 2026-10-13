@@ -50,11 +50,12 @@ Additional tooling (linting, formatting, testing, Firebase, and CI/CD) is tracke
 
 ## Getting started
 
-Install the app and standalone Functions package dependencies:
+Install the app and standalone Functions and Firestore rules test package dependencies:
 
 ```sh
 npm install
 npm --prefix functions install
+npm --prefix firestore-rules install
 ```
 
 Start the development server with hot module replacement:
@@ -148,9 +149,12 @@ The dedicated [`firestore-rules`](./firestore-rules) suite loads the committed
 It exercises public reads and the authorization, validation, immutability, and
 default-deny boundaries without production credentials or a browser.
 
-With Java 25 available, run `npm run test:rules`. The command starts only the
-Firestore emulator under the offline `demo-simply-fizzed` project, runs the
-Node-based Vitest suite, propagates failures, and shuts the emulator down.
+The suite keeps Firebase 13 and `@firebase/rules-unit-testing` 6 in a standalone
+package because the app's FirebaseUI dependency currently supports Firebase 12.
+After installing that package as described above, run `npm run test:rules` with
+Java 25 available. The command starts only the Firestore emulator under the
+offline `demo-simply-fizzed` project, runs the Node-based Vitest suite,
+propagates failures, and shuts the emulator down.
 
 ## End-to-end testing
 
