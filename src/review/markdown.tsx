@@ -2,64 +2,112 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // See LICENSE for copying terms.
 
-/* oxlint-disable react/no-array-index-key -- Line fragments have no stable identity beyond order. */
+/* oxlint-disable oxc/no-map-spread -- Sanitization returns immutable syntax trees. */
+/* oxlint-disable react/no-unstable-nested-components -- Contextual headings require render-specific component mappings. */
 /* oxlint-disable react/only-export-components -- Rendering and canonical parsing must share one grammar. */
-/* oxlint-disable typescript/no-unsafe-type-assertion -- The bounded heading level creates a valid intrinsic element name. */
+/* oxlint-disable typescript/no-unsafe-type-assertion -- A bounded heading level produces a valid intrinsic element name. */
 
-import { Fragment, type ReactNode } from "react";
+import type { Heading, List, PhrasingContent, Root, RootContent, Text } from "mdast";
+import { fromMarkdown } from "mdast-util-from-markdown";
+import { toMarkdown } from "mdast-util-to-markdown";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
+import ReactMarkdown, { type Components } from "react-markdown";
+import remarkBreaks from "remark-breaks";
 import { REVIEW_CONTENT_LIMIT, REVIEW_MARKDOWN_LIMIT } from "../model/firestore";
 
 const MEANINGFUL_CHARACTER = /[\p{L}\p{M}\p{N}\p{P}\p{S}]/u;
-const UNSUPPORTED_DELIMITERS = new Set(["`", "|", "[", "]", "~"]);
 
-function escapeUnsupportedDelimiters(input: string): string {
-  let escaped = "";
-  let precedingBackslashes = 0;
-  for (const character of input) {
-    if (character === "\\") {
-      escaped += character;
-      precedingBackslashes += 1;
-      continue;
-    }
-    if (UNSUPPORTED_DELIMITERS.has(character) && precedingBackslashes % 2 === 0) {
-      escaped += "\\";
-    }
-    escaped += character;
-    precedingBackslashes = 0;
+function sourceFor(source: string, node: RootContent | PhrasingContent): string {
+  const start = node.position?.start.offset;
+  const end = node.position?.end.offset;
+  return start === undefined || end === undefined ? "" : source.slice(start, end);
+}
+
+function literal(source: string, node: RootContent | PhrasingContent): Text {
+  return { type: "text", value: sourceFor(source, node) };
+}
+
+function sanitizePhrasing(source: string, node: PhrasingContent): PhrasingContent {
+  if (node.type === "text" || node.type === "break") return node;
+  if (node.type === "strong" || node.type === "emphasis") {
+    return { ...node, children: node.children.map((child) => sanitizePhrasing(source, child)) };
   }
-  return escaped;
+  return literal(source, node);
 }
 
-/** Neutralize unsupported Markdown constructs while retaining readable literal text. */
+function isSupportedHeading(source: string, node: Heading): boolean {
+  return /^ {0,3}#{1,6}(?:\s+|$)/.test(sourceFor(source, node));
+}
+
+function isSupportedList(source: string, node: List): boolean {
+  if (
+    node.children.some(
+      (item) => item.children.length !== 1 || item.children[0]?.type !== "paragraph",
+    )
+  ) {
+    return false;
+  }
+  const itemPattern = node.ordered ? /^ {0,3}\d+\.\s+/ : /^ {0,3}[-+*]\s+/;
+  return sourceFor(source, node)
+    .split("\n")
+    .filter((line) => line.trim().length > 0)
+    .every((line) => itemPattern.test(line));
+}
+
+function sanitizeRoot(source: string): Root {
+  const parsed = fromMarkdown(source);
+  const children: RootContent[] = parsed.children.map((node) => {
+    if (node.type === "paragraph") {
+      return { ...node, children: node.children.map((child) => sanitizePhrasing(source, child)) };
+    }
+    if (node.type === "heading" && isSupportedHeading(source, node)) {
+      return { ...node, children: node.children.map((child) => sanitizePhrasing(source, child)) };
+    }
+    if (node.type === "list" && isSupportedList(source, node)) {
+      return {
+        ...node,
+        children: node.children.map((item) => ({
+          ...item,
+          children: item.children.map((paragraph) =>
+            paragraph.type === "paragraph"
+              ? {
+                  ...paragraph,
+                  children: paragraph.children.map((child) => sanitizePhrasing(source, child)),
+                }
+              : paragraph,
+          ),
+        })),
+      };
+    }
+    return { type: "paragraph", children: [literal(source, node)] };
+  });
+  return { type: "root", children };
+}
+
+/** Canonicalize the supported Markdown subset and retain unsupported syntax as literal text. */
 export function constrainReviewMarkdown(input: string): string {
-  const normalized = input
-    .replaceAll("\r\n", "\n")
-    .replaceAll("\r", "\n")
-    .replace(/&(?!(?:amp|lt|gt);)/g, "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-  return escapeUnsupportedDelimiters(normalized)
-    .replace(/^(\s{0,3})(?=(?:(?:-\s*){3,}|(?:_\s*){3,}|(?:\*\s*){3,}|=+)\s*$)/gm, "$1\\")
-    .replace(/^(\s*\d+)(?=\)\s+)/gm, "$1\\")
-    .replace(/^( {4,}|\t)/gm, "\\$&");
+  const normalized = input.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+  return toMarkdown(sanitizeRoot(normalized), {
+    bullet: "-",
+    emphasis: "*",
+    strong: "*",
+  }).trimEnd();
 }
 
-function literalText(markdown: string): string {
-  return markdown
-    .replace(/^\s{0,3}#{1,6}(?:\s+|$)/gm, "")
-    .replace(/^\s*(?:[-+*]|\d+\.)(?:\s+|$)/gm, "")
-    .replace(/\*\*|__|[*_]/g, "")
-    .replace(/\\([\\`|[\]>*_#.!+~)=-])/g, "$1")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&amp;", "&");
+function textContent(markdown: string): string {
+  const values: string[] = [];
+  const visit = (node: RootContent | PhrasingContent): void => {
+    if (node.type === "text") values.push(node.value);
+    else if ("children" in node) node.children.forEach(visit);
+  };
+  sanitizeRoot(markdown).children.forEach(visit);
+  return values.join("\n").replace(/\*\*|__|[*_]/g, "");
 }
 
 /** Count substantive characters without charging for supported formatting markup. */
 export function reviewContentLength(markdown: string): number {
-  return Array.from(literalText(markdown)).length;
+  return Array.from(textContent(markdown)).length;
 }
 
 /** Normalize empty formatting to no review and validate both review limits. */
@@ -67,7 +115,7 @@ export function prepareReviewMarkdown(
   input: string,
 ): { markdown: null; contentLength: 0 } | { markdown: string; contentLength: number } {
   const markdown = constrainReviewMarkdown(input).trim();
-  const plain = literalText(markdown).trim();
+  const plain = textContent(markdown).trim();
   if (!MEANINGFUL_CHARACTER.test(plain)) return { markdown: null, contentLength: 0 };
   const contentLength = Array.from(plain).length;
   if (contentLength > REVIEW_CONTENT_LIMIT) throw new Error("Review content is too long.");
@@ -75,78 +123,28 @@ export function prepareReviewMarkdown(
   return { markdown, contentLength };
 }
 
-function decodeLiteral(value: string): string {
-  return value.replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
-}
-
-function inline(markdown: string, keyPrefix = "inline"): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  let text = "";
-  let index = 0;
-  const flush = () => {
-    if (text.length > 0) nodes.push(decodeLiteral(text));
-    text = "";
+function headingComponent(
+  sourceDepth: number,
+  headingBaseLevel: number,
+  highestHeadingLevel: number,
+): NonNullable<Components["h1"]> {
+  return function ReviewHeading({ children }) {
+    const level = Math.max(1, headingBaseLevel + sourceDepth - highestHeadingLevel);
+    const component = level <= 6 ? (`h${level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6") : "div";
+    return (
+      <Typography
+        component={component}
+        variant={level <= 4 ? "subtitle1" : "subtitle2"}
+        sx={{ mt: 1.5, mb: 0.5, fontWeight: 600 }}
+        {...(level <= 6 ? {} : { role: "heading", "aria-level": level })}
+      >
+        {children}
+      </Typography>
+    );
   };
-
-  while (index < markdown.length) {
-    if (markdown[index] === "\\" && index + 1 < markdown.length) {
-      text += markdown[index + 1];
-      index += 2;
-      continue;
-    }
-    const strong = markdown.startsWith("**", index)
-      ? "**"
-      : markdown.startsWith("__", index)
-        ? "__"
-        : undefined;
-    if (strong !== undefined) {
-      const end = markdown.indexOf(strong, index + 2);
-      if (end > index + 2) {
-        flush();
-        nodes.push(
-          <strong key={`${keyPrefix}-strong-${index}`}>
-            {inline(markdown.slice(index + 2, end), `${keyPrefix}-${index}`)}
-          </strong>,
-        );
-        index = end + 2;
-        continue;
-      }
-    }
-    const marker = markdown[index];
-    if ((marker === "*" || marker === "_") && markdown[index + 1] !== marker) {
-      const end = markdown.indexOf(marker, index + 1);
-      if (end > index + 1) {
-        flush();
-        nodes.push(
-          <em key={`${keyPrefix}-em-${index}`}>
-            {inline(markdown.slice(index + 1, end), `${keyPrefix}-${index}`)}
-          </em>,
-        );
-        index = end + 1;
-        continue;
-      }
-    }
-    text += marker;
-    index += 1;
-  }
-  flush();
-  return nodes;
 }
 
-function paragraph(lines: string[], key: string): ReactNode {
-  return (
-    <Typography component="p" variant="body1" key={key} sx={{ my: 1, overflowWrap: "anywhere" }}>
-      {lines.map((line, index) => (
-        <Fragment key={`${key}-${index}`}>
-          {index > 0 && <br />}
-          {inline(line, `${key}-${index}`)}
-        </Fragment>
-      ))}
-    </Typography>
-  );
-}
-
-/** Render only the explicitly supported Markdown subset with contextual headings. */
+/** Render only the dependency-parsed, explicitly supported Markdown subset. */
 export function ConstrainedMarkdown({
   markdown,
   headingBaseLevel = 3,
@@ -154,81 +152,63 @@ export function ConstrainedMarkdown({
   markdown: string;
   headingBaseLevel?: number;
 }) {
-  const lines = markdown.split("\n");
-  const headingLevels = lines.flatMap((line) => {
-    const heading = /^(#{1,6})\s+/.exec(line);
-    return heading === null ? [] : [(heading[1] ?? "").length];
-  });
+  const canonical = constrainReviewMarkdown(markdown);
+  const headingLevels = sanitizeRoot(canonical).children.flatMap((node) =>
+    node.type === "heading" ? [node.depth] : [],
+  );
   const highestHeadingLevel = headingLevels.length === 0 ? 1 : Math.min(...headingLevels);
-  const blocks: ReactNode[] = [];
-  let index = 0;
-  while (index < lines.length) {
-    const line = lines[index] ?? "";
-    if (line.trim().length === 0) {
-      index += 1;
-      continue;
-    }
-    const heading = /^(#{1,6})\s+(.+)$/.exec(line);
-    if (heading !== null) {
-      const level = Math.max(1, headingBaseLevel + (heading[1] ?? "").length - highestHeadingLevel);
-      const component =
-        level <= 6 ? (`h${level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6") : "div";
-      blocks.push(
-        <Typography
-          key={`heading-${index}`}
-          component={component}
-          variant={level <= 4 ? "subtitle1" : "subtitle2"}
-          sx={{ mt: 1.5, mb: 0.5, fontWeight: 600 }}
-          {...(level <= 6 ? {} : { role: "heading", "aria-level": level })}
-        >
-          {inline(heading[2] ?? "", `heading-${index}`)}
-        </Typography>,
-      );
-      index += 1;
-      continue;
-    }
-    const list = /^\s*(?:(\d+)\.|([-+*]))\s+(.+)$/.exec(line);
-    if (list !== null) {
-      const ordered = list[1] !== undefined;
-      const items: ReactNode[] = [];
-      while (index < lines.length) {
-        const item = /^\s*(?:(\d+)\.|([-+*]))\s+(.+)$/.exec(lines[index] ?? "");
-        if (item === null || (item[1] !== undefined) !== ordered) break;
-        items.push(<li key={`item-${index}`}>{inline(item[3] ?? "", `item-${index}`)}</li>);
-        index += 1;
-      }
-      blocks.push(
-        <Box
-          key={`list-${index}`}
-          component={ordered ? "ol" : "ul"}
-          sx={{ my: 1, pl: 3, overflowWrap: "anywhere" }}
-        >
-          {items}
-        </Box>,
-      );
-      continue;
-    }
-    const paragraphLines = [line];
-    index += 1;
-    while (index < lines.length && (lines[index] ?? "").trim().length > 0) {
-      if (
-        /^(#{1,6})\s+/.test(lines[index] ?? "") ||
-        /^\s*(?:\d+\.|[-+*])\s+/.test(lines[index] ?? "")
-      ) {
-        break;
-      }
-      paragraphLines.push(lines[index] ?? "");
-      index += 1;
-    }
-    blocks.push(paragraph(paragraphLines, `paragraph-${index}`));
-  }
+  const components: Components = {
+    p: ({ children }) => (
+      <Typography component="p" variant="body1" sx={{ my: 1, overflowWrap: "anywhere" }}>
+        {children}
+      </Typography>
+    ),
+    h1: headingComponent(1, headingBaseLevel, highestHeadingLevel),
+    h2: headingComponent(2, headingBaseLevel, highestHeadingLevel),
+    h3: headingComponent(3, headingBaseLevel, highestHeadingLevel),
+    h4: headingComponent(4, headingBaseLevel, highestHeadingLevel),
+    h5: headingComponent(5, headingBaseLevel, highestHeadingLevel),
+    h6: headingComponent(6, headingBaseLevel, highestHeadingLevel),
+    ol: ({ children }) => (
+      <Box component="ol" sx={{ my: 1, pl: 3, overflowWrap: "anywhere" }}>
+        {children}
+      </Box>
+    ),
+    ul: ({ children }) => (
+      <Box component="ul" sx={{ my: 1, pl: 3, overflowWrap: "anywhere" }}>
+        {children}
+      </Box>
+    ),
+  };
 
   return (
     <Box
       className="review-content"
       sx={{ "& > :first-child": { mt: 0 }, "& > :last-child": { mb: 0 } }}
     >
-      {blocks}
+      <ReactMarkdown
+        allowedElements={[
+          "p",
+          "br",
+          "strong",
+          "em",
+          "h1",
+          "h2",
+          "h3",
+          "h4",
+          "h5",
+          "h6",
+          "ol",
+          "ul",
+          "li",
+        ]}
+        components={components}
+        remarkPlugins={[remarkBreaks]}
+        skipHtml
+        unwrapDisallowed
+      >
+        {canonical}
+      </ReactMarkdown>
     </Box>
   );
 }
