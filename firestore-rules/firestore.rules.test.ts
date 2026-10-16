@@ -26,6 +26,12 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, it } from "vitest
 
 const PROJECT_ID = "demo-simply-fizzed";
 const USER_ID = "rules-test-user";
+const MUTATION_ONE = "00000000-0000-4000-8000-000000000001";
+const MUTATION_TWO = "00000000-0000-4000-8000-000000000002";
+const MUTATION_THREE = "00000000-0000-4000-8000-000000000003";
+const MUTATION_FOUR = "00000000-0000-4000-8000-000000000004";
+const MUTATION_FIVE = "00000000-0000-4000-8000-000000000005";
+const MUTATION_SIX = "00000000-0000-4000-8000-000000000006";
 const RULES_PATH = new URL("../firestore.rules", import.meta.url);
 
 let testEnvironment: RulesTestEnvironment;
@@ -134,6 +140,25 @@ function validRating(overrides: Record<string, unknown> = {}): Record<string, un
     rating: null,
     firstRecorded: serverTimestamp(),
     lastRatedAt: null,
+    ...overrides,
+  };
+}
+
+function validReview(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    authorId: USER_ID,
+    authorName: "Rules Test Fan",
+    sodaOfferingId: "existing-soda",
+    sodaName: validSoda.name,
+    sodaBrand: validSoda.brand,
+    sodaFlavor: validSoda.flavor,
+    markdown: "A **great** cola.",
+    contentLength: 13,
+    version: 1,
+    authoredAt: Timestamp.fromMillis(1_000),
+    baseModerationCycle: 0,
+    baseApprovedVersion: null,
+    mutationId: MUTATION_ONE,
     ...overrides,
   };
 }
@@ -710,6 +735,214 @@ describe("public profiles and rating inventories", () => {
       setDoc(doc(database, "profiles", USER_ID, "ratings", "existing-soda"), validRating()),
     );
     await assertFails(deleteDoc(doc(database, "profiles", USER_ID, "ratings", "existing-soda")));
+  });
+});
+
+describe("textual review privacy and author writes", () => {
+  beforeEach(async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const database = context.firestore();
+      await Promise.all([
+        setDoc(doc(database, "sodas", "existing-soda"), validSoda),
+        setDoc(doc(database, "profiles", USER_ID), validProfile()),
+        setDoc(
+          doc(database, "profiles", USER_ID, "ratings", "existing-soda"),
+          validRating({
+            rating: 4,
+            lastRatedAt: Timestamp.fromMillis(1_000),
+            firstRecorded: Timestamp.fromMillis(1_000),
+          }),
+        ),
+      ]);
+    });
+  });
+
+  it("allows an offline-capable author review but denies anonymous current-text reads", async () => {
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const reference = doc(database, "profiles", USER_ID, "reviews", "existing-soda");
+    await assertSucceeds(setDoc(reference, validReview()));
+    await assertSucceeds(getDoc(reference));
+
+    const anonymous = testEnvironment.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(anonymous, "profiles", USER_ID, "reviews", "existing-soda")));
+    await assertFails(getDocs(collection(anonymous, "profiles", USER_ID, "reviews")));
+  });
+
+  it("requires safe UUID mutation identities", async () => {
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    await assertFails(
+      setDoc(
+        doc(database, "profiles", USER_ID, "reviews", "existing-soda"),
+        validReview({ mutationId: "../replayed/revision" }),
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(database, "profiles", USER_ID, "reviews", "existing-soda"),
+        validReview({ mutationId: "not-a-uuid" }),
+      ),
+    );
+  });
+
+  it("requires a point rating and validates physical and claimed logical limits", async () => {
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    await assertFails(
+      setDoc(
+        doc(database, "profiles", USER_ID, "reviews", "oversized"),
+        validReview({
+          sodaOfferingId: "oversized",
+          markdown: "x".repeat(3_001),
+          contentLength: 2_000,
+        }),
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(database, "profiles", USER_ID, "reviews", "existing-soda"),
+        validReview({ contentLength: 2_001 }),
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(database, "profiles", USER_ID, "reviews", "existing-soda"),
+        validReview({ markdown: null, contentLength: 0 }),
+      ),
+    );
+  });
+
+  it("allows revisions and clearing but protects server moderation fields", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "profiles", USER_ID, "reviews", "existing-soda"), {
+        ...validReview(),
+        moderationStatus: "hidden",
+        moderationCycle: 2,
+        approvedVersion: null,
+        hiddenReason: "Please revise",
+      });
+    });
+    const reference = doc(
+      testEnvironment.authenticatedContext(USER_ID).firestore(),
+      "profiles",
+      USER_ID,
+      "reviews",
+      "existing-soda",
+    );
+    await assertSucceeds(
+      updateDoc(reference, {
+        markdown: "A revised opinion.",
+        contentLength: 18,
+        version: 2,
+        authoredAt: Timestamp.fromMillis(2_000),
+        baseModerationCycle: 2,
+        baseApprovedVersion: null,
+        mutationId: MUTATION_TWO,
+      }),
+    );
+    await assertFails(updateDoc(reference, { moderationStatus: "visible" }));
+    await assertFails(
+      updateDoc(reference, {
+        markdown: "A second revision.",
+        contentLength: 18,
+        version: 3,
+        authoredAt: Timestamp.fromMillis(3_000),
+        baseModerationCycle: 2,
+        baseApprovedVersion: null,
+        mutationId: MUTATION_TWO,
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(reference, {
+        markdown: null,
+        contentLength: 0,
+        version: 3,
+        authoredAt: Timestamp.fromMillis(3_000),
+        baseModerationCycle: 2,
+        baseApprovedVersion: null,
+        mutationId: MUTATION_THREE,
+      }),
+    );
+  });
+
+  it("requires rating and review clearing to be atomic", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "profiles", USER_ID, "reviews", "existing-soda"), {
+        ...validReview(),
+        moderationStatus: "visible",
+        moderationCycle: 0,
+      });
+    });
+    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const rating = doc(database, "profiles", USER_ID, "ratings", "existing-soda");
+    const review = doc(database, "profiles", USER_ID, "reviews", "existing-soda");
+    await assertFails(updateDoc(rating, { rating: null, lastRatedAt: null }));
+
+    const batch = writeBatch(database);
+    batch.update(rating, { rating: null, lastRatedAt: null });
+    batch.update(review, {
+      markdown: null,
+      contentLength: 0,
+      version: 2,
+      authoredAt: Timestamp.fromMillis(2_000),
+      baseModerationCycle: 0,
+      baseApprovedVersion: null,
+      mutationId: MUTATION_FOUR,
+    });
+    await assertSucceeds(batch.commit());
+  });
+
+  it("blocks restricted revisions while still allowing authors to clear current text", async () => {
+    await seedRestriction(USER_ID);
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "profiles", USER_ID, "reviews", "existing-soda"), {
+        ...validReview(),
+        moderationStatus: "hidden",
+        moderationCycle: 1,
+      });
+    });
+    const reference = doc(
+      testEnvironment.authenticatedContext(USER_ID).firestore(),
+      "profiles",
+      USER_ID,
+      "reviews",
+      "existing-soda",
+    );
+    await assertFails(
+      updateDoc(reference, {
+        markdown: "A restricted revision.",
+        contentLength: 22,
+        version: 2,
+        authoredAt: Timestamp.fromMillis(2_000),
+        baseModerationCycle: 1,
+        baseApprovedVersion: null,
+        mutationId: MUTATION_FIVE,
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(reference, {
+        markdown: null,
+        contentLength: 0,
+        version: 2,
+        authoredAt: Timestamp.fromMillis(2_000),
+        baseModerationCycle: 1,
+        baseApprovedVersion: null,
+        mutationId: MUTATION_SIX,
+      }),
+    );
+  });
+
+  it("exposes only trusted public projections and keeps moderation audit private", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const database = context.firestore();
+      await setDoc(doc(database, "publishedReviews", "public-review"), {
+        markdown: "Public text",
+      });
+      await setDoc(doc(database, "reviewAudit", "review", "reports", "report"), {
+        reporterId: "private-reporter",
+      });
+    });
+    const anonymous = testEnvironment.unauthenticatedContext().firestore();
+    await assertSucceeds(getDocs(collection(anonymous, "publishedReviews")));
+    await assertFails(getDocs(collection(anonymous, "reviewAudit", "review", "reports")));
   });
 });
 

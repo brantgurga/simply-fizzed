@@ -131,6 +131,76 @@ describe("SodaDetail", () => {
     expect(saver.mock.calls.map((call) => call.at(-1))).toEqual([true, false]);
   });
 
+  it("requires confirmation and atomically includes a textual review when clearing a rating", async () => {
+    const saver = vi.fn().mockResolvedValue(undefined);
+    const confirm = vi.spyOn(globalThis, "confirm").mockReturnValue(false);
+    const user = userEvent.setup();
+    render(
+      <SodaDetail
+        sodaId="cola"
+        user={{ uid: "fan-123", displayName: "Fan", email: "fan@example.com" }}
+        loader={vi.fn().mockResolvedValue({
+          status: "found",
+          value: { id: "cola", brand: "Brand", name: "Cola", flavor: "Original" },
+        })}
+        ratingLoader={vi.fn().mockResolvedValue({
+          status: "found",
+          value: {
+            id: "cola",
+            userId: "fan-123",
+            sodaOfferingId: "cola",
+            sodaName: "Cola",
+            sodaBrand: "Brand",
+            sodaFlavor: "Original",
+            rating: 4,
+            firstRecorded: new Date("2026-01-01T00:00:00Z"),
+            lastRatedAt: new Date("2026-01-02T00:00:00Z"),
+          },
+        })}
+        currentReviewLoader={vi.fn().mockResolvedValue({
+          status: "found",
+          value: {
+            id: "cola",
+            authorId: "fan-123",
+            authorName: "Fan",
+            sodaOfferingId: "cola",
+            sodaName: "Cola",
+            sodaBrand: "Brand",
+            sodaFlavor: "Original",
+            markdown: "Great cola.",
+            contentLength: 11,
+            version: 1,
+            authoredAt: new Date("2026-01-03T00:00:00Z"),
+            baseModerationCycle: 0,
+            baseApprovedVersion: null,
+            mutationId: "one",
+            moderationStatus: "visible",
+            moderationCycle: 0,
+            approvedVersion: 1,
+          },
+        })}
+        ratingSaver={saver}
+      />,
+    );
+
+    expect(await screen.findByRole("textbox", { name: "Review" })).toHaveValue("Great cola.");
+    await user.click(screen.getByRole("button", { name: "Clear rating" }));
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(saver).not.toHaveBeenCalled();
+
+    confirm.mockReturnValue(true);
+    await user.click(screen.getByRole("button", { name: "Clear rating" }));
+    expect(saver).toHaveBeenCalledWith(
+      "fan-123",
+      "Fan",
+      expect.objectContaining({ id: "cola" }),
+      null,
+      false,
+      expect.objectContaining({ markdown: "Great cola." }),
+    );
+    confirm.mockRestore();
+  });
+
   it("marks, rates, clears, and removes a sampling", async () => {
     const saver = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();

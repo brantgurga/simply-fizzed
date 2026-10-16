@@ -2,13 +2,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // See LICENSE for copying terms.
 
+/* oxlint-disable eslint/no-await-in-loop -- Emulator-state polling must remain sequential. */
+
+import { randomUUID } from "node:crypto";
 import { expect } from "expect";
 import {
   deleteApp as deleteAdminApp,
   initializeApp as initializeAdminApp,
 } from "firebase-admin/app";
 import { getAuth as getAdminAuth, type Auth } from "firebase-admin/auth";
-import { getFirestore as getAdminFirestore, type Firestore } from "firebase-admin/firestore";
+import {
+  getFirestore as getAdminFirestore,
+  type DocumentSnapshot,
+  type Firestore,
+} from "firebase-admin/firestore";
 import { deleteApp, initializeApp, type FirebaseApp } from "firebase/app";
 import { connectAuthEmulator, getAuth, signInWithEmailAndPassword, type User } from "firebase/auth";
 import {
@@ -17,6 +24,7 @@ import {
   httpsCallable,
   type Functions,
 } from "firebase/functions";
+import { processReviewWrite, reviewKey } from "../src/reviews.js";
 
 const PROJECT_ID = "demo-simply-fizzed";
 const PASSWORD = "emulator-password";
@@ -96,6 +104,67 @@ async function call<T>(name: AccountName, functionName: string, data: unknown = 
   }
   const callable = httpsCallable<unknown, T>(client.functions, functionName);
   return (await callable(request)).data;
+}
+
+async function waitForReview(
+  authorId: string,
+  sodaId: string,
+  predicate: (current: DocumentSnapshot, published: DocumentSnapshot) => boolean,
+): Promise<void> {
+  const key = reviewKey(authorId, sodaId);
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    const [current, published] = await Promise.all([
+      adminDb.collection("profiles").doc(authorId).collection("reviews").doc(sodaId).get(),
+      adminDb.collection("publishedReviews").doc(key).get(),
+    ]);
+    if (predicate(current, published)) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("Timed out waiting for review processing.");
+}
+
+async function seedVisibleReview(sodaId: string): Promise<DocumentSnapshot> {
+  const authorId = accounts.fan.uid;
+  const review = {
+    authorId,
+    authorName: accounts.fan.displayName,
+    sodaOfferingId: sodaId,
+    sodaName: "Integration Cola",
+    sodaBrand: "Test Brand",
+    sodaFlavor: "Original",
+    markdown: "A useful integration review.",
+    contentLength: 28,
+    version: 1,
+    authoredAt: new Date(),
+    baseModerationCycle: 0,
+    baseApprovedVersion: null,
+    mutationId: randomUUID(),
+  };
+  await Promise.all([
+    adminDb
+      .collection("profiles")
+      .doc(authorId)
+      .set({ publicName: accounts.fan.displayName }, { merge: true }),
+    adminDb.collection("profiles").doc(authorId).collection("ratings").doc(sodaId).set({
+      userId: authorId,
+      sodaOfferingId: sodaId,
+      sodaName: review.sodaName,
+      sodaBrand: review.sodaBrand,
+      sodaFlavor: review.sodaFlavor,
+      rating: 4,
+      firstRecorded: new Date(),
+      lastRatedAt: new Date(),
+    }),
+    adminDb.collection("reviewIntegrationEvents").doc(sodaId).set(review),
+  ]);
+  await adminDb.collection("profiles").doc(authorId).collection("reviews").doc(sodaId).set(review);
+  await waitForReview(
+    authorId,
+    sodaId,
+    (current, published) => current.get("moderationStatus") === "visible" && published.exists,
+  );
+  return await adminDb.collection("reviewIntegrationEvents").doc(sodaId).get();
 }
 
 before(async () => {
@@ -509,5 +578,102 @@ describe("callable authorization boundary", () => {
     });
 
     expect(response.status).toBe(401);
+  });
+});
+
+describe("review moderation concurrency", () => {
+  it("does not republish pending content when a revision trigger is delivered twice", async () => {
+    const sodaId = "dup000000001";
+    const originalEvent = await seedVisibleReview(sodaId);
+    await call("secondFan", "reportReview", {
+      authorId: accounts.fan.uid,
+      sodaOfferingId: sodaId,
+      version: 1,
+      category: "offensive",
+    });
+
+    await processReviewWrite(adminDb, accounts.fan.uid, sodaId, undefined, originalEvent);
+
+    const key = reviewKey(accounts.fan.uid, sodaId);
+    const [current, published, queue, versions] = await Promise.all([
+      adminDb.collection("profiles").doc(accounts.fan.uid).collection("reviews").doc(sodaId).get(),
+      adminDb.collection("publishedReviews").doc(key).get(),
+      adminDb.collection("reviewModerationQueue").doc(key).get(),
+      adminDb.collection("reviewAudit").doc(key).collection("versions").get(),
+    ]);
+    expect(current.get("moderationStatus")).toBe("pending");
+    expect(published.exists).toBe(false);
+    expect(queue.exists).toBe(true);
+    expect(versions.size).toBe(1);
+  });
+
+  it("retains a concurrent Security/Safety report instead of applying a stale allow", async () => {
+    const sodaId = "race00000001";
+    await seedVisibleReview(sodaId);
+    const first = await call<{ cycle: number }>("secondFan", "reportReview", {
+      authorId: accounts.fan.uid,
+      sodaOfferingId: sodaId,
+      version: 1,
+      category: "offensive",
+    });
+    const key = reviewKey(accounts.fan.uid, sodaId);
+    const queue = await adminDb.collection("reviewModerationQueue").doc(key).get();
+
+    const results = await Promise.allSettled([
+      call("secondFan", "reportReview", {
+        authorId: accounts.fan.uid,
+        sodaOfferingId: sodaId,
+        version: 1,
+        category: "security-safety",
+      }),
+      call("moderator", "moderateReview", {
+        authorId: accounts.fan.uid,
+        sodaOfferingId: sodaId,
+        expectedVersion: 1,
+        expectedCycle: first.cycle,
+        expectedQueueVersion: queue.get("queueVersion"),
+        decision: "allow",
+      }),
+    ]);
+    expect(results[0]?.status).toBe("fulfilled");
+
+    const [current, finalQueue, published] = await Promise.all([
+      adminDb.collection("profiles").doc(accounts.fan.uid).collection("reviews").doc(sodaId).get(),
+      adminDb.collection("reviewModerationQueue").doc(key).get(),
+      adminDb.collection("publishedReviews").doc(key).get(),
+    ]);
+    expect(current.get("moderationStatus")).toBe("pending");
+    expect(finalQueue.data()).toMatchObject({
+      securitySafety: true,
+      queueKind: "security",
+    });
+    expect(published.exists).toBe(false);
+  });
+
+  it("observes current Auth revocation instead of a cached Moderator token claim", async () => {
+    await adminAuth.setCustomUserClaims(accounts.moderator.uid, {});
+    try {
+      await expect(
+        call("moderator", "loadReviewModerationQueue", { kind: "reported", page: 0 }),
+      ).rejects.toMatchObject({ code: "functions/permission-denied" });
+    } finally {
+      await adminAuth.setCustomUserClaims(accounts.moderator.uid, { moderator: true });
+    }
+  });
+
+  it("observes current Auth disablement before accepting a report", async () => {
+    await adminAuth.updateUser(accounts.secondFan.uid, { disabled: true });
+    try {
+      await expect(
+        call("secondFan", "reportReview", {
+          authorId: accounts.fan.uid,
+          sodaOfferingId: "disabled-report",
+          version: 1,
+          category: "offensive",
+        }),
+      ).rejects.toMatchObject({ code: "functions/permission-denied" });
+    } finally {
+      await adminAuth.updateUser(accounts.secondFan.uid, { disabled: false });
+    }
   });
 });

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // See LICENSE for copying terms.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import SportsBarIcon from "@mui/icons-material/SportsBar";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
@@ -18,6 +18,13 @@ import Typography from "@mui/material/Typography";
 import { publicContributorName, type ContributorIdentity } from "../contributor";
 import { db } from "../firebase";
 import { loadRating, saveRating, type RatingLoad, type RatingValue } from "../rating/ratings";
+import ReviewEditor from "../review/ReviewEditor";
+import { PublicReviewList } from "../review/ReviewList";
+import {
+  loadSodaReviews,
+  type CurrentReviewLoad,
+  type CurrentReviewRecord,
+} from "../review/reviews";
 import { sodaCatalogRoute } from "../routes";
 import { formatSodaUpdatedAt, loadSoda, type DocumentLoad, type SodaDocument } from "./sodas";
 
@@ -25,6 +32,12 @@ interface SodaDetailProps {
   sodaId: string;
   user?: ({ uid: string } & ContributorIdentity) | null;
   onSignIn?: () => void;
+  canReview?: boolean;
+  canModerateReviews?: boolean;
+  reviewListLoader?: (
+    cursor?: Parameters<typeof loadSodaReviews>[2],
+  ) => ReturnType<typeof loadSodaReviews>;
+  currentReviewLoader?: (authorId: string, sodaId: string) => Promise<CurrentReviewLoad>;
   loader?: (id: string) => Promise<DocumentLoad<SodaDocument>>;
   ratingLoader?: (userId: string, sodaId: string) => Promise<RatingLoad>;
   ratingSaver?: (
@@ -33,6 +46,7 @@ interface SodaDetailProps {
     soda: SodaDocument,
     value: RatingValue,
     create: boolean,
+    reviewToClear?: CurrentReviewRecord,
   ) => Promise<void>;
 }
 
@@ -61,7 +75,8 @@ const defaultRatingSaver = (
   soda: SodaDocument,
   value: RatingValue,
   create: boolean,
-) => saveRating(db, userId, publicName, soda, value, create);
+  reviewToClear?: CurrentReviewRecord,
+) => saveRating(db, userId, publicName, soda, value, create, reviewToClear);
 const ratingLabel = (value: number) => {
   const meanings = ["Disliked", "Below average", "Acceptable", "Really liked", "Loved"];
   return `${value} mug${value === 1 ? "" : "s"}: ${meanings[value - 1] ?? ""}`;
@@ -78,6 +93,8 @@ function RatingControls({
   onSignIn,
   loader,
   saver,
+  canReview,
+  currentReviewLoader,
 }: {
   soda: SodaDocument;
   user: ({ uid: string } & ContributorIdentity) | null;
@@ -89,19 +106,26 @@ function RatingControls({
     soda: SodaDocument,
     value: RatingValue,
     create: boolean,
+    reviewToClear?: CurrentReviewRecord,
   ) => Promise<void>;
+  canReview: boolean;
+  currentReviewLoader?:
+    | ((authorId: string, sodaId: string) => Promise<CurrentReviewLoad>)
+    | undefined;
 }) {
   const [state, setState] = useState<RatingState>(() =>
     user === null ? { status: "ready", value: undefined } : { status: "loading" },
   );
   const [pendingSaves, setPendingSaves] = useState(0);
   const [saveError, setSaveError] = useState(false);
+  const [currentReview, setCurrentReview] = useState<CurrentReviewRecord>();
   const latestMutation = useRef(0);
   const [request, setRequest] = useState({ userId: user?.uid, sodaId: soda.id, loader });
 
   if (request.userId !== user?.uid || request.sodaId !== soda.id || request.loader !== loader) {
     setRequest({ userId: user?.uid, sodaId: soda.id, loader });
     setState(user === null ? { status: "ready", value: undefined } : { status: "loading" });
+    setCurrentReview(undefined);
   }
 
   useEffect(() => {
@@ -145,18 +169,34 @@ function RatingControls({
 
   const persist = async (value: RatingValue) => {
     const previous = state.value;
+    const clearsReview = currentReview?.markdown != null && (value === null || value === undefined);
+    if (
+      clearsReview &&
+      !globalThis.confirm("Clearing this rating will also clear your textual review. Continue?")
+    ) {
+      return;
+    }
     const mutation = ++latestMutation.current;
     setState({ status: "ready", value });
     setPendingSaves((count) => count + 1);
     setSaveError(false);
     try {
-      await saver(
+      const argumentsWithoutReview = [
         user.uid,
         publicContributorName(user) ?? "",
         soda,
         value,
         previous === undefined && value !== undefined,
-      );
+      ] as const;
+      if (clearsReview) await saver(...argumentsWithoutReview, currentReview);
+      else await saver(...argumentsWithoutReview);
+      if (clearsReview) {
+        setCurrentReview((review) =>
+          review === undefined
+            ? undefined
+            : { ...review, markdown: null, contentLength: 0, version: review.version + 1 },
+        );
+      }
     } catch {
       if (latestMutation.current === mutation) {
         setState({ status: "ready", value: previous });
@@ -207,6 +247,14 @@ function RatingControls({
       {saveError && (
         <Alert severity="error">Your sampling could not be saved. Please try again.</Alert>
       )}
+      <ReviewEditor
+        soda={soda}
+        user={user}
+        hasPointRating={rating !== null}
+        canReview={canReview}
+        onCurrentChange={setCurrentReview}
+        {...(currentReviewLoader === undefined ? {} : { loader: currentReviewLoader })}
+      />
     </Stack>
   );
 }
@@ -215,12 +263,24 @@ export default function SodaDetail({
   sodaId,
   user = null,
   onSignIn = noop,
+  canReview = true,
+  canModerateReviews = false,
+  reviewListLoader,
+  currentReviewLoader,
   loader = defaultLoader,
   ratingLoader = defaultRatingLoader,
   ratingSaver = defaultRatingSaver,
 }: SodaDetailProps) {
   const [state, setState] = useState<State>({ status: "loading" });
   const [request, setRequest] = useState({ sodaId, loader });
+  const reviewLoader = useCallback(
+    (cursor?: Parameters<typeof loadSodaReviews>[2]) =>
+      reviewListLoader?.(cursor) ??
+      (loader === defaultLoader
+        ? loadSodaReviews(db, sodaId, cursor)
+        : Promise.resolve({ reviews: [] })),
+    [loader, reviewListLoader, sodaId],
+  );
 
   if (request.sodaId !== sodaId || request.loader !== loader) {
     setRequest({ sodaId, loader });
@@ -286,6 +346,11 @@ export default function SodaDetail({
         onSignIn={onSignIn}
         loader={ratingLoader}
         saver={ratingSaver}
+        canReview={canReview}
+        currentReviewLoader={
+          currentReviewLoader ??
+          (loader === defaultLoader ? undefined : async () => ({ status: "missing" as const }))
+        }
       />
       <Typography color="text.secondary">
         Last updated:{" "}
@@ -312,6 +377,13 @@ export default function SodaDetail({
           </List>
         )}
       </section>
+      <PublicReviewList
+        label="Reviews"
+        loader={reviewLoader}
+        viewerId={user?.uid}
+        onSignIn={onSignIn}
+        canModerate={canModerateReviews}
+      />
     </Stack>
   );
 }

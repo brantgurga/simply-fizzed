@@ -8,6 +8,32 @@
         { "fieldPath": "verifiedAt", "order": "DESCENDING" },
         { "fieldPath": "verifiedBy", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "publishedReviews",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sodaOfferingId", "order": "ASCENDING" },
+        { "fieldPath": "publishedAt", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "publishedReviews",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "authorId", "order": "ASCENDING" },
+        { "fieldPath": "publishedAt", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "reviewModerationQueue",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "queueKind", "order": "ASCENDING" },
+        { "fieldPath": "pendingSince", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
