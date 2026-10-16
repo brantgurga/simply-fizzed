@@ -13,7 +13,8 @@ import { publicContributorName, type ContributorIdentity } from "../contributor"
 import { db } from "../firebase";
 import { REVIEW_CONTENT_LIMIT } from "../model/firestore";
 import type { SodaDocument } from "../soda/sodas";
-import { ConstrainedMarkdown, prepareReviewMarkdown, reviewContentLength } from "./markdown";
+import { ConstrainedMarkdown } from "./markdown";
+import { prepareReviewMarkdown, reviewContentLength } from "./markdownFormat";
 import {
   loadCurrentReview,
   saveCurrentReview,

@@ -4,7 +4,8 @@
 
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { ConstrainedMarkdown, constrainReviewMarkdown, prepareReviewMarkdown } from "./markdown";
+import { ConstrainedMarkdown } from "./markdown";
+import { constrainReviewMarkdown, prepareReviewMarkdown } from "./markdownFormat";
 
 const persistedExample = `# First impressions
 

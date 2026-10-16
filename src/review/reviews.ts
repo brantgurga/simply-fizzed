@@ -30,7 +30,7 @@ import {
   type PublishedReviewDocument,
 } from "../model/firestore";
 import type { SodaDocument } from "../soda/sodas";
-import { prepareReviewMarkdown } from "./markdown";
+import { prepareReviewMarkdown } from "./markdownFormat";
 
 export const REVIEW_PAGE_SIZE = 5;
 export const REPORT_CATEGORIES = [
