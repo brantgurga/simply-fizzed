@@ -59,15 +59,25 @@ afterEach(() => {
 });
 
 describe("Firebase Functions deployment configuration", () => {
-  it("supplies the review moderation runtime service account from a repository variable", () => {
-    const workflow = readFileSync(hostingWorkflow, "utf8");
-    expect(workflow).toContain(
-      "REVIEW_MODERATION_SERVICE_ACCOUNT: ${{ vars.FIREBASE_REVIEW_MODERATION_SERVICE_ACCOUNT }}",
-    );
-    expect(workflow).toContain(
-      '["REVIEW_MODERATION_SERVICE_ACCOUNT", process.env.REVIEW_MODERATION_SERVICE_ACCOUNT]',
-    );
-  });
+  const serviceAccounts = [
+    ["GET_MY_AUTHORIZATION_SERVICE_ACCOUNT", "FIREBASE_GET_MY_AUTHORIZATION_SERVICE_ACCOUNT"],
+    ["SEARCH_USERS_SERVICE_ACCOUNT", "FIREBASE_SEARCH_USERS_SERVICE_ACCOUNT"],
+    ["REVEAL_USER_EMAIL_SERVICE_ACCOUNT", "FIREBASE_REVEAL_USER_EMAIL_SERVICE_ACCOUNT"],
+    ["SAVE_MY_PROFILE_SERVICE_ACCOUNT", "FIREBASE_SAVE_MY_PROFILE_SERVICE_ACCOUNT"],
+    ["APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT", "FIREBASE_APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT"],
+    ["GET_USER_AUDIT_HISTORY_SERVICE_ACCOUNT", "FIREBASE_GET_USER_AUDIT_HISTORY_SERVICE_ACCOUNT"],
+    ["RECORD_ACCOUNT_CREATION_SERVICE_ACCOUNT", "FIREBASE_RECORD_ACCOUNT_CREATION_SERVICE_ACCOUNT"],
+    ["REVIEW_MODERATION_SERVICE_ACCOUNT", "FIREBASE_REVIEW_MODERATION_SERVICE_ACCOUNT"],
+  ];
+
+  it.each(serviceAccounts)(
+    "supplies %s from its repository variable",
+    (parameter, repositoryVariable) => {
+      const workflow = readFileSync(hostingWorkflow, "utf8");
+      expect(workflow).toContain(`${parameter}: \${{ vars.${repositoryVariable} }}`);
+      expect(workflow).toContain(`["${parameter}", process.env.${parameter}]`);
+    },
+  );
 });
 
 describe("Firebase deployment retry bootstrap", () => {
