@@ -4,7 +4,7 @@
 
 /* oxlint-disable react/no-array-index-key -- Audit entries have no client-visible stable IDs. */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -49,13 +49,36 @@ interface QueueItem {
 }
 
 type QueueKind = "security" | "reported" | "revised";
+interface QueueCursor {
+  pendingSinceMillis: number;
+  id: string;
+}
+interface QueuePage {
+  items: QueueItem[];
+  next?: QueueCursor;
+}
+type QueueLoader = (
+  kind: QueueKind,
+  cursor: QueueCursor | undefined,
+  revealSecurity: boolean,
+) => Promise<QueuePage>;
 
-async function loadQueue(kind: QueueKind, page: number, revealSecurity: boolean) {
+async function loadQueue(
+  kind: QueueKind,
+  cursor: QueueCursor | undefined,
+  revealSecurity: boolean,
+) {
   const callable = httpsCallable<
-    { kind: QueueKind; page: number; revealSecurity?: boolean },
-    { items: QueueItem[]; hasMore: boolean }
+    { kind: QueueKind; cursor?: QueueCursor; revealSecurity?: boolean },
+    QueuePage
   >(functions, "loadReviewModerationQueue");
-  return (await callable({ kind, page, ...(revealSecurity ? { revealSecurity: true } : {}) })).data;
+  return (
+    await callable({
+      kind,
+      ...(cursor === undefined ? {} : { cursor }),
+      ...(revealSecurity ? { revealSecurity: true } : {}),
+    })
+  ).data;
 }
 
 async function decideReview(input: {
@@ -71,26 +94,51 @@ async function decideReview(input: {
   await callable(input);
 }
 
-function ModerationGrid({ kind, title }: { kind: QueueKind; title: string }) {
+export function ModerationGrid({
+  kind,
+  title,
+  loader = loadQueue,
+  decider = decideReview,
+}: {
+  kind: QueueKind;
+  title: string;
+  loader?: QueueLoader;
+  decider?: typeof decideReview;
+}) {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
+  const [cursors, setCursors] = useState<Array<QueueCursor | undefined>>([undefined]);
+  const [next, setNext] = useState<QueueCursor>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [revealSecurity, setRevealSecurity] = useState(false);
   const [reasons, setReasons] = useState<Record<string, string>>({});
+  const latestRequest = useRef(0);
+  const cursor = cursors[page];
+  const viewIdentity = `${kind}:${revealSecurity}:${cursor?.pendingSinceMillis ?? "start"}:${
+    cursor?.id ?? ""
+  }`;
+  const activeView = useRef(viewIdentity);
+  useEffect(() => {
+    activeView.current = viewIdentity;
+  }, [viewIdentity]);
   const reload = useCallback(async () => {
+    const request = ++latestRequest.current;
+    setLoading(true);
     try {
-      const result = await loadQueue(kind, page, revealSecurity);
+      const result = await loader(kind, cursor, revealSecurity);
+      if (request !== latestRequest.current || activeView.current !== viewIdentity) return;
       setItems(result.items);
-      setHasMore(result.hasMore);
+      setNext(result.next);
       setError(false);
     } catch {
-      setError(true);
+      if (request === latestRequest.current && activeView.current === viewIdentity) setError(true);
     } finally {
-      setLoading(false);
+      if (request === latestRequest.current && activeView.current === viewIdentity) {
+        setLoading(false);
+      }
     }
-  }, [kind, page, revealSecurity]);
+  }, [cursor, kind, loader, revealSecurity, viewIdentity]);
 
   useEffect(() => {
     // Loading the current external queue is the purpose of this synchronization effect.
@@ -99,11 +147,12 @@ function ModerationGrid({ kind, title }: { kind: QueueKind; title: string }) {
   }, [reload]);
 
   const decide = async (item: QueueItem, decision: "allow" | "hide") => {
+    const decidingView = viewIdentity;
     setLoading(true);
     setError(false);
     try {
       const explanation = (reasons[item.id] ?? "").trim();
-      await decideReview({
+      await decider({
         authorId: item.authorId,
         sodaOfferingId: item.sodaOfferingId,
         expectedVersion: item.latestVersion,
@@ -112,10 +161,18 @@ function ModerationGrid({ kind, title }: { kind: QueueKind; title: string }) {
         decision,
         ...(explanation.length === 0 ? {} : { explanation }),
       });
-      await reload();
+      if (activeView.current !== decidingView) return;
+      setReasons((value) => ({ ...value, [item.id]: "" }));
+      if (page === 0) await reload();
+      else {
+        setCursors([undefined]);
+        setPage(0);
+      }
     } catch {
-      setError(true);
-      setLoading(false);
+      if (activeView.current === decidingView) {
+        setError(true);
+        setLoading(false);
+      }
     }
   };
 
@@ -132,6 +189,8 @@ function ModerationGrid({ kind, title }: { kind: QueueKind; title: string }) {
             color="inherit"
             onClick={() => {
               setLoading(true);
+              setCursors([undefined]);
+              setPage(0);
               setRevealSecurity(true);
             }}
           >
@@ -232,13 +291,18 @@ function ModerationGrid({ kind, title }: { kind: QueueKind; title: string }) {
           </Stack>
         </Box>
       ))}
-      {(page > 0 || hasMore) && (
+      {(page > 0 || next !== undefined) && (
         <Pagination
           page={page + 1}
-          count={page + 1 + (hasMore ? 1 : 0)}
+          count={page + 1 + (next === undefined ? 0 : 1)}
           onChange={(_event, value) => {
+            const requestedPage = value - 1;
+            if (requestedPage > page) {
+              if (next === undefined) return;
+              setCursors((existing) => [...existing.slice(0, page + 1), next]);
+            }
             setLoading(true);
-            setPage(value - 1);
+            setPage(requestedPage);
           }}
         />
       )}

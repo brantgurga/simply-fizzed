@@ -33,6 +33,7 @@ interface ReviewEditorProps {
     input: string,
     current?: CurrentReviewRecord,
   ) => Promise<{ markdown: string | null; version: number }>;
+  synchronizedCurrent?: CurrentReviewRecord;
   onCurrentChange?: (review: CurrentReviewRecord | undefined) => void;
 }
 
@@ -59,6 +60,7 @@ export default function ReviewEditor({
   canReview,
   loader = defaultLoader,
   saver = defaultSaver,
+  synchronizedCurrent,
   onCurrentChange,
 }: ReviewEditorProps) {
   const [current, setCurrent] = useState<CurrentReviewRecord>();
@@ -74,6 +76,13 @@ export default function ReviewEditor({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<"saved" | "error">();
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const currentReference = useRef(current);
+  const draftReference = useRef(input);
+
+  useEffect(() => {
+    currentReference.current = current;
+    draftReference.current = input;
+  }, [current, input]);
 
   useEffect(() => {
     let active = true;
@@ -103,6 +112,22 @@ export default function ReviewEditor({
       active = false;
     };
   }, [loader, onCurrentChange, soda.id, user.uid]);
+
+  useEffect(() => {
+    if (
+      synchronizedCurrent === undefined ||
+      (synchronizedCurrent.version === currentReference.current?.version &&
+        synchronizedCurrent.markdown === currentReference.current?.markdown)
+    ) {
+      return;
+    }
+    // Rating clears are atomic with review clears, so mirror that committed revision here.
+    // oxlint-disable-next-line react/set-state-in-effect
+    setCurrent(synchronizedCurrent);
+    setInput(synchronizedCurrent.markdown ?? "");
+    setEditing(synchronizedCurrent.markdown !== null);
+    setPreview(false);
+  }, [synchronizedCurrent]);
 
   const apply = (before: string, after = before) => {
     const element = textarea.current;
@@ -162,17 +187,24 @@ export default function ReviewEditor({
         version: result.version,
         authoredAt: new Date(),
         moderationStatus:
-          result.markdown === null ? "none" : needsModeration ? "pending" : "visible",
-        approvedVersion: result.markdown === null || needsModeration ? null : result.version,
-        ...(needsModeration
+          result.markdown === null
+            ? needsModeration
+              ? (current?.moderationStatus ?? "none")
+              : "none"
+            : needsModeration
+              ? "pending"
+              : "visible",
+        approvedVersion: result.markdown === null ? null : (current?.approvedVersion ?? null),
+        ...(needsModeration && result.markdown !== null
           ? { hiddenReason: null }
           : current?.hiddenReason === undefined
             ? {}
             : { hiddenReason: current.hiddenReason }),
       };
+      const draftUnchanged = draftReference.current === value;
       setCurrent(optimistic);
-      setInput(result.markdown ?? "");
-      setEditing(result.markdown !== null);
+      setInput((draft) => (draft === value ? (result.markdown ?? "") : draft));
+      if (draftUnchanged) setEditing(result.markdown !== null);
       setPreview(false);
       setMessage("saved");
       onCurrentChange?.(optimistic);

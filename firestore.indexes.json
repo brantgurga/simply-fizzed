@@ -32,7 +32,8 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "queueKind", "order": "ASCENDING" },
-        { "fieldPath": "pendingSince", "order": "ASCENDING" }
+        { "fieldPath": "pendingSince", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     }
   ],

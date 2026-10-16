@@ -51,6 +51,8 @@ describe("review authoritative validation", () => {
     expect(revisionDisposition("hidden", 1, 1)).toBe("pending");
     expect(revisionDisposition("visible", 2, 1)).toBe("pending");
     expect(revisionDisposition("visible", 1, 1, 1, null)).toBe("pending");
+    expect(revisionDisposition("visible", 1, 1, 1, null, null)).toBe("visible");
+    expect(revisionDisposition("visible", 1, 1, 2, 1, 1)).toBe("visible");
   });
 
   it("makes Security/Safety dominant throughout one moderation cycle", () => {

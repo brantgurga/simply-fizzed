@@ -24,7 +24,7 @@ import {
   httpsCallable,
   type Functions,
 } from "firebase/functions";
-import { processReviewWrite, reviewKey } from "../src/reviews.js";
+import { processReviewWrite, reviewKey, syncPublishedReviewRating } from "../src/reviews.js";
 
 const PROJECT_ID = "demo-simply-fizzed";
 const PASSWORD = "emulator-password";
@@ -654,7 +654,7 @@ describe("review moderation concurrency", () => {
     await adminAuth.setCustomUserClaims(accounts.moderator.uid, {});
     try {
       await expect(
-        call("moderator", "loadReviewModerationQueue", { kind: "reported", page: 0 }),
+        call("moderator", "loadReviewModerationQueue", { kind: "reported" }),
       ).rejects.toMatchObject({ code: "functions/permission-denied" });
     } finally {
       await adminAuth.setCustomUserClaims(accounts.moderator.uid, { moderator: true });
@@ -675,5 +675,265 @@ describe("review moderation concurrency", () => {
     } finally {
       await adminAuth.updateUser(accounts.secondFan.uid, { disabled: false });
     }
+  });
+
+  it("keeps cleared pending and hidden reviews in moderation when they are reposted", async () => {
+    const sodaId = "clear-pending";
+    await seedVisibleReview(sodaId);
+    await call("secondFan", "reportReview", {
+      authorId: accounts.fan.uid,
+      sodaOfferingId: sodaId,
+      version: 1,
+      category: "offensive",
+    });
+    const reference = adminDb
+      .collection("profiles")
+      .doc(accounts.fan.uid)
+      .collection("reviews")
+      .doc(sodaId);
+    const reported = await reference.get();
+    await reference.update({
+      markdown: null,
+      contentLength: 0,
+      version: 2,
+      authoredAt: new Date(),
+      baseModerationCycle: reported.get("moderationCycle"),
+      baseApprovedVersion: null,
+      mutationId: randomUUID(),
+    });
+    await processReviewWrite(adminDb, accounts.fan.uid, sodaId, reported, await reference.get());
+    await waitForReview(
+      accounts.fan.uid,
+      sodaId,
+      (current, published) =>
+        current.get("version") === 2 &&
+        current.get("moderationStatus") === "pending" &&
+        !published.exists,
+    );
+
+    const cleared = await reference.get();
+    expect(cleared.get("moderationStatus")).toBe("pending");
+    expect(cleared.get("moderationCycle")).toBe(reported.get("moderationCycle"));
+    const clearedQueue = await adminDb
+      .collection("reviewModerationQueue")
+      .doc(reviewKey(accounts.fan.uid, sodaId))
+      .get();
+    expect(clearedQueue.exists).toBe(false);
+    await reference.update({
+      markdown: "A useful integration review.",
+      contentLength: 28,
+      version: 3,
+      authoredAt: new Date(),
+      baseModerationCycle: cleared.get("moderationCycle"),
+      baseApprovedVersion: null,
+      mutationId: randomUUID(),
+    });
+    await processReviewWrite(adminDb, accounts.fan.uid, sodaId, cleared, await reference.get());
+    await waitForReview(
+      accounts.fan.uid,
+      sodaId,
+      (current, published) =>
+        current.get("version") === 3 &&
+        current.get("moderationStatus") === "pending" &&
+        !published.exists,
+    );
+    const key = reviewKey(accounts.fan.uid, sodaId);
+    const repostedQueue = await adminDb.collection("reviewModerationQueue").doc(key).get();
+    expect(repostedQueue.data()).toMatchObject({
+      cycle: reported.get("moderationCycle"),
+      queueKind: "revised",
+    });
+
+    await call("moderator", "moderateReview", {
+      authorId: accounts.fan.uid,
+      sodaOfferingId: sodaId,
+      expectedVersion: 3,
+      expectedCycle: repostedQueue.get("cycle"),
+      expectedQueueVersion: repostedQueue.get("queueVersion"),
+      decision: "hide",
+      explanation: "Please revise before reposting.",
+    });
+    const hidden = await reference.get();
+    await reference.update({
+      markdown: null,
+      contentLength: 0,
+      version: 4,
+      authoredAt: new Date(),
+      baseModerationCycle: hidden.get("moderationCycle"),
+      baseApprovedVersion: null,
+      mutationId: randomUUID(),
+    });
+    await processReviewWrite(adminDb, accounts.fan.uid, sodaId, hidden, await reference.get());
+    const clearedHidden = await reference.get();
+    expect(clearedHidden.get("moderationStatus")).toBe("hidden");
+    const clearedHiddenQueue = await adminDb.collection("reviewModerationQueue").doc(key).get();
+    expect(clearedHiddenQueue.exists).toBe(false);
+    await reference.update({
+      markdown: "A useful integration review.",
+      contentLength: 28,
+      version: 5,
+      authoredAt: new Date(),
+      baseModerationCycle: clearedHidden.get("moderationCycle"),
+      baseApprovedVersion: null,
+      mutationId: randomUUID(),
+    });
+    await processReviewWrite(
+      adminDb,
+      accounts.fan.uid,
+      sodaId,
+      clearedHidden,
+      await reference.get(),
+    );
+    const repostedHidden = await reference.get();
+    expect(repostedHidden.get("moderationStatus")).toBe("pending");
+    const repostedHiddenQueue = await adminDb.collection("reviewModerationQueue").doc(key).get();
+    expect(repostedHiddenQueue.exists).toBe(true);
+    await adminDb.collection("reviewModerationQueue").doc(key).delete();
+  });
+
+  it("keeps Security/Safety protection after a hidden review is revised", async () => {
+    const sodaId = "hidden-security";
+    await seedVisibleReview(sodaId);
+    const report = await call<{ cycle: number }>("secondFan", "reportReview", {
+      authorId: accounts.fan.uid,
+      sodaOfferingId: sodaId,
+      version: 1,
+      category: "security-safety",
+    });
+    const key = reviewKey(accounts.fan.uid, sodaId);
+    const queue = await adminDb.collection("reviewModerationQueue").doc(key).get();
+    await call("moderator", "moderateReview", {
+      authorId: accounts.fan.uid,
+      sodaOfferingId: sodaId,
+      expectedVersion: 1,
+      expectedCycle: report.cycle,
+      expectedQueueVersion: queue.get("queueVersion"),
+      decision: "hide",
+      explanation: "Security review required.",
+    });
+    const reference = adminDb
+      .collection("profiles")
+      .doc(accounts.fan.uid)
+      .collection("reviews")
+      .doc(sodaId);
+    const hidden = await reference.get();
+    expect(hidden.get("moderationSecuritySafety")).toBe(true);
+    await reference.update({
+      markdown: "A useful integration review.",
+      contentLength: 28,
+      version: 2,
+      authoredAt: new Date(),
+      baseModerationCycle: hidden.get("moderationCycle"),
+      baseApprovedVersion: null,
+      mutationId: randomUUID(),
+    });
+    await waitForReview(
+      accounts.fan.uid,
+      sodaId,
+      (current, published) =>
+        current.get("version") === 2 &&
+        current.get("moderationStatus") === "pending" &&
+        !published.exists,
+    );
+
+    const protectedQueue = await adminDb.collection("reviewModerationQueue").doc(key).get();
+    expect(protectedQueue.data()).toMatchObject({
+      queueKind: "security",
+      securitySafety: true,
+    });
+    const listed = await call<{
+      items: Array<{
+        id: string;
+        current: { protectedContent: boolean };
+        history: { versions: Array<{ review?: { markdown?: string } }> };
+      }>;
+    }>("moderator", "loadReviewModerationQueue", { kind: "security" });
+    const protectedItem = listed.items.find((item) => item.id === key);
+    expect(protectedItem?.current.protectedContent).toBe(true);
+    expect(protectedItem?.history.versions.map((item) => item.review?.markdown)).toEqual([
+      "[protected]",
+      "[protected]",
+    ]);
+    await adminDb.collection("reviewModerationQueue").doc(key).delete();
+  });
+
+  it("reconciles unordered rating deliveries from the authoritative current rating", async () => {
+    const sodaId = "rating-order";
+    await seedVisibleReview(sodaId);
+    const key = reviewKey(accounts.fan.uid, sodaId);
+    await adminDb
+      .collection("profiles")
+      .doc(accounts.fan.uid)
+      .collection("ratings")
+      .doc(sodaId)
+      .update({ rating: 5 });
+    await adminDb.collection("publishedReviews").doc(key).update({ rating: 2 });
+
+    await Promise.all([
+      syncPublishedReviewRating(adminDb, accounts.fan.uid, sodaId),
+      syncPublishedReviewRating(adminDb, accounts.fan.uid, sodaId),
+    ]);
+
+    expect((await adminDb.collection("publishedReviews").doc(key).get()).get("rating")).toBe(5);
+  });
+
+  it("uses a stable cursor when earlier moderation entries are removed", async () => {
+    const existing = await adminDb
+      .collection("reviewModerationQueue")
+      .where("queueKind", "==", "revised")
+      .get();
+    await Promise.all(existing.docs.map(async (item) => await item.ref.delete()));
+    await Promise.all(
+      Array.from(
+        { length: 6 },
+        async (_value, index) => await seedVisibleReview(`cursor-soda-${index}`),
+      ),
+    );
+    await Promise.all(
+      Array.from(
+        { length: 6 },
+        async (_value, index) =>
+          await adminDb
+            .collection("reviewModerationQueue")
+            .doc(`cursor-${index}`)
+            .set({
+              authorId: accounts.fan.uid,
+              sodaOfferingId: `cursor-soda-${index}`,
+              latestVersion: 1,
+              cycle: 1,
+              queueVersion: 1,
+              queueKind: "revised",
+              pendingSince: new Date(1_000 + index),
+            }),
+      ),
+    );
+    const first = await call<{
+      items: Array<{ id: string }>;
+      next?: { pendingSinceMillis: number; id: string };
+    }>("moderator", "loadReviewModerationQueue", { kind: "revised" });
+    expect(first.items.map((item) => item.id)).toEqual([
+      "cursor-0",
+      "cursor-1",
+      "cursor-2",
+      "cursor-3",
+      "cursor-4",
+    ]);
+    const cursor = first.next;
+    if (cursor === undefined) throw new Error("Expected a moderation cursor.");
+    await adminDb.collection("reviewModerationQueue").doc("cursor-0").delete();
+
+    const second = await call<{ items: Array<{ id: string }> }>(
+      "moderator",
+      "loadReviewModerationQueue",
+      { kind: "revised", cursor },
+    );
+    expect(second.items.map((item) => item.id)).toEqual(["cursor-5"]);
+    await Promise.all(
+      Array.from(
+        { length: 6 },
+        async (_value, index) =>
+          await adminDb.collection("reviewModerationQueue").doc(`cursor-${index}`).delete(),
+      ),
+    );
   });
 });

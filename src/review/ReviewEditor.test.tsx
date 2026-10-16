@@ -35,7 +35,7 @@ describe("ReviewEditor", () => {
     expect(screen.getByText("Bright cola")).toBeVisible();
   });
 
-  it("carries the latest optimistic approval into consecutive visible edits", async () => {
+  it("keeps the last authoritative approval across consecutive saves", async () => {
     const saver = vi
       .fn()
       .mockResolvedValueOnce({ markdown: "Great cola.", version: 2 })
@@ -79,7 +79,38 @@ describe("ReviewEditor", () => {
     await user.click(save);
     await waitFor(() => expect(saver).toHaveBeenCalledTimes(2));
 
-    expect(saver.mock.calls[1]?.[3]).toEqual(expect.objectContaining({ approvedVersion: 2 }));
+    expect(saver.mock.calls[1]?.[3]).toEqual(expect.objectContaining({ approvedVersion: 1 }));
+  });
+
+  it("preserves text typed while a save is pending", async () => {
+    let finishSave: ((value: { markdown: string; version: number }) => void) | undefined;
+    const saver = vi.fn(
+      () =>
+        new Promise<{ markdown: string; version: number }>((resolve) => {
+          finishSave = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    render(
+      <ReviewEditor
+        soda={soda}
+        user={fan}
+        hasPointRating
+        canReview
+        loader={vi.fn().mockResolvedValue({ status: "missing" })}
+        saver={saver}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Write a review" }));
+    const input = screen.getByRole("textbox", { name: "Review" });
+    await user.type(input, "Saved draft");
+    await user.click(screen.getByRole("button", { name: "Publish review" }));
+    await user.type(input, " with newer text");
+    finishSave?.({ markdown: "Saved draft", version: 1 });
+    await waitFor(() => expect(screen.getByText("Review saved.")).toBeVisible());
+
+    expect(input).toHaveValue("Saved draft with newer text");
   });
 
   it("does not activate pasted links, images, or HTML", async () => {

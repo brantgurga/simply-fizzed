@@ -197,7 +197,7 @@ export const moderateReview = onCall<ModerateReviewInput>(
 export const loadReviewModerationQueue = onCall<{
   kind: "security" | "reported" | "revised";
   revealSecurity?: boolean;
-  page?: number;
+  cursor?: { pendingSinceMillis: number; id: string };
 }>(
   { ...callableOptions, serviceAccount: reviewModerationServiceAccount },
   async (request) =>
@@ -207,7 +207,7 @@ export const loadReviewModerationQueue = onCall<{
           request.auth?.uid,
           request.data.kind,
           request.data.revealSecurity === true,
-          request.data.page ?? 0,
+          request.data.cursor,
         ),
     ),
 );
@@ -242,13 +242,7 @@ export const processReviewRating = onDocumentWritten(
     serviceAccount: reviewModerationServiceAccount,
   },
   async (event) => {
-    const after = event.data?.after;
-    await syncPublishedReviewRating(
-      firestore,
-      event.params.authorId,
-      event.params.sodaId,
-      after?.exists ? after.get("rating") : null,
-    );
+    await syncPublishedReviewRating(firestore, event.params.authorId, event.params.sodaId);
   },
 );
 

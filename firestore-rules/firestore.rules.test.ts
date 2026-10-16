@@ -816,6 +816,7 @@ describe("textual review privacy and author writes", () => {
         ...validReview(),
         moderationStatus: "hidden",
         moderationCycle: 2,
+        moderationSecuritySafety: true,
         approvedVersion: null,
         hiddenReason: "Please revise",
       });
@@ -839,6 +840,7 @@ describe("textual review privacy and author writes", () => {
       }),
     );
     await assertFails(updateDoc(reference, { moderationStatus: "visible" }));
+    await assertFails(updateDoc(reference, { moderationSecuritySafety: false }));
     await assertFails(
       updateDoc(reference, {
         markdown: "A second revision.",

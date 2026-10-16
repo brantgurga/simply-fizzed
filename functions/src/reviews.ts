@@ -7,6 +7,7 @@
 
 import { createHash } from "node:crypto";
 import {
+  FieldPath,
   FieldValue,
   Timestamp,
   type DocumentData,
@@ -57,6 +58,10 @@ export interface ModerateReviewInput {
   decision: "allow" | "hide";
   explanation?: string;
 }
+export interface ModerationQueueCursor {
+  pendingSinceMillis: number;
+  id: string;
+}
 
 export function reviewKey(authorId: string, sodaOfferingId: string): string {
   return createHash("sha256").update(authorId).update("\0").update(sodaOfferingId).digest("hex");
@@ -84,11 +89,16 @@ export function revisionDisposition(
   authorBaseCycle: number,
   approvedVersion: number | null = null,
   authorBaseApprovedVersion: number | null = null,
+  previousBaseApprovedVersion?: number | null,
 ): "visible" | "pending" {
+  const followsApprovedChain =
+    authorBaseApprovedVersion === approvedVersion ||
+    (previousBaseApprovedVersion !== undefined &&
+      authorBaseApprovedVersion === previousBaseApprovedVersion);
   return previousStatus === "pending" ||
     previousStatus === "hidden" ||
     authorBaseCycle !== moderationCycle ||
-    authorBaseApprovedVersion !== approvedVersion
+    !followsApprovedChain
     ? "pending"
     : "visible";
 }
@@ -376,13 +386,16 @@ export async function processReviewWrite(
     }
 
     if (markdown === null) {
+      const previousStatus = before?.get("moderationStatus") ?? current.get("moderationStatus");
+      const preservesModeration = previousStatus === "pending" || previousStatus === "hidden";
       transaction.update(reference, {
-        moderationStatus: "none",
+        moderationStatus: preservesModeration ? previousStatus : "none",
         approvedVersion: null,
         publicationVersion: null,
         publishedAt: null,
-        hiddenReason: null,
+        hiddenReason: previousStatus === "hidden" ? (current.get("hiddenReason") ?? null) : null,
         moderatedAt: now,
+        ...(preservesModeration ? {} : { moderationSecuritySafety: false }),
       });
       transaction.delete(publicReference);
       transaction.delete(queueReference);
@@ -440,7 +453,11 @@ export async function processReviewWrite(
     const canonicalFields = { authorName, sodaName, sodaBrand, sodaFlavor };
 
     const hadPreviousText = before?.get("markdown") != null;
-    const oldStatus = hadPreviousText ? (before?.get("moderationStatus") ?? "none") : "none";
+    const previousStatus = before?.get("moderationStatus") ?? "none";
+    const oldStatus =
+      hadPreviousText || previousStatus === "pending" || previousStatus === "hidden"
+        ? previousStatus
+        : "none";
     const cycle = integer(before?.get("moderationCycle") ?? 0);
     const baseCycle = integer(current.get("baseModerationCycle") ?? 0);
     const approvedVersion =
@@ -451,16 +468,23 @@ export async function processReviewWrite(
       typeof current.get("baseApprovedVersion") === "number"
         ? integer(current.get("baseApprovedVersion"), 1)
         : null;
+    const previousBaseApprovedVersion =
+      typeof before?.get("baseApprovedVersion") === "number"
+        ? integer(before.get("baseApprovedVersion"), 1)
+        : null;
     const disposition = revisionDisposition(
       oldStatus,
       cycle,
       baseCycle,
       approvedVersion,
       baseApprovedVersion,
+      previousBaseApprovedVersion,
     );
     if (disposition === "pending") {
       const sameQueueCycle = queue.exists && queue.get("cycle") === cycle;
-      const securitySafety = sameQueueCycle && queue.get("securitySafety") === true;
+      const securitySafety =
+        current.get("moderationSecuritySafety") === true ||
+        (sameQueueCycle && queue.get("securitySafety") === true);
       const priorCategories = queue.get("categories");
       const reportedVersion = queue.get("reportedVersion");
       const queueVersion = sameQueueCycle ? integer(queue.get("queueVersion"), 1) + 1 : 1;
@@ -468,6 +492,7 @@ export async function processReviewWrite(
         ...canonicalFields,
         moderationStatus: "pending",
         moderationCycle: cycle,
+        moderationSecuritySafety: securitySafety,
         approvedVersion: null,
         moderatedAt: now,
       });
@@ -502,6 +527,7 @@ export async function processReviewWrite(
       ...canonicalFields,
       moderationStatus: "visible",
       moderationCycle: cycle,
+      moderationSecuritySafety: false,
       approvedVersion: version,
       publicationVersion,
       publishedAt,
@@ -522,20 +548,27 @@ export async function processReviewWrite(
   });
 }
 
-/** Keep the public review's independent point rating current without changing chronology. */
+/** Reconcile the public projection with the authoritative current rating transactionally. */
 export async function syncPublishedReviewRating(
   db: Firestore,
   authorId: string,
   sodaId: string,
-  rating: unknown,
 ): Promise<void> {
-  const reference = db.collection("publishedReviews").doc(reviewKey(authorId, sodaId));
-  if (typeof rating !== "number" || rating < 1 || rating > 5) {
-    await reference.delete();
-    return;
-  }
-  const snapshot = await reference.get();
-  if (snapshot.exists) await reference.update({ rating });
+  const ratingReference = db.collection("profiles").doc(authorId).collection("ratings").doc(sodaId);
+  const publicReference = db.collection("publishedReviews").doc(reviewKey(authorId, sodaId));
+  await db.runTransaction(async (transaction) => {
+    const [rating, published] = await Promise.all([
+      transaction.get(ratingReference),
+      transaction.get(publicReference),
+    ]);
+    if (!published.exists) return;
+    const currentRating = rating.get("rating");
+    if (typeof currentRating !== "number" || currentRating < 1 || currentRating > 5) {
+      transaction.delete(publicReference);
+    } else if (published.get("rating") !== currentRating) {
+      transaction.update(publicReference, { rating: currentRating });
+    }
+  });
 }
 
 /** Trusted online report and moderation operations. */
@@ -632,6 +665,7 @@ export class ReviewModerationService {
       transaction.update(reference, {
         moderationStatus: "pending",
         moderationCycle: cycle,
+        moderationSecuritySafety: securitySafety,
         approvedVersion: null,
         moderatedAt: FieldValue.serverTimestamp(),
       });
@@ -761,6 +795,7 @@ export class ReviewModerationService {
           : integer(current.get("publicationVersion") ?? 1, 1);
         transaction.update(reference, {
           moderationStatus: "visible",
+          moderationSecuritySafety: false,
           approvedVersion: expectedVersion,
           publicationVersion,
           publishedAt,
@@ -794,23 +829,31 @@ export class ReviewModerationService {
     moderatorId: string | undefined,
     kind: "security" | "reported" | "revised",
     revealSecurity = false,
-    page = 0,
-  ): Promise<{ items: DocumentData[]; hasMore: boolean }> {
+    cursor?: ModerationQueueCursor,
+  ): Promise<{ items: DocumentData[]; next?: ModerationQueueCursor }> {
     await requireCurrentModerator(this.#auth, moderatorId);
     if (!new Set(["security", "reported", "revised"]).has(kind)) {
       throw new ServiceError("invalid-argument", "Unknown moderation queue.");
     }
-    integer(page);
-    if (page > 100) {
-      throw new ServiceError("invalid-argument", "Moderation page is out of range.");
-    }
-    const snapshot = await this.#db
+    let queueQuery = this.#db
       .collection("reviewModerationQueue")
       .where("queueKind", "==", kind)
       .orderBy("pendingSince", "asc")
-      .limit((page + 1) * 5 + 1)
-      .get();
-    const pageDocuments = snapshot.docs.slice(page * 5, page * 5 + 5);
+      .orderBy(FieldPath.documentId(), "asc")
+      .limit(6);
+    if (cursor !== undefined) {
+      if (typeof cursor !== "object" || cursor === null) {
+        throw new ServiceError("invalid-argument", "Moderation cursor is malformed.");
+      }
+      const pendingSinceMillis = integer(cursor.pendingSinceMillis);
+      const id = text(cursor.id, 1_500);
+      if (id.includes("/")) {
+        throw new ServiceError("invalid-argument", "Moderation cursor is malformed.");
+      }
+      queueQuery = queueQuery.startAfter(Timestamp.fromMillis(pendingSinceMillis), id);
+    }
+    const snapshot = await queueQuery.get();
+    const pageDocuments = snapshot.docs.slice(0, 5);
     const items = await Promise.all(
       pageDocuments.map(async (queue) => {
         const authorId = text(queue.get("authorId"), 1_500);
@@ -864,6 +907,15 @@ export class ReviewModerationService {
         };
       }),
     );
-    return { items, hasMore: snapshot.docs.length > (page + 1) * 5 };
+    const last = pageDocuments.at(-1);
+    if (snapshot.docs.length <= 5 || last === undefined) return { items };
+    const pendingSince = last.get("pendingSince");
+    if (!(pendingSince instanceof Timestamp)) {
+      throw new ServiceError("internal", "The moderation queue ordering is malformed.");
+    }
+    return {
+      items,
+      next: { pendingSinceMillis: pendingSince.toMillis(), id: last.id },
+    };
   }
 }

@@ -9,6 +9,7 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 const script = resolve("scripts/firebase-deploy.sh");
+const hostingWorkflow = resolve(".github/workflows/firebase-hosting.yml");
 /** @type {string[]} */
 const temporaryDirectories = [];
 
@@ -55,6 +56,18 @@ esac
 
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { recursive: true });
+});
+
+describe("Firebase Functions deployment configuration", () => {
+  it("supplies the review moderation runtime service account from a repository variable", () => {
+    const workflow = readFileSync(hostingWorkflow, "utf8");
+    expect(workflow).toContain(
+      "REVIEW_MODERATION_SERVICE_ACCOUNT: ${{ vars.FIREBASE_REVIEW_MODERATION_SERVICE_ACCOUNT }}",
+    );
+    expect(workflow).toContain(
+      '["REVIEW_MODERATION_SERVICE_ACCOUNT", process.env.REVIEW_MODERATION_SERVICE_ACCOUNT]',
+    );
+  });
 });
 
 describe("Firebase deployment retry bootstrap", () => {

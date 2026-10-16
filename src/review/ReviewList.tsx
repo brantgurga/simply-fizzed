@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // See LICENSE for copying terms.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import SportsBarIcon from "@mui/icons-material/SportsBar";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
@@ -289,11 +289,17 @@ export function PublicReviewList({
   const [page, setPage] = useState(0);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [loadIdentity, setLoadIdentity] = useState({ loader });
+  const activeLoader = useRef(loader);
+  const latestRequest = useRef(0);
+  useEffect(() => {
+    activeLoader.current = loader;
+  }, [loader]);
   useEffect(() => {
     let active = true;
+    const request = ++latestRequest.current;
     void loader().then(
       (result) => {
-        if (active) {
+        if (active && request === latestRequest.current && activeLoader.current === loader) {
           setPages([result]);
           setPage(0);
           setState("ready");
@@ -301,7 +307,7 @@ export function PublicReviewList({
         }
       },
       () => {
-        if (active) {
+        if (active && request === latestRequest.current && activeLoader.current === loader) {
           setState("error");
           setLoadIdentity({ loader });
         }
@@ -323,14 +329,19 @@ export function PublicReviewList({
     }
     const cursor = pages.at(-1)?.next;
     if (cursor === undefined) return;
+    const requestedLoader = loader;
+    const request = ++latestRequest.current;
     setState("loading");
     try {
-      const loaded = await loader(cursor);
+      const loaded = await requestedLoader(cursor);
+      if (request !== latestRequest.current || activeLoader.current !== requestedLoader) return;
       setPages((value) => [...value, loaded]);
       setPage(next);
       setState("ready");
     } catch {
-      setState("error");
+      if (request === latestRequest.current && activeLoader.current === requestedLoader) {
+        setState("error");
+      }
     }
   };
 

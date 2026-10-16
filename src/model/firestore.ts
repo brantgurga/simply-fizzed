@@ -378,6 +378,7 @@ export const currentReviewDocumentSchema = z.object({
   mutationId: nonBlankString,
   moderationStatus: z.optional(reviewModerationStatusSchema),
   moderationCycle: z.optional(z.number().check(z.int(), z.minimum(0))),
+  moderationSecuritySafety: z.optional(z.boolean()),
   approvedVersion: z.optional(z.nullable(z.number().check(z.int(), z.minimum(1)))),
   publishedAt: z.optional(z.nullable(firestoreTimestampSchema)),
   moderatedAt: z.optional(firestoreTimestampSchema),

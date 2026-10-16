@@ -131,8 +131,9 @@ describe("SodaDetail", () => {
     expect(saver.mock.calls.map((call) => call.at(-1))).toEqual([true, false]);
   });
 
-  it("requires confirmation and atomically includes a textual review when clearing a rating", async () => {
+  it("requires confirmation and synchronizes the editor after clearing a reviewed rating", async () => {
     const saver = vi.fn().mockResolvedValue(undefined);
+    const reviewSaver = vi.fn().mockResolvedValue({ markdown: "Fresh review.", version: 3 });
     const confirm = vi.spyOn(globalThis, "confirm").mockReturnValue(false);
     const user = userEvent.setup();
     render(
@@ -180,6 +181,7 @@ describe("SodaDetail", () => {
           },
         })}
         ratingSaver={saver}
+        currentReviewSaver={reviewSaver}
       />,
     );
 
@@ -197,6 +199,18 @@ describe("SodaDetail", () => {
       null,
       false,
       expect.objectContaining({ markdown: "Great cola." }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole("textbox", { name: "Review" })).not.toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("radio", { name: "5 mugs: Loved" }));
+    await user.click(await screen.findByRole("button", { name: "Write a review" }));
+    await user.type(screen.getByRole("textbox", { name: "Review" }), "Fresh review.");
+    await user.click(screen.getByRole("button", { name: "Publish review" }));
+    await waitFor(() => expect(reviewSaver).toHaveBeenCalledOnce());
+    expect(reviewSaver.mock.calls[0]?.[3]).toEqual(
+      expect.objectContaining({ markdown: null, version: 2 }),
     );
     confirm.mockRestore();
   });

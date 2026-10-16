@@ -38,6 +38,12 @@ interface SodaDetailProps {
     cursor?: Parameters<typeof loadSodaReviews>[2],
   ) => ReturnType<typeof loadSodaReviews>;
   currentReviewLoader?: (authorId: string, sodaId: string) => Promise<CurrentReviewLoad>;
+  currentReviewSaver?: (
+    author: { id: string; name: string },
+    soda: SodaDocument,
+    input: string,
+    current?: CurrentReviewRecord,
+  ) => Promise<{ markdown: string | null; version: number }>;
   loader?: (id: string) => Promise<DocumentLoad<SodaDocument>>;
   ratingLoader?: (userId: string, sodaId: string) => Promise<RatingLoad>;
   ratingSaver?: (
@@ -95,6 +101,7 @@ function RatingControls({
   saver,
   canReview,
   currentReviewLoader,
+  currentReviewSaver,
 }: {
   soda: SodaDocument;
   user: ({ uid: string } & ContributorIdentity) | null;
@@ -112,6 +119,7 @@ function RatingControls({
   currentReviewLoader?:
     | ((authorId: string, sodaId: string) => Promise<CurrentReviewLoad>)
     | undefined;
+  currentReviewSaver?: SodaDetailProps["currentReviewSaver"];
 }) {
   const [state, setState] = useState<RatingState>(() =>
     user === null ? { status: "ready", value: undefined } : { status: "loading" },
@@ -194,7 +202,19 @@ function RatingControls({
         setCurrentReview((review) =>
           review === undefined
             ? undefined
-            : { ...review, markdown: null, contentLength: 0, version: review.version + 1 },
+            : {
+                ...review,
+                markdown: null,
+                contentLength: 0,
+                version: review.version + 1,
+                baseModerationCycle: review.moderationCycle ?? 0,
+                baseApprovedVersion: review.approvedVersion ?? null,
+                moderationStatus:
+                  review.moderationStatus === "pending" || review.moderationStatus === "hidden"
+                    ? review.moderationStatus
+                    : "none",
+                approvedVersion: null,
+              },
         );
       }
     } catch {
@@ -253,7 +273,9 @@ function RatingControls({
         hasPointRating={rating !== null}
         canReview={canReview}
         onCurrentChange={setCurrentReview}
+        {...(currentReview === undefined ? {} : { synchronizedCurrent: currentReview })}
         {...(currentReviewLoader === undefined ? {} : { loader: currentReviewLoader })}
+        {...(currentReviewSaver === undefined ? {} : { saver: currentReviewSaver })}
       />
     </Stack>
   );
@@ -267,6 +289,7 @@ export default function SodaDetail({
   canModerateReviews = false,
   reviewListLoader,
   currentReviewLoader,
+  currentReviewSaver,
   loader = defaultLoader,
   ratingLoader = defaultRatingLoader,
   ratingSaver = defaultRatingSaver,
@@ -351,6 +374,7 @@ export default function SodaDetail({
           currentReviewLoader ??
           (loader === defaultLoader ? undefined : async () => ({ status: "missing" as const }))
         }
+        {...(currentReviewSaver === undefined ? {} : { currentReviewSaver })}
       />
       <Typography color="text.secondary">
         Last updated:{" "}
