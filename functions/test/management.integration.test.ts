@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // See LICENSE for copying terms.
 
-/* oxlint-disable eslint/no-await-in-loop -- Emulator-state polling must remain sequential. */
-
 import { randomUUID } from "node:crypto";
 import { expect } from "expect";
 import {
@@ -114,11 +112,13 @@ async function waitForReview(
   const key = reviewKey(authorId, sodaId);
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Each poll must observe fresh emulator state.
     const [current, published] = await Promise.all([
       adminDb.collection("profiles").doc(authorId).collection("reviews").doc(sodaId).get(),
       adminDb.collection("publishedReviews").doc(key).get(),
     ]);
     if (predicate(current, published)) return;
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Delay before the next sequential poll.
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error("Timed out waiting for review processing.");
