@@ -68,8 +68,30 @@ const recordAccountCreationServiceAccount = defineString(
     input: { text: { nonEmpty: true } },
   },
 );
-const reviewModerationServiceAccount = defineString("REVIEW_MODERATION_SERVICE_ACCOUNT", {
-  description: "Least-privilege runtime identity for review projection and moderation.",
+const reportReviewServiceAccount = defineString("REPORT_REVIEW_SERVICE_ACCOUNT", {
+  description: "Least-privilege runtime identity for reportReview.",
+  input: { text: { nonEmpty: true } },
+});
+const moderateReviewServiceAccount = defineString("MODERATE_REVIEW_SERVICE_ACCOUNT", {
+  description: "Least-privilege runtime identity for moderateReview.",
+  input: { text: { nonEmpty: true } },
+});
+const loadReviewModerationQueueServiceAccount = defineString(
+  "LOAD_REVIEW_MODERATION_QUEUE_SERVICE_ACCOUNT",
+  {
+    description: "Least-privilege runtime identity for loadReviewModerationQueue.",
+    input: { text: { nonEmpty: true } },
+  },
+);
+const processReviewRevisionServiceAccount = defineString(
+  "PROCESS_REVIEW_REVISION_SERVICE_ACCOUNT",
+  {
+    description: "Least-privilege runtime identity for processReviewRevision.",
+    input: { text: { nonEmpty: true } },
+  },
+);
+const processReviewRatingServiceAccount = defineString("PROCESS_REVIEW_RATING_SERVICE_ACCOUNT", {
+  description: "Least-privilege runtime identity for processReviewRating.",
   input: { text: { nonEmpty: true } },
 });
 const app = initializeApp();
@@ -179,14 +201,14 @@ export const getUserAuditHistory = onCall<{
 
 /** Atomically report one public review version and open or escalate its moderation cycle. */
 export const reportReview = onCall<ReportReviewInput>(
-  { ...callableOptions, serviceAccount: reviewModerationServiceAccount },
+  { ...callableOptions, serviceAccount: reportReviewServiceAccount },
   async (request) =>
     await translateErrors(async () => await reviewService.report(request.auth?.uid, request.data)),
 );
 
 /** Apply a version-aware Moderator decision without allowing text rewrites. */
 export const moderateReview = onCall<ModerateReviewInput>(
-  { ...callableOptions, serviceAccount: reviewModerationServiceAccount },
+  { ...callableOptions, serviceAccount: moderateReviewServiceAccount },
   async (request) =>
     await translateErrors(
       async () => await reviewService.moderate(request.auth?.uid, request.data),
@@ -199,7 +221,7 @@ export const loadReviewModerationQueue = onCall<{
   revealSecurity?: boolean;
   cursor?: { pendingSinceMillis: number; id: string };
 }>(
-  { ...callableOptions, serviceAccount: reviewModerationServiceAccount },
+  { ...callableOptions, serviceAccount: loadReviewModerationQueueServiceAccount },
   async (request) =>
     await translateErrors(
       async () =>
@@ -218,7 +240,7 @@ export const processReviewRevision = onDocumentWritten(
     document: "profiles/{authorId}/reviews/{sodaId}",
     region: REGION,
     retry: true,
-    serviceAccount: reviewModerationServiceAccount,
+    serviceAccount: processReviewRevisionServiceAccount,
   },
   async (event) => {
     const before = event.data?.before;
@@ -239,7 +261,7 @@ export const processReviewRating = onDocumentWritten(
     document: "profiles/{authorId}/ratings/{sodaId}",
     region: REGION,
     retry: true,
-    serviceAccount: reviewModerationServiceAccount,
+    serviceAccount: processReviewRatingServiceAccount,
   },
   async (event) => {
     await syncPublishedReviewRating(firestore, event.params.authorId, event.params.sodaId);
