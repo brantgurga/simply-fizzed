@@ -11,6 +11,10 @@ export const COLLECTIONS = {
   availability: "availability",
   profiles: "profiles",
   ratings: "ratings",
+  reviews: "reviews",
+  publishedReviews: "publishedReviews",
+  reviewModerationQueue: "reviewModerationQueue",
+  reviewAudit: "reviewAudit",
   verifications: "verifications",
 } as const;
 
@@ -344,3 +348,58 @@ export const ratingDocumentSchema = z
     }),
   );
 export type RatingDocument = z.infer<typeof ratingDocumentSchema>;
+
+/** User-facing and persisted limits for constrained Markdown soda reviews. */
+export const REVIEW_CONTENT_LIMIT = 2_000;
+export const REVIEW_MARKDOWN_LIMIT = 3_000;
+
+/** The author-visible moderation state of a current textual review. */
+export const reviewModerationStatusSchema = z.enum(["visible", "pending", "hidden", "none"]);
+export type ReviewModerationStatus = z.infer<typeof reviewModerationStatusSchema>;
+
+const nullableReviewMarkdownSchema = z.nullable(
+  z.string().check(z.minLength(1), z.maxLength(REVIEW_MARKDOWN_LIMIT)),
+);
+
+/** The author's current review document under their public profile. */
+export const currentReviewDocumentSchema = z.object({
+  authorId: nonBlankString,
+  authorName: attributionNameSchema,
+  sodaOfferingId: nonBlankString,
+  sodaName: nonBlankString,
+  sodaBrand: nonBlankString,
+  sodaFlavor: nonBlankString,
+  markdown: nullableReviewMarkdownSchema,
+  contentLength: z.number().check(z.int(), z.minimum(0), z.maximum(REVIEW_CONTENT_LIMIT)),
+  version: z.number().check(z.int(), z.minimum(1)),
+  authoredAt: firestoreTimestampSchema,
+  baseModerationCycle: z.number().check(z.int(), z.minimum(0)),
+  baseApprovedVersion: z.nullable(z.number().check(z.int(), z.minimum(1))),
+  mutationId: nonBlankString,
+  moderationStatus: z.optional(reviewModerationStatusSchema),
+  moderationCycle: z.optional(z.number().check(z.int(), z.minimum(0))),
+  moderationSecuritySafety: z.optional(z.boolean()),
+  approvedVersion: z.optional(z.nullable(z.number().check(z.int(), z.minimum(1)))),
+  publishedAt: z.optional(z.nullable(firestoreTimestampSchema)),
+  moderatedAt: z.optional(firestoreTimestampSchema),
+  hiddenReason: z.optional(z.nullable(z.string().check(z.maxLength(1_000)))),
+});
+export type CurrentReviewDocument = z.infer<typeof currentReviewDocumentSchema>;
+
+/** A server-maintained, currently public review projection. */
+export const publishedReviewDocumentSchema = z.object({
+  authorId: nonBlankString,
+  authorName: attributionNameSchema,
+  sodaOfferingId: nonBlankString,
+  sodaName: nonBlankString,
+  sodaBrand: nonBlankString,
+  sodaFlavor: nonBlankString,
+  markdown: z.string().check(z.minLength(1), z.maxLength(REVIEW_MARKDOWN_LIMIT)),
+  contentLength: z.number().check(z.int(), z.minimum(1), z.maximum(REVIEW_CONTENT_LIMIT)),
+  rating: mugRatingSchema,
+  version: z.number().check(z.int(), z.minimum(1)),
+  moderationCycle: z.number().check(z.int(), z.minimum(0)),
+  publishedAt: firestoreTimestampSchema,
+  revisedAt: z.nullable(firestoreTimestampSchema),
+});
+export type PublishedReviewDocument = z.infer<typeof publishedReviewDocumentSchema>;

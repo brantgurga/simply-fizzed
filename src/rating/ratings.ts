@@ -8,6 +8,7 @@ import {
   getDoc,
   getDocs,
   serverTimestamp,
+  Timestamp,
   writeBatch,
   type Firestore,
 } from "firebase/firestore";
@@ -21,6 +22,7 @@ import {
 } from "../model/firestore";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "../firebase";
+import type { CurrentReviewRecord } from "../review/reviews";
 import type { SodaDocument } from "../soda/sodas";
 
 export interface RatingRecord extends RatingDocument {
@@ -87,10 +89,26 @@ export async function saveRating(
   soda: SodaDocument,
   value: RatingValue,
   create: boolean,
+  reviewToClear?: CurrentReviewRecord,
 ): Promise<void> {
   const ratingReference = doc(db, COLLECTIONS.profiles, userId, COLLECTIONS.ratings, soda.id);
   const batch = writeBatch(db);
   void publicName;
+
+  if (reviewToClear?.markdown != null && (value === null || value === undefined)) {
+    batch.update(
+      doc(db, COLLECTIONS.profiles, userId, COLLECTIONS.reviews, reviewToClear.sodaOfferingId),
+      {
+        markdown: null,
+        contentLength: 0,
+        version: reviewToClear.version + 1,
+        authoredAt: Timestamp.now(),
+        baseModerationCycle: reviewToClear.moderationCycle ?? 0,
+        baseApprovedVersion: reviewToClear.approvedVersion ?? null,
+        mutationId: crypto.randomUUID(),
+      },
+    );
+  }
 
   if (value === undefined) {
     batch.delete(ratingReference);

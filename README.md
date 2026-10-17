@@ -362,10 +362,10 @@ explicit async/await flow, and CI runs both syntax and type-aware Functions lint
 Before the first hosted Functions deployment, confirm Blaze billing, required Cloud
 Functions/Run/Build and Artifact Registry APIs, and deployment-service-account
 permissions. Set `FIREBASE_OPERATOR_UIDS_JSON` plus one distinct runtime identity for
-all seven Functions using the `FIREBASE_*_SERVICE_ACCOUNT` variables validated in the
+all twelve Functions using the `FIREBASE_*_SERVICE_ACCOUNT` variables validated in the
 hosting workflow. This includes separate identities for profile writes, user-management
-writes, audit-history reads, and account-creation auditing. Configure these as `production`
-environment variables. Leave the optional `FIREBASE_ENFORCE_FUNCTIONS_APP_CHECK`
+writes, audit-history reads, account-creation auditing, and each review operation. Configure
+these as `production` environment variables. Leave the optional `FIREBASE_ENFORCE_FUNCTIONS_APP_CHECK`
 environment variable unset or `false` for the observe-first rollout described above.
 The delivery workflow validates these values
 before writing the Functions environment file. Grant each Function's identity only the

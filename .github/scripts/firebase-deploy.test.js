@@ -9,6 +9,7 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 const script = resolve("scripts/firebase-deploy.sh");
+const hostingWorkflow = resolve(".github/workflows/firebase-hosting.yml");
 /** @type {string[]} */
 const temporaryDirectories = [];
 
@@ -55,6 +56,36 @@ esac
 
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { recursive: true });
+});
+
+describe("Firebase Functions deployment configuration", () => {
+  const serviceAccounts = [
+    ["GET_MY_AUTHORIZATION_SERVICE_ACCOUNT", "FIREBASE_GET_MY_AUTHORIZATION_SERVICE_ACCOUNT"],
+    ["SEARCH_USERS_SERVICE_ACCOUNT", "FIREBASE_SEARCH_USERS_SERVICE_ACCOUNT"],
+    ["REVEAL_USER_EMAIL_SERVICE_ACCOUNT", "FIREBASE_REVEAL_USER_EMAIL_SERVICE_ACCOUNT"],
+    ["SAVE_MY_PROFILE_SERVICE_ACCOUNT", "FIREBASE_SAVE_MY_PROFILE_SERVICE_ACCOUNT"],
+    ["APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT", "FIREBASE_APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT"],
+    ["GET_USER_AUDIT_HISTORY_SERVICE_ACCOUNT", "FIREBASE_GET_USER_AUDIT_HISTORY_SERVICE_ACCOUNT"],
+    ["RECORD_ACCOUNT_CREATION_SERVICE_ACCOUNT", "FIREBASE_RECORD_ACCOUNT_CREATION_SERVICE_ACCOUNT"],
+    ["REPORT_REVIEW_SERVICE_ACCOUNT", "FIREBASE_REPORT_REVIEW_SERVICE_ACCOUNT"],
+    ["MODERATE_REVIEW_SERVICE_ACCOUNT", "FIREBASE_MODERATE_REVIEW_SERVICE_ACCOUNT"],
+    [
+      "LOAD_REVIEW_MODERATION_QUEUE_SERVICE_ACCOUNT",
+      "FIREBASE_LOAD_REVIEW_MODERATION_QUEUE_SERVICE_ACCOUNT",
+    ],
+    ["PROCESS_REVIEW_REVISION_SERVICE_ACCOUNT", "FIREBASE_PROCESS_REVIEW_REVISION_SERVICE_ACCOUNT"],
+    ["PROCESS_REVIEW_RATING_SERVICE_ACCOUNT", "FIREBASE_PROCESS_REVIEW_RATING_SERVICE_ACCOUNT"],
+  ];
+
+  it.each(serviceAccounts)(
+    "supplies %s from its repository variable",
+    (parameter, repositoryVariable) => {
+      const workflow = readFileSync(hostingWorkflow, "utf8");
+      const normalizedWorkflow = workflow.replaceAll(/: >-\n\s+/g, ": ");
+      expect(normalizedWorkflow).toContain(`${parameter}: \${{ vars.${repositoryVariable} }}`);
+      expect(workflow).toContain(`["${parameter}", process.env.${parameter}]`);
+    },
+  );
 });
 
 describe("Firebase deployment retry bootstrap", () => {

@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   locationRoute,
   manageUsersRoute,
+  moderateReviewsRoute,
   parseHashRoute,
   profileRoute,
   sodaCatalogRoute,
@@ -18,8 +19,9 @@ describe("hash routes", () => {
     expect(parseHashRoute("#/")).toEqual({ page: "home" });
   });
 
-  it("recognizes the exact privileged management route", () => {
+  it("recognizes the exact privileged management routes", () => {
     expect(parseHashRoute(manageUsersRoute)).toEqual({ page: "manageUsers" });
+    expect(parseHashRoute(moderateReviewsRoute)).toEqual({ page: "moderateReviews" });
   });
 
   it("round-trips URL-addressable catalog state", () => {
