@@ -81,7 +81,8 @@ describe("Firebase Functions deployment configuration", () => {
     "supplies %s from its repository variable",
     (parameter, repositoryVariable) => {
       const workflow = readFileSync(hostingWorkflow, "utf8");
-      expect(workflow).toContain(`${parameter}: \${{ vars.${repositoryVariable} }}`);
+      const normalizedWorkflow = workflow.replaceAll(/: >-\n\s+/g, ": ");
+      expect(normalizedWorkflow).toContain(`${parameter}: \${{ vars.${repositoryVariable} }}`);
       expect(workflow).toContain(`["${parameter}", process.env.${parameter}]`);
     },
   );
