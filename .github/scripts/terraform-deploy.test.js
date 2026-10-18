@@ -47,6 +47,8 @@ describe("Terraform infrastructure contracts", () => {
     expect(moduleMain.match(/roles\/eventarc\.eventReceiver/gu)).toHaveLength(3);
     expect(moduleMain.match(/roles\/run\.invoker/gu)).toHaveLength(3);
     expect(moduleMain.match(/\n      account_id\s+=/gu)).toHaveLength(12);
+    expect(moduleMain.match(/\n      description\s+=/gu)).toHaveLength(12);
+    expect(moduleMain).not.toMatch(/display_name\s*=\s*"[^"]* Function"/u);
     expect(moduleMain).not.toContain('"roles/resourcemanager.projectIamAdmin",');
     expect(moduleMain).toContain("firebase-functions-default-service-account");
   });

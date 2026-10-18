@@ -41,39 +41,46 @@ locals {
   runtime_accounts = {
     GET_MY_AUTHORIZATION_SERVICE_ACCOUNT = {
       account_id   = "get-my-authorization"
-      display_name = "Get authorization Function"
+      display_name = "Get my authorization"
+      description  = "Returns the caller's application roles and authorization capabilities."
       roles        = ["roles/datastore.viewer", "roles/firebaseauth.viewer"]
     }
     SEARCH_USERS_SERVICE_ACCOUNT = {
       account_id   = "search-users"
-      display_name = "Search users Function"
+      display_name = "Search users"
+      description  = "Searches Firebase Authentication users for authorized administrators."
       roles        = ["roles/datastore.viewer", "roles/firebaseauth.viewer"]
     }
     REVEAL_USER_EMAIL_SERVICE_ACCOUNT = {
       account_id   = "reveal-user-email"
-      display_name = "Reveal user email Function"
+      display_name = "Reveal user email"
+      description  = "Reveals a user's email address to authorized administrators."
       roles        = ["roles/datastore.viewer", "roles/firebaseauth.viewer"]
     }
     SAVE_MY_PROFILE_SERVICE_ACCOUNT = {
       account_id   = "save-my-profile"
-      display_name = "Save profile Function"
+      display_name = "Save my profile"
+      description  = "Validates and persists profile changes for the authenticated user."
       roles        = ["roles/datastore.user", "roles/firebaseauth.viewer"]
     }
     APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT = {
       account_id   = "apply-user-management"
-      display_name = "Apply user management Function"
+      display_name = "Apply user management"
+      description  = "Applies authorized changes to user accounts, roles, and audit records."
       roles        = ["roles/datastore.user", "roles/firebaseauth.editor"]
     }
     GET_USER_AUDIT_HISTORY_SERVICE_ACCOUNT = {
       account_id   = "get-user-audit-history"
-      display_name = "Get audit history Function"
+      display_name = "Get user audit history"
+      description  = "Returns user-management audit history and recovers pending audit records."
       # Reads can complete a pending cross-system audit operation, so this
       # identity needs Firestore writes on that recovery path.
       roles = ["roles/datastore.user", "roles/firebaseauth.viewer"]
     }
     RECORD_ACCOUNT_CREATION_SERVICE_ACCOUNT = {
       account_id   = "record-account-creation"
-      display_name = "Record account creation Function"
+      display_name = "Record account creation"
+      description  = "Records application state when Firebase Authentication creates an account."
       roles = [
         "roles/datastore.user",
         "roles/eventarc.eventReceiver",
@@ -82,22 +89,26 @@ locals {
     }
     REPORT_REVIEW_SERVICE_ACCOUNT = {
       account_id   = "report-review"
-      display_name = "Report review Function"
+      display_name = "Report review"
+      description  = "Records an authenticated user's moderation report for a review."
       roles        = ["roles/datastore.user", "roles/firebaseauth.viewer"]
     }
     MODERATE_REVIEW_SERVICE_ACCOUNT = {
       account_id   = "moderate-review"
-      display_name = "Moderate review Function"
+      display_name = "Moderate review"
+      description  = "Applies an authorized moderator's decision to a reported review."
       roles        = ["roles/datastore.user", "roles/firebaseauth.viewer"]
     }
     LOAD_REVIEW_MODERATION_QUEUE_SERVICE_ACCOUNT = {
       account_id   = "load-review-moderation-queue"
-      display_name = "Load review queue Function"
+      display_name = "Load review moderation queue"
+      description  = "Loads reported reviews awaiting an authorized moderation decision."
       roles        = ["roles/datastore.viewer", "roles/firebaseauth.viewer"]
     }
     PROCESS_REVIEW_REVISION_SERVICE_ACCOUNT = {
       account_id   = "process-review-revision"
-      display_name = "Process review revision Function"
+      display_name = "Process review revision"
+      description  = "Updates review-derived data after a Firestore review revision event."
       roles = [
         "roles/datastore.user",
         "roles/eventarc.eventReceiver",
@@ -106,7 +117,8 @@ locals {
     }
     PROCESS_REVIEW_RATING_SERVICE_ACCOUNT = {
       account_id   = "process-review-rating"
-      display_name = "Process review rating Function"
+      display_name = "Process review rating"
+      description  = "Updates aggregate ratings after a Firestore review rating event."
       roles = [
         "roles/datastore.user",
         "roles/eventarc.eventReceiver",
@@ -156,7 +168,7 @@ resource "google_service_account" "runtime" {
   project      = var.project_id
   account_id   = each.value.account_id
   display_name = each.value.display_name
-  description  = "Dedicated least-privilege runtime identity for ${each.key}."
+  description  = each.value.description
 
   depends_on = [google_project_service.required]
 }
