@@ -31,6 +31,20 @@ dist-ssr
 # (google-github-actions/auth removes these after each job).
 gha-creds-*.json
 
+# Terraform (dependency lock files remain committed)
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+.terraformrc
+terraform.rc
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
 # Firebase
 .firebase/
 /functions/lib/

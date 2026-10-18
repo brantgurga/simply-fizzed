@@ -23,7 +23,7 @@ export const EXCLUSIONS = Object.freeze({
 });
 
 const lineCommentExtensions = new Set([".js", ".jsx", ".rules", ".ts", ".tsx"]);
-const hashCommentExtensions = new Set([".yaml", ".yml"]);
+const hashCommentExtensions = new Set([".sh", ".tf", ".yaml", ".yml"]);
 const blockCommentExtensions = new Set([".css"]);
 const xmlCommentExtensions = new Set([".html", ".svg"]);
 const hashCommentFiles = new Set([
