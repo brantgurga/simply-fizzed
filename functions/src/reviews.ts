@@ -324,7 +324,15 @@ export async function processReviewWrite(
   const publicReference = db.collection("publishedReviews").doc(key);
   const queueReference = db.collection("reviewModerationQueue").doc(key);
   if (after === undefined || !after.exists) {
-    await Promise.all([publicReference.delete(), queueReference.delete()]);
+    const reference = currentReference(db, authorId, sodaId);
+    await db.runTransaction(async (transaction) => {
+      const current = await transaction.get(reference);
+      // A delayed retry for an older deletion must not remove projections created after
+      // the author recreated the review. Reading current makes recreation race-safe too.
+      if (current.exists) return;
+      transaction.delete(publicReference);
+      transaction.delete(queueReference);
+    });
     return;
   }
 
