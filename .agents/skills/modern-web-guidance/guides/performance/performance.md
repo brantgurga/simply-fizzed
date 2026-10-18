@@ -1,3 +1,5 @@
+<!-- Modified by Simply Fizzed to correct secure transport guidance. -->
+
 # Performance
 
 ## Critical Rendering Path (CRP) Optimization
@@ -142,7 +144,7 @@ Third-party scripts (analytics, ads, chat widgets) are the primary source of mai
 **HTML: Third-Party Script Execution**
 ```html
 <!-- 1. Place third-party scripts near the end of the page with the defer attribute -->
-<script defer src="http://www.example.com/third-party.js"></script>
+<script defer src="https://www.example.com/third-party.js"></script>
 ```
 
 ## CSS Rendering & Containment Optimization

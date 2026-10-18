@@ -1,3 +1,5 @@
+<!-- Modified by Simply Fizzed to correct accessibility guidance. -->
+
 # Accessibility Coding Guidelines
 
 This guide provides actionable DOs and DON'Ts for AI coding agents to ensure web applications are accessible to all users, including those using assistive technologies.
@@ -339,7 +341,7 @@ function toggleWidgetState() {
 
 ### CSS generated content
 
-- **Alt text for CSS generated content**: Use the alternative text argument of `content` (e.g. `content: url(icon.svg) / "Save";`) and keep meaningful text in the DOM. See `accessible-generated-content` (via `npx -y modern-web-guidance@latest retrieve "accessible-generated-content"`) for more details.
+- **Alt text for CSS generated content**: Use the alternative text argument of `content` only when equivalent meaningful text is absent from the DOM (e.g. `content: url(icon.svg) / "Save";`). Use empty alternative text for decorative generated content; duplicating DOM text causes repeated announcements. See `accessible-generated-content` (via `npx -y modern-web-guidance@0.0.194 retrieve "accessible-generated-content"`) for more details.
 
 ### Content Visibility Decision Matrix
 
@@ -412,15 +414,15 @@ Live regions let assistive tech announce content updates that aren't tied to nav
 
 ## 9. Color
 
-See `color` (via `npx -y modern-web-guidance@latest retrieve "color"`) for accessible color (contrast requirements, light and dark color schemes, Forced Colors Mode, etc).
+See `color` (via `npx -y modern-web-guidance@0.0.194 retrieve "color"`) for accessible color (contrast requirements, light and dark color schemes, Forced Colors Mode, etc).
 
 ## 10. Typography
 
-See `typography` (via `npx -y modern-web-guidance@latest retrieve "typography"`) for readable typography.
+See `typography` (via `npx -y modern-web-guidance@0.0.194 retrieve "typography"`) for readable typography.
 
 ## 11. Motion and Preferences
 
-See `motion` (via `npx -y modern-web-guidance@latest retrieve "motion"`).
+See `motion` (via `npx -y modern-web-guidance@0.0.194 retrieve "motion"`).
 
 ## 12. Modals and Native Dialogs
 

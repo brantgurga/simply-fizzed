@@ -1,3 +1,5 @@
+<!-- Modified by Simply Fizzed to prevent unsafe CSP nonce rewriting. -->
+
 # Web Security
 
 Guidelines for implementing preventative security measures on the web safely and incrementally.
@@ -57,7 +59,7 @@ Before attempting to deploy global security policies, focus on code-level hygien
 
 ### 1.2 Avoid Dangerous DOM Sinks
 - **DO**: Prefer `textContent` or `innerText` over `innerHTML` when setting text content.
-- **DO**: Use `setHTML()` (part of the Sanitizer API; see `sanitize-untrusted-html` (via `npx -y modern-web-guidance@latest retrieve "sanitize-untrusted-html"`)) when available to safely insert untrusted HTML without going through `innerHTML`.
+- **DO**: Use `setHTML()` (part of the Sanitizer API; see `sanitize-untrusted-html` (via `npx -y modern-web-guidance@0.0.194 retrieve "sanitize-untrusted-html"`)) when available to safely insert untrusted HTML without going through `innerHTML`.
 - **DO NOT**: Use `innerHTML` or `setHTMLUnsafe` with untrusted or unsanitized input.
 - **DO**: Use DOMParser or create elements programmatically (`document.createElement`) instead of concatenating HTML strings.
 
@@ -99,7 +101,7 @@ Content-Security-Policy: frame-ancestors 'self' https://trusted-partner.com;
 
 ### 1.5 Secure Window Messaging (postMessage)
 If your application communicates with other origins using `window.postMessage`, you must strictly validate the sender and receiver.
-- **DO**: Always validate the `event.origin` of incoming messages on the receiver side using strict equality against a list of trusted origins (or use the `Origin` API when comparing against URLs/elements, checking schemeful same-site relationships, or distinguishing opaque sandboxed iframe origins; see `validate-origins` (via `npx -y modern-web-guidance@latest retrieve "validate-origins"`)). Do **not** trust wildcards (`*`), substring checks, or unverified payloads.
+- **DO**: Always validate the `event.origin` of incoming messages on the receiver side using strict equality against a list of trusted origins (or use the `Origin` API when comparing against URLs/elements, checking schemeful same-site relationships, or distinguishing opaque sandboxed iframe origins; see `validate-origins` (via `npx -y modern-web-guidance@0.0.194 retrieve "validate-origins"`)). Do **not** trust wildcards (`*`), substring checks, or unverified payloads.
 - **DO**: Always specify a target origin (rather than the wildcard `*`) when calling `postMessage` to send sensitive data, ensuring only the intended origin can receive it.
 - **DO**: Validate and sanitize the properties of incoming message payloads before performing operations or writing them to DOM sinks. Manual JSON serialization is unnecessary as `postMessage` handles object cloning internally.
 
@@ -232,8 +234,10 @@ const csp = [
 headers.set('Reporting-Endpoints', 'main-endpoint="https://reports.example/main"');
 headers.set('Content-Security-Policy', csp);
 
-// If transforming rendered HTML in middleware, inject the per-request nonce onto <script> tags:
-html = html.replace(/<script\b(?![^>]*\bnonce=)/gi, `<script nonce="${nonce}"`);
+// Pass the nonce into the trusted server-side template and stamp only script
+// elements authored by the application. Never add a nonce by rewriting rendered
+// HTML, because attacker-injected script markup would receive the trusted nonce.
+const html = renderTrustedTemplate({ scriptNonce: nonce });
 ```
 
 For static/cached HTML (SPAs) where a per-response nonce is not possible, use hash-based CSP: compute the `sha256-` hash of each script and list the hashes in `script-src` alongside `'strict-dynamic' 'report-sample'`.
@@ -246,7 +250,7 @@ Trusted Types enforces source-level guidance at runtime by blocking raw string a
 - **DO**: Enforce Trusted Types in your `Content-Security-Policy` header by including the `require-trusted-types-for 'script'` directive.
 - **DO**: Sanitize any HTML sink assignments through a named `trustedTypes.createPolicy(...)` instance rather than assigning raw strings (or prefer `element.setHTML()` directly, which sanitizes HTML without needing a Trusted Types policy).
 - **DO NOT**: Create a pass-through policy (such as `createHTML: (s) => s`) that returns unsanitized input unchanged, as this neutralizes Trusted Types protection.
-- **DO**: Consult the dedicated `trusted-types` (via `npx -y modern-web-guidance@latest retrieve "trusted-types"`) guide for full implementation details, including `trusted-types` policy allowlisting and rollout strategies.
+- **DO**: Consult the dedicated `trusted-types` (via `npx -y modern-web-guidance@0.0.194 retrieve "trusted-types"`) guide for full implementation details, including `trusted-types` policy allowlisting and rollout strategies.
 
 ```javascript
 const htmlPolicy = window.trustedTypes?.createPolicy('app-html', {

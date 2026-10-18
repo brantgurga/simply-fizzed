@@ -1,3 +1,5 @@
+<!-- Modified by Simply Fizzed to correct native Temporal initialization. -->
+
 # Formatting Human-Readable Durations with Temporal
 
 Presenting elapsed time or durations to users in a readable format (e.g., "1 hour and 30 minutes") has historically required manual math or external libraries. The `Temporal` API's `Temporal.Duration` class simplifies this by providing structured duration objects and powerful "balancing" capabilities via the `round()` method.
@@ -53,8 +55,8 @@ Note that the polyfill does not automatically assign the `Temporal` object to th
     globalThis.Temporal = module.Temporal;
     // Extend Date.prototype if needed
     Date.prototype.toTemporalInstant = module.toTemporalInstant;
-    initializeApp();
   }
+  initializeApp();
 })();
 ```
 

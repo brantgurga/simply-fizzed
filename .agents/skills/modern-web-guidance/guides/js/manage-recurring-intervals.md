@@ -1,3 +1,5 @@
+<!-- Modified by Simply Fizzed to correct native Temporal initialization. -->
+
 # Managing Recurring Intervals with Temporal
 
 Calculating recurring intervals, such as subscription billing cycles or payroll periods, has historically been error-prone with the legacy `Date` object. Adding a month to a date like January 31st is ambiguous (should it be February 28th/29th or March 3rd?).
@@ -62,8 +64,8 @@ For browsers that do not yet support the native `Temporal` API, use feature dete
     globalThis.Temporal = module.Temporal;
     // Extend Date.prototype if needed
     Date.prototype.toTemporalInstant = module.toTemporalInstant;
-    initializeApp();
   }
+  initializeApp();
 })();
 
 function initializeApp() {

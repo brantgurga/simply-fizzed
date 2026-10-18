@@ -1,3 +1,5 @@
+<!-- Modified by Simply Fizzed to correct security guidance. -->
+
 # Forms
 
 ## 1. Semantic Structure and Form Element
@@ -261,7 +263,8 @@ form.addEventListener('submit', (e) => {
 
 ```html
 <form method="post">
-  <input type="hidden" name="csrf_token" value="secure_token_abc123">
+  <!-- Generate a unique, unpredictable token on the server and bind it to this session. -->
+  <input type="hidden" name="csrf_token" value="{{ perRequestCsrfToken }}">
 
   <h1>Sign up</h1>
 

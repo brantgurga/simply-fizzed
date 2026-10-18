@@ -1,3 +1,5 @@
+<!-- Modified by Simply Fizzed to correct invalid-event handling. -->
+
 # Required Field Feedback
 
 ## The Problem
@@ -87,10 +89,13 @@ form.addEventListener('blur', (e) => {
   }
 }, true);
 
-// Sync all required fields when submission is attempted
-form.addEventListener('submit', () => {
-  form.querySelectorAll('input[required]').forEach(syncAriaInvalid);
-});
+// Native validation emits `invalid` before blocking submission. Capture it so
+// failed submission attempts also synchronize the accessibility state.
+form.addEventListener('invalid', (e) => {
+  if (e.target.matches('input[required]')) {
+    syncAriaInvalid(e.target);
+  }
+}, true);
 
 // Remove error state immediately upon correction
 form.addEventListener('input', (e) => {

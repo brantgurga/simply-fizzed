@@ -1,3 +1,5 @@
+<!-- Modified by Simply Fizzed to require SSRF-safe issuer retrieval. -->
+
 # Verify email address ownership
 
 When collecting an email address during sign-up, sign-in, checkout, or account recovery, verifying ownership traditionally requires sending an out-of-band one-time passcode (OTP) or magic link. This forces users to leave your page, wait for email delivery, and copy codes—introducing friction, drop-off, and phishing risk, while also revealing to the email provider which relying party (RP) the user is visiting.
@@ -118,7 +120,8 @@ Before making any network request to `iss`, verify that the submitted email's do
 
 ```javascript
 import dns from 'node:dns/promises';
-import { createRemoteJWKSet } from 'jose';
+import { createLocalJWKSet } from 'jose';
+import { safeExternalFetch } from './safe-external-fetch.js';
 
 const domain = submittedEmail.split('@')[1];
 const txtRecords = (await dns.resolveTxt(`_email-verification.${domain}`)).map((r) => r.join(''));
@@ -127,13 +130,16 @@ if (!txtRecords.some((txt) => txt.startsWith('iss=') && `https://${txt.slice(4).
 }
 
 const discoveryUrl = new URL('/.well-known/email-verification', iss);
-if (discoveryUrl.protocol !== 'https:') throw new Error('Issuer must use HTTPS.');
-const metadata = await (await fetch(discoveryUrl)).json();
-if (metadata.issuer !== iss || !metadata.jwks_uri?.startsWith('https://')) {
-  throw new Error('Invalid issuer metadata or non-HTTPS jwks_uri.');
+const discoveryResponse = await safeExternalFetch(discoveryUrl);
+const metadata = await discoveryResponse.json();
+if (metadata.issuer !== iss || !metadata.jwks_uri) {
+  throw new Error('Invalid issuer metadata or missing jwks_uri.');
 }
-const issuerJwks = createRemoteJWKSet(new URL(metadata.jwks_uri));
+const jwksResponse = await safeExternalFetch(new URL(metadata.jwks_uri));
+const issuerJwks = createLocalJWKSet(await jwksResponse.json());
 ```
+
+`safeExternalFetch` is a hardened server-side egress helper. It MUST require HTTPS on the default port, reject credentials, resolve every hostname to public (non-loopback, non-private, non-link-local) IP addresses, pin the validated address for the connection to prevent DNS rebinding, disable automatic redirects, and repeat all checks before following an explicitly allowed redirect. Apply response-size and timeout limits as well. Never substitute a bare `fetch()` for issuer-controlled URLs.
 
 ### Step 3: Verify the EVT signature and Key Binding JWT (`KB-JWT`)
 

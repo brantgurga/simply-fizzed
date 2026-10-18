@@ -1,3 +1,5 @@
+<!-- Modified by Simply Fizzed to correct module evaluation ordering. -->
+
 # Conditional Async Dependencies
 
 Top-level `await` allows modules to act as asynchronous functions, meaning they can pause module execution to await promises. This is extremely useful for conditionally loading async dependencies—like polyfills or heavy secondary libraries—only when required by the browser. 
@@ -52,12 +54,12 @@ if (myPopover) {
 // b.js: import './conditionally-load-polyfill.js';
 // main.js: import './a.js'; import './b.js'; // CRASH!
 
-// INSTEAD, guarantee a single entry point:
-// Import the top-level await module ONCE at the very top of your application tree.
-import './conditionally-load-polyfill.js';
+// INSTEAD, guarantee ordering from a single entry point. Sibling static imports
+// do not depend on one another, so sequence dynamic imports explicitly.
+await import('./conditionally-load-polyfill.js');
 
-// Then import the rest of your application code, ensuring the await resolves first.
-import './app.js';
+// This import starts only after the polyfill module and its top-level await finish.
+await import('./app.js');
 ```
 
 ### Fallback strategies

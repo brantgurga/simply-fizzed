@@ -1,3 +1,5 @@
+<!-- Modified by Simply Fizzed to correct native Temporal initialization. -->
+
 # Calculating Event Differentials with Temporal
 
 Calculating the time elapsed between events (such as trial expirations, subscription durations, or prorated costs) has historically been difficult with the legacy `Date` object due to complexities with time zones, daylight saving time (DST), and inconsistent parsing.
@@ -79,7 +81,7 @@ Note that the polyfill does not automatically assign the `Temporal` object to th
     globalThis.Temporal = module.Temporal;
     // Extend Date.prototype if needed
     Date.prototype.toTemporalInstant = module.toTemporalInstant;
-    initializeApp();
   }
+  initializeApp();
 })();
 ```
