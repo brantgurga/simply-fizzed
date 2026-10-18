@@ -32,10 +32,19 @@ const runtimeAccounts = {
 const runtimeParameters = Object.keys(runtimeAccounts);
 
 describe("Terraform infrastructure contracts", () => {
-  it("pins Terraform and Google provider versions", () => {
+  it("keeps generic version pins consistent across configuration", () => {
     const versions = read("infra/environments/production/versions.tf");
-    expect(versions).toContain('required_version = "= 1.16.6"');
-    expect(versions).toContain('version = "~> 8.7.0"');
+    const lock = read("infra/environments/production/.terraform.lock.hcl");
+    const terraformVersion = versions.match(/required_version\s*=\s*"= (\d+\.\d+\.\d+)"/u)?.[1];
+    const googleConstraint = versions.match(
+      /source\s*=\s*"hashicorp\/google"[\s\S]*?version\s*=\s*"(~> \d+\.\d+\.\d+)"/u,
+    )?.[1];
+
+    expect(terraformVersion).toBeDefined();
+    expect(googleConstraint).toBeDefined();
+    expect(workflow).toContain(`terraform_version: ${terraformVersion}`);
+    expect(lock).toContain('provider "registry.terraform.io/hashicorp/google"');
+    expect(lock).toContain(googleConstraint);
   });
 
   it("uses only additive, non-basic IAM grants", () => {
