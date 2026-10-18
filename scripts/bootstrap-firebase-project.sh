@@ -185,7 +185,6 @@ readonly -a deployment_roles=(
   roles/firebasehosting.admin
   roles/firebaserules.admin
   roles/iam.serviceAccountAdmin
-  roles/resourcemanager.projectIamAdmin
   roles/serviceusage.apiKeysViewer
   roles/serviceusage.serviceUsageAdmin
   roles/serviceusage.serviceUsageConsumer
@@ -197,6 +196,41 @@ for role in "${deployment_roles[@]}"; do
     --condition=None \
     --quiet >/dev/null
 done
+
+# Terraform needs projects.setIamPolicy for additive member resources, but must
+# not be able to grant arbitrary roles. modifiedGrantsByRole restricts every
+# policy mutation to roles owned by this module and excludes projectIamAdmin.
+readonly -a terraform_managed_project_roles=(
+  roles/cloudfunctions.admin
+  roles/datastore.indexAdmin
+  roles/datastore.user
+  roles/datastore.viewer
+  roles/eventarc.eventReceiver
+  roles/firebaseauth.editor
+  roles/firebaseauth.viewer
+  roles/firebasehosting.admin
+  roles/firebaserules.admin
+  roles/iam.serviceAccountAdmin
+  roles/iam.serviceAccountUser
+  roles/run.invoker
+  roles/serviceusage.apiKeysViewer
+  roles/serviceusage.serviceUsageAdmin
+  roles/serviceusage.serviceUsageConsumer
+)
+printf -v managed_roles "'%s'," "${terraform_managed_project_roles[@]}"
+managed_roles="${managed_roles%,}"
+readonly managed_roles
+readonly iam_condition="api.getAttribute('iam.googleapis.com/modifiedGrantsByRole', []).hasOnly([$managed_roles])"
+gcloud projects remove-iam-policy-binding "$project_id" \
+  --member="serviceAccount:$deployer_email" \
+  --role="roles/resourcemanager.projectIamAdmin" \
+  --condition=None \
+  --quiet >/dev/null 2>&1 || true
+gcloud projects add-iam-policy-binding "$project_id" \
+  --member="serviceAccount:$deployer_email" \
+  --role="roles/resourcemanager.projectIamAdmin" \
+  --condition="^:^expression=$iam_condition:title=terraform-managed-roles:description=Restrict Terraform to its declared project roles" \
+  --quiet >/dev/null
 
 gcloud storage buckets add-iam-policy-binding "gs://$state_bucket" \
   --member="serviceAccount:$deployer_email" \

@@ -281,7 +281,9 @@ accounts, their behavior-specific IAM memberships, and the deployment identity's
 project/runtime access. The Firebase CLI continues to own Functions, Hosting releases,
 Firestore rules, and Firestore indexes. Google- and Firebase-managed service agents stay
 outside both configurations. IAM changes use additive member resources so managed or
-administrator-created policy members are not overwritten.
+administrator-created policy members are not overwritten. The bootstrap conditions the
+deployer's project-IAM permission so it can change only the roles declared by this
+module, rather than grant itself arbitrary project access.
 
 A project administrator needs authenticated `gcloud` and Firebase CLIs plus `jq`, and
 must accept the Firebase terms. Bootstrap a new or existing project with:

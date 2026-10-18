@@ -128,14 +128,14 @@ locals {
   }
 
   # Project-level roles needed by direct Terraform execution and by Firebase CLI.
-  # Runtime impersonation is scoped separately to only the twelve identities below.
+  # The bootstrap grants project IAM administration with a condition that limits
+  # policy changes to this exact set and the runtime roles above.
   deployment_roles = toset([
     "roles/cloudfunctions.admin",
     "roles/datastore.indexAdmin",
     "roles/firebasehosting.admin",
     "roles/firebaserules.admin",
     "roles/iam.serviceAccountAdmin",
-    "roles/resourcemanager.projectIamAdmin",
     "roles/serviceusage.apiKeysViewer",
     "roles/serviceusage.serviceUsageAdmin",
     "roles/serviceusage.serviceUsageConsumer",
@@ -185,4 +185,18 @@ resource "google_service_account_iam_member" "deployment_can_use_runtime" {
   service_account_id = each.value.name
   role               = "roles/iam.serviceAccountUser"
   member             = "serviceAccount:${var.deployment_service_account_email}"
+}
+
+# Firebase CLI checks this legacy default identity before every Functions deploy.
+# Keep the project-level grant constrained to that single service account.
+resource "google_project_iam_member" "deployment_can_use_app_engine_default" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountUser"
+  member  = "serviceAccount:${var.deployment_service_account_email}"
+
+  condition {
+    title       = "firebase-functions-default-service-account"
+    description = "Allow Firebase CLI to validate the legacy Functions identity."
+    expression  = "resource.name == \"projects/-/serviceAccounts/${var.project_id}@appspot.gserviceaccount.com\""
+  }
 }
