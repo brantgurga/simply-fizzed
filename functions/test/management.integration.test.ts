@@ -22,6 +22,7 @@ import {
   httpsCallable,
   type Functions,
 } from "firebase/functions";
+import { FirestoreUserAuditStore } from "../src/firestore-audit-store.js";
 import { processReviewWrite, reviewKey, syncPublishedReviewRating } from "../src/reviews.js";
 
 const PROJECT_ID = "demo-simply-fizzed";
@@ -581,8 +582,44 @@ describe("callable authorization boundary", () => {
   });
 });
 
-describe("review moderation concurrency", () => {
-  it("does not republish pending content when a revision trigger is delivered twice", async () => {
+describe("background function retry safety", () => {
+  it("recordAccountCreation records one audit event when delivered twice", async () => {
+    const subjectUid = "duplicate-account-creation";
+    const store = new FirestoreUserAuditStore(adminDb);
+    const event = {
+      id: `account-created:${subjectUid}`,
+      actor: { kind: "system" as const, id: "firebase-auth" as const },
+      subjectUid,
+      type: "account.created" as const,
+      before: null,
+      after: {
+        auth: {
+          disabled: false,
+          displayName: "Duplicate Account",
+          email: "duplicate@example.com",
+          hasProfileImage: false,
+          moderator: false,
+        },
+        profile: null,
+        restriction: null,
+      },
+      changedFields: ["auth"],
+    };
+
+    await Promise.all([
+      store.appendInitialEvent(event, new Date("2026-10-18T00:00:00.000Z")),
+      store.appendInitialEvent(event, new Date("2026-10-18T00:00:00.000Z")),
+    ]);
+
+    const [state, events] = await Promise.all([
+      adminDb.collection("userAuditState").doc(subjectUid).get(),
+      adminDb.collection("userAudit").doc(subjectUid).collection("events").get(),
+    ]);
+    expect(state.get("version")).toBe(1);
+    expect(events.docs.map((item) => item.id)).toEqual([event.id]);
+  });
+
+  it("processReviewRevision does not republish pending content when delivered twice", async () => {
     const sodaId = "dup000000001";
     const originalEvent = await seedVisibleReview(sodaId);
     await call("secondFan", "reportReview", {
@@ -607,6 +644,61 @@ describe("review moderation concurrency", () => {
     expect(versions.size).toBe(1);
   });
 
+  it("processReviewRevision ignores retried deletion after a newer recreation", async () => {
+    const sodaId = "retry-delete";
+    await seedVisibleReview(sodaId);
+    const reference = adminDb
+      .collection("profiles")
+      .doc(accounts.fan.uid)
+      .collection("reviews")
+      .doc(sodaId);
+    const deletedReview = await reference.get();
+    await reference.delete();
+    await waitForReview(accounts.fan.uid, sodaId, (current, published) => {
+      return !current.exists && !published.exists;
+    });
+    await reference.set({
+      ...deletedReview.data(),
+      version: 2,
+      mutationId: randomUUID(),
+      authoredAt: new Date(),
+    });
+    await waitForReview(accounts.fan.uid, sodaId, (current, published) => {
+      return current.get("version") === 2 && published.exists;
+    });
+
+    await processReviewWrite(adminDb, accounts.fan.uid, sodaId, deletedReview, undefined);
+
+    const published = await adminDb
+      .collection("publishedReviews")
+      .doc(reviewKey(accounts.fan.uid, sodaId))
+      .get();
+    expect(published.exists).toBe(true);
+    expect(published.get("version")).toBe(2);
+  });
+
+  it("processReviewRating preserves the current rating when delivered twice", async () => {
+    const sodaId = "rating-order";
+    await seedVisibleReview(sodaId);
+    const key = reviewKey(accounts.fan.uid, sodaId);
+    await adminDb
+      .collection("profiles")
+      .doc(accounts.fan.uid)
+      .collection("ratings")
+      .doc(sodaId)
+      .update({ rating: 5 });
+    await adminDb.collection("publishedReviews").doc(key).update({ rating: 2 });
+
+    await Promise.all([
+      syncPublishedReviewRating(adminDb, accounts.fan.uid, sodaId),
+      syncPublishedReviewRating(adminDb, accounts.fan.uid, sodaId),
+    ]);
+
+    expect((await adminDb.collection("publishedReviews").doc(key).get()).get("rating")).toBe(5);
+  });
+});
+
+describe("review moderation concurrency", () => {
   it("retains a concurrent Security/Safety report instead of applying a stale allow", async () => {
     const sodaId = "race00000001";
     await seedVisibleReview(sodaId);
@@ -855,26 +947,6 @@ describe("review moderation concurrency", () => {
       "[protected]",
     ]);
     await adminDb.collection("reviewModerationQueue").doc(key).delete();
-  });
-
-  it("reconciles unordered rating deliveries from the authoritative current rating", async () => {
-    const sodaId = "rating-order";
-    await seedVisibleReview(sodaId);
-    const key = reviewKey(accounts.fan.uid, sodaId);
-    await adminDb
-      .collection("profiles")
-      .doc(accounts.fan.uid)
-      .collection("ratings")
-      .doc(sodaId)
-      .update({ rating: 5 });
-    await adminDb.collection("publishedReviews").doc(key).update({ rating: 2 });
-
-    await Promise.all([
-      syncPublishedReviewRating(adminDb, accounts.fan.uid, sodaId),
-      syncPublishedReviewRating(adminDb, accounts.fan.uid, sodaId),
-    ]);
-
-    expect((await adminDb.collection("publishedReviews").doc(key).get()).get("rating")).toBe(5);
   });
 
   it("uses a stable cursor when earlier moderation entries are removed", async () => {
