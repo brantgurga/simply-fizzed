@@ -31,6 +31,8 @@
   "ignores": [
     "node_modules",
     "functions/node_modules",
+    ".agents/skills/modern-web-guidance",
+    ".augment/skills/modern-web-guidance",
     "dist",
     "playwright-report",
     "test-results",

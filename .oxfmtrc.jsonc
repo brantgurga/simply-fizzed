@@ -1,0 +1,11 @@
+// Copyright (C) 2026 Brant Langer Gurganus
+// SPDX-License-Identifier: AGPL-3.0-only
+// See LICENSE for copying terms.
+
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+
+  // Modern Web Guidance is vendored from its upstream repository. Exclude both
+  // the canonical skill and its Augment symlink to preserve upstream content.
+  "ignorePatterns": [".agents/skills/modern-web-guidance", ".augment/skills/modern-web-guidance"],
+}

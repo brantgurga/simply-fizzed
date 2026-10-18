@@ -22,3 +22,10 @@ FirebaseUI packages whose npm metadata omit a license are sourced from
 `firebase/firebaseui-web`, which is licensed under Apache-2.0. `caniuse-lite`
 is CC-BY-4.0 browser-support data used by the build toolchain and is not
 application source code.
+
+## Modern Web Guidance
+
+The agent guidance under `.agents/skills/modern-web-guidance` comes from
+[GoogleChrome/modern-web-guidance](https://github.com/GoogleChrome/modern-web-guidance)
+and is licensed under Apache-2.0. The complete license is available at
+`LICENSES/Apache-2.0.txt`.
