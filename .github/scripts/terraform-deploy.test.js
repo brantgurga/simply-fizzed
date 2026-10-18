@@ -68,24 +68,25 @@ describe("Terraform infrastructure contracts", () => {
 });
 
 describe("Terraform Firebase delivery contracts", () => {
-  it("authenticates before planning and applies exactly the saved plan", () => {
-    const steps = [
-      "Authenticate to Google Cloud",
-      "Set up Terraform",
-      "Terraform init",
-      "Terraform plan",
-      "Terraform apply",
-      "Read Terraform deployment outputs",
-      "Deploy Functions, Firestore rules, and indexes",
-    ];
-    for (let index = 1; index < steps.length; index += 1) {
-      const previous = steps[index - 1];
-      const current = steps[index];
-      if (previous === undefined || current === undefined) throw new Error("Invalid step order");
-      expect(workflow.indexOf(previous)).toBeLessThan(workflow.indexOf(current));
-    }
-    expect(workflow).toMatch(/terraform plan [^\n]*-out="\$RUNNER_TEMP\/production\.tfplan"/u);
-    expect(workflow).toContain('terraform apply "$RUNNER_TEMP/production.tfplan"');
+  it("publishes a plan before a protected job applies that exact artifact", () => {
+    const planStart = workflow.indexOf("  terraform-plan:");
+    const applyStart = workflow.indexOf("  deploy-staging:");
+    const planJob = workflow.slice(planStart, applyStart);
+    const applyJob = workflow.slice(applyStart, workflow.indexOf("  promote-production:"));
+
+    expect(planStart).toBeGreaterThan(0);
+    expect(applyStart).toBeGreaterThan(planStart);
+    expect(planJob).toContain("terraform plan -input=false -out=production.tfplan");
+    expect(planJob).toContain("Publish Terraform plan for approval");
+    expect(planJob).toContain("terraform show -no-color production.tfplan");
+    expect(planJob).toContain("name: terraform-production-plan");
+    expect(applyJob).toContain("needs: [build-staging, terraform-plan]");
+    expect(applyJob).toContain("environment: production-infrastructure");
+    expect(applyJob).toContain("Download approved Terraform plan");
+    expect(applyJob).toContain("terraform apply production.tfplan");
+    expect(applyJob.indexOf("Terraform apply approved plan")).toBeLessThan(
+      applyJob.indexOf("Read Terraform deployment outputs"),
+    );
   });
 
   it("maps all runtime identities from Terraform rather than GitHub variables", () => {
