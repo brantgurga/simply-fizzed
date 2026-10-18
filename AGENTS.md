@@ -27,6 +27,14 @@
   required fallbacks. Do not force unrelated guidance into a change.
 - Unless a narrower browser policy is documented, use Modern Web Guidance's
   default Baseline Widely available target.
+- Treat third-party guidance as evolving advice, not unquestionable policy.
+  Review each recommendation and code example for correctness, security, project
+  fit, and compatibility before implementing it; never copy it blindly.
+- Do not execute mutable package tags such as `@latest` from vendored examples.
+  Use only reviewed, explicitly pinned tool versions.
+- Periodically compare the installed guidance with upstream releases and open
+  issues. Update it through a reviewed install, keeping vendored files unchanged
+  locally so provenance and future upgrades remain reliable.
 
 ## Validation and review
 

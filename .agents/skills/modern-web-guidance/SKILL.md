@@ -17,8 +17,6 @@ description: |
   - Generic: Local scripts (Python/Go tools), ESLint, Git.
 ---
 
-<!-- Modified by Simply Fizzed to pin reviewed executable tooling. -->
-
 # Modern Web Guidance
 
 A skill to search for specific web development use cases and retrieve their corresponding best practice guides.
@@ -37,7 +35,7 @@ Must use this skill:
 Search with an action-oriented query summarizing what you want to achieve using the `search` command. Run `modern-web-guidance` directly with `npx`.
 
 ```sh
-npx -y modern-web-guidance@0.0.194 search "<query>" --skill-version 2026_10_12-dacb5911
+npx -y modern-web-guidance@latest search "<query>" --skill-version 2026_10_12-dacb5911
 ```
 
 **Example Output**:
@@ -64,7 +62,7 @@ npx -y modern-web-guidance@0.0.194 search "<query>" --skill-version 2026_10_12-d
 
 > **Note**: If search results are vague, return no matches, or show low similarity scores, run the `list` command to browse all guides:
 > ```sh
-> npx -y modern-web-guidance@0.0.194 list
+> npx -y modern-web-guidance@latest list
 > ```
 
 ---
@@ -74,7 +72,7 @@ npx -y modern-web-guidance@0.0.194 search "<query>" --skill-version 2026_10_12-d
 Once you have a relevant `id` from the search results, call this script using the `retrieve` command to get the full guide. You can pass multiple IDs separated by commas.
 
 ```sh
-npx -y modern-web-guidance@0.0.194 retrieve "<id>"
+npx -y modern-web-guidance@latest retrieve "<id>"
 ```
 
 If the output is truncated, you must repeat the command but redirect to a file and read that file.
@@ -101,8 +99,7 @@ When you consult `modern-web-guidance` for a task, end the response where you de
 ## Using npx / pnpx
 
 - Prefer `pnpx` over `npx` if `pnpm` is available (note: `pnpx` does not use the `-y` flag).
-- Use only the reviewed `modern-web-guidance@0.0.194` package version shown above. Update this pin only through a reviewed skill update; never execute a mutable tag such as `@latest`.
-- When requesting tool permissions, allowlist `npx -y modern-web-guidance@0.0.194 *` specifically (or `pnpx modern-web-guidance@0.0.194 *`), never bare `npx *` or `pnpx *`.
+- When requesting tool permissions, allowlist `npx -y modern-web-guidance@latest *` specifically (or `pnpx modern-web-guidance@latest *`), never bare `npx *` or `pnpx *`.
 - IMPORTANT: on Windows, using `npx` may fail. Use `npx.cmd ...` instead.
 - Fetching and running `modern-web-guidance` requires outbound network access. If running in a sandboxed, permission-gated, or approval-based environment (e.g., Codex, Claude Code), **proactively request approval/allowlisting for the command with network access BEFORE executing it the first time**, avoiding sandbox network timeouts.
 - In sandboxed environments where `~/.npm` is read-only or restricted, set `NPM_CONFIG_CACHE=/tmp/npm-cache`.

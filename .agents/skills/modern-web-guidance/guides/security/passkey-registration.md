@@ -1,5 +1,3 @@
-<!-- Modified by Simply Fizzed to correct WebAuthn signal API usage. -->
-
 # Passkey Registration
 
 This guide details how to enable users to register a passkey for their account, providing a highly secure, phishing-resistant passwordless sign-in alternative.
@@ -141,7 +139,7 @@ async function registerPasskey(isPromotion = false) {
   let encodedResponse = credential.toJSON();
   try {
     const response = await registerVerifyFetch(encodedResponse);
-    if (!response.ok && PublicKeyCredential.signalUnknownCredential) {
+    if (!response.ok) {
       // Server verification failed to verify/authenticate the credential (orphaned)
       await PublicKeyCredential.signalUnknownCredential({
         rpId, // RP ID must match the one defined on the server
@@ -150,12 +148,10 @@ async function registerPasskey(isPromotion = false) {
     }
   } catch (serverErr) {
     console.error("Server verification network failure:", serverErr);
-    if (PublicKeyCredential.signalUnknownCredential) {
-      await PublicKeyCredential.signalUnknownCredential({
-        rpId, // RP ID must match the one defined on the server
-        credentialId: encodedResponse.id, // Base64URL-encoded credential ID
-      });
-    }
+    await publickeycredential.signalunknowncredential({
+      rpId, // RP ID must match the one defined on the server
+      credentialid: encodedresponse.id, // base64url-encoded credential id
+    });
   }
 }
 ```

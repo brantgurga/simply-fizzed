@@ -1,5 +1,3 @@
-<!-- Modified by Simply Fizzed to flag fetched content as untrusted. -->
-
 # Agentic JavaScript Tools
 
 The Imperative API uses `document.modelContext.registerTool()` to programmatically define JavaScript tools. This is ideal for Single Page Applications (SPAs) where tools need to be added or removed based on the current route or user state.
@@ -184,7 +182,7 @@ await document.modelContext.registerTool({
       return { error: err instanceof Error ? err.message : String(err) };
     }
   },
-  annotations: { readOnlyHint: true, untrustedContentHint: true }
+  annotations: { readOnlyHint: true }
 });
 ```
 

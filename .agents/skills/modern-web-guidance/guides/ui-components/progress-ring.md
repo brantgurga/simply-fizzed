@@ -1,5 +1,3 @@
-<!-- Modified by Simply Fizzed to correct fallback selector syntax. -->
-
 # Progress ring
 
 A progress ring (or circular progress bar) provides visual feedback on the status of a task. Unlike a linear progress bar, its circular shape is ideal for dashboards, card components, or anywhere space is constrained.
@@ -12,7 +10,7 @@ This guide implements a progress ring by:
 
 This approach is preferred over SVG-only solutions because it uses the semantic `<progress>` element rather than ARIA, and more easily integrates with existing layout, design systems and typography.
 
-See the `spinner` (via `npx -y modern-web-guidance@0.0.194 retrieve "spinner"`) for handling indeterminate loading states.
+See the `spinner` (via `npx -y modern-web-guidance@latest retrieve "spinner"`) for handling indeterminate loading states.
 
 ## Implementation
 
@@ -156,13 +154,11 @@ For browsers that don't yet support `background-clip: border-area`, fall back to
 
 ```css
 @supports not (background-clip: border-area) {
-  progress.progress-ring {
-    mask-image: radial-gradient(
-      transparent calc(50% - var(--thickness)),
-      black calc(50% - var(--thickness) + 0.5px)
-    );
-    border: 0;
-  }
+  mask-image: radial-gradient(
+    transparent calc(50% - var(--thickness)),
+    black calc(50% - var(--thickness) + 0.5px)
+  );
+  border: 0;
 }
 ```
 

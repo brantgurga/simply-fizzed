@@ -1,5 +1,3 @@
-<!-- Modified by Simply Fizzed to correct native Temporal initialization. -->
-
 # Coordinating Global Events with Temporal
 
 Scheduling events across different time zones is notoriously difficult with the legacy `Date` object, especially around Daylight Saving Time (DST) transitions when hours can be skipped or repeated.
@@ -70,8 +68,8 @@ For environments without native `Temporal` support, you must conditionally load 
     globalThis.Temporal = module.Temporal;
     // Extend Date.prototype if needed
     Date.prototype.toTemporalInstant = module.toTemporalInstant;
+    initializeApp();
   }
-  initializeApp();
 })();
 
 function initializeApp() {

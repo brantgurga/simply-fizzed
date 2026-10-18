@@ -1,5 +1,3 @@
-<!-- Modified by Simply Fizzed to require user verification for step-up authentication. -->
-
 # Passkey Reauthentication
 
 This delta-focused guide details how to implement step-up authentication or re-verification for a signed-in user before they perform sensitive account changes (e.g. passwords updates, financial transfers).
@@ -24,8 +22,6 @@ router.post("/api/reauth/options", enforceActiveSession, async (req, res) => {
   const options = {
     challenge: serverGeneratedBase64UrlChallenge, // Random challenge stored in user session
     rpId: "example.com",
-    // Step-up authentication must require a fresh local biometric or PIN check.
-    userVerification: "required",
     // Enforce allowance strictly limited to the user's credentials list
     allowCredentials: userPasskeys.map((cred) => ({
       type: "public-key",

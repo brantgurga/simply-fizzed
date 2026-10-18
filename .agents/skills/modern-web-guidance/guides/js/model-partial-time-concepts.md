@@ -1,5 +1,3 @@
-<!-- Modified by Simply Fizzed to correct native Temporal initialization. -->
-
 # Modeling Partial Time Concepts with Temporal
 
 Modeling date concepts that lack a full calendar date—such as credit card expirations, annual renewals, or daily alarms—has historically been error-prone with the legacy `Date` object. Developers often resort to using arbitrary days (like the 1st of the month) or parsing strings, leading to "day leakage" or incorrect calculations due to leap years and varying month lengths.
@@ -92,7 +90,7 @@ Note that the polyfill does not automatically assign the `Temporal` object to th
     globalThis.Temporal = module.Temporal;
     // Extend Date.prototype if needed
     Date.prototype.toTemporalInstant = module.toTemporalInstant;
+    initializeApp();
   }
-  initializeApp();
 })();
 ```

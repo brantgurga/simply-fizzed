@@ -1,5 +1,3 @@
-<!-- Modified by Simply Fizzed to correct pointer interaction behavior. -->
-
 # Interactive Content Reveal
 
 Add performant, interactive reveal effects to your site with CSS masks and registered custom properties. By using a radial gradient as a mask and registering its stop values, we can smoothly transition the entry and exit, while following a user's pointer with minimal JavaScript. 
@@ -48,7 +46,7 @@ Apply the `mask-image` to the element you want to reveal. Use a `radial-gradient
 }
 
 /* Update the gradients stops on interaction */
-.container:hover .reveal-layer {
+.reveal-layer:hover {
   --inner-size: 100px;
   --outer-size: 120px;
 }  

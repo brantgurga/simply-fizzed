@@ -1,5 +1,3 @@
-<!-- Modified by Simply Fizzed to correct download progress handling. -->
-
 # Summarizer
 
 The **Summarizer API** allows web developers to offer local, AI-powered text distillation directly within the browser using **Gemini Nano in Chrome or Phi in Edge**. This API supports various formats, including key points, headlines, and TL;DRs, while operating entirely on-device to ensure user privacy.
@@ -47,7 +45,7 @@ if (availability === 'available') {
       ...options,
       monitor(m) {
         m.addEventListener('downloadprogress', (e) => {
-          console.log(`Downloaded ${Math.round(e.loaded * 100)}%`);
+          console.log(`Downloaded ${Math.round((e.loaded / e.total) * 100)}%`);
         });
       },
     });
