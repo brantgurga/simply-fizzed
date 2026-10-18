@@ -36,6 +36,15 @@ service cloud.firestore {
       return isAuthenticated() && !hasActiveRestriction(request.auth.uid);
     }
 
+    function reviewPath(userId, sodaId) {
+      return /databases/$(database)/documents/profiles/$(userId)/reviews/$(sodaId);
+    }
+
+    function hasTextualReviewAfter(userId, sodaId) {
+      return existsAfter(reviewPath(userId, sodaId))
+        && getAfter(reviewPath(userId, sodaId)).data.markdown != null;
+    }
+
     function isNonEmptyString(value, maxLength) {
       return value is string
         && value.matches(".*[\\p{L}\\p{M}\\p{N}\\p{P}\\p{S}].*")
@@ -138,6 +147,40 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/locations/$(data.locationId));
     }
 
+    function isValidCurrentReview(data, userId, sodaId) {
+      return data.authorId == userId
+        && data.sodaOfferingId == sodaId
+        && isNonEmptyString(data.sodaOfferingId, 1500)
+        && isValidAttributionName(data.authorName)
+        && isNonEmptyString(data.sodaName, 200)
+        && isNonEmptyString(data.sodaBrand, 200)
+        && isNonEmptyString(data.sodaFlavor, 200)
+        && (data.markdown == null || isNonEmptyString(data.markdown, 3000))
+        && data.contentLength is int
+        && data.contentLength >= 0
+        && data.contentLength <= 2000
+        && ((data.markdown == null && data.contentLength == 0)
+          || (data.markdown != null && data.contentLength > 0))
+        && data.version is int
+        && data.version >= 1
+        && isValidActionTime(data.authoredAt)
+        && data.baseModerationCycle is int
+        && data.baseModerationCycle >= 0
+        && (data.baseApprovedVersion == null
+          || (data.baseApprovedVersion is int && data.baseApprovedVersion >= 1))
+        && data.mutationId is string
+        && data.mutationId.matches(
+          "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
+        )
+        && (data.markdown == null
+          || (existsAfter(
+              /databases/$(database)/documents/profiles/$(userId)/ratings/$(sodaId)
+            )
+            && getAfter(
+              /databases/$(database)/documents/profiles/$(userId)/ratings/$(sodaId)
+            ).data.rating != null));
+    }
+
     function isValidRating(data, userId, ratingId) {
       return data.keys().hasOnly([
           "userId", "sodaOfferingId", "sodaName", "sodaBrand", "sodaFlavor",
@@ -235,9 +278,57 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             "rating", "lastRatedAt"
           ])
-          && isValidRating(request.resource.data, userId, ratingId);
-        allow delete: if canWriteOwnData(userId);
+          && isValidRating(request.resource.data, userId, ratingId)
+          && (request.resource.data.rating != null
+            || !hasTextualReviewAfter(userId, ratingId));
+        allow delete: if canWriteOwnData(userId)
+          && !hasTextualReviewAfter(userId, ratingId);
       }
+
+      match /reviews/{sodaId} {
+        allow get, list: if canWriteOwnData(userId);
+        allow create: if canWriteOwnData(userId)
+          && canWriteCommunityData()
+          && request.resource.data.keys().hasOnly([
+            "authorId", "authorName", "sodaOfferingId", "sodaName", "sodaBrand", "sodaFlavor",
+            "markdown", "contentLength", "version", "authoredAt", "baseModerationCycle",
+            "baseApprovedVersion", "mutationId"
+          ])
+          && request.resource.data.markdown != null
+          && request.resource.data.version == 1
+          && request.resource.data.baseModerationCycle == 0
+          && request.resource.data.baseApprovedVersion == null
+          && isValidCurrentReview(request.resource.data, userId, sodaId);
+        allow update: if canWriteOwnData(userId)
+          && (canWriteCommunityData() || request.resource.data.markdown == null)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "markdown", "contentLength", "version", "authoredAt", "baseModerationCycle",
+            "baseApprovedVersion", "mutationId"
+          ])
+          && request.resource.data.version == resource.data.version + 1
+          && request.resource.data.mutationId != resource.data.mutationId
+          && request.resource.data.authorId == resource.data.authorId
+          && request.resource.data.authorName == resource.data.authorName
+          && request.resource.data.sodaOfferingId == resource.data.sodaOfferingId
+          && request.resource.data.sodaName == resource.data.sodaName
+          && request.resource.data.sodaBrand == resource.data.sodaBrand
+          && request.resource.data.sodaFlavor == resource.data.sodaFlavor
+          && isValidCurrentReview(request.resource.data, userId, sodaId);
+        allow delete: if false;
+      }
+    }
+
+    match /publishedReviews/{reviewId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /reviewModerationQueue/{reviewId} {
+      allow read, write: if false;
+    }
+
+    match /reviewAudit/{document=**} {
+      allow read, write: if false;
     }
 
     match /restrictions/{userId} {

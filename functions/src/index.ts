@@ -8,6 +8,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { defineBoolean, defineString } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onUserCreated } from "firebase-functions/v2/identity";
 import { auditableSnapshot } from "./audit.js";
 import { FirestoreUserAuditStore } from "./firestore-audit-store.js";
@@ -18,6 +19,13 @@ import {
   type ApplyUserManagementInput,
   type SearchUsersInput,
 } from "./management.js";
+import {
+  processReviewWrite,
+  ReviewModerationService,
+  syncPublishedReviewRating,
+  type ModerateReviewInput,
+  type ReportReviewInput,
+} from "./reviews.js";
 
 const REGION = "us-central1";
 const operatorUids = defineString("OPERATOR_UIDS_JSON", {
@@ -60,11 +68,39 @@ const recordAccountCreationServiceAccount = defineString(
     input: { text: { nonEmpty: true } },
   },
 );
+const reportReviewServiceAccount = defineString("REPORT_REVIEW_SERVICE_ACCOUNT", {
+  description: "Least-privilege runtime identity for reportReview.",
+  input: { text: { nonEmpty: true } },
+});
+const moderateReviewServiceAccount = defineString("MODERATE_REVIEW_SERVICE_ACCOUNT", {
+  description: "Least-privilege runtime identity for moderateReview.",
+  input: { text: { nonEmpty: true } },
+});
+const loadReviewModerationQueueServiceAccount = defineString(
+  "LOAD_REVIEW_MODERATION_QUEUE_SERVICE_ACCOUNT",
+  {
+    description: "Least-privilege runtime identity for loadReviewModerationQueue.",
+    input: { text: { nonEmpty: true } },
+  },
+);
+const processReviewRevisionServiceAccount = defineString(
+  "PROCESS_REVIEW_REVISION_SERVICE_ACCOUNT",
+  {
+    description: "Least-privilege runtime identity for processReviewRevision.",
+    input: { text: { nonEmpty: true } },
+  },
+);
+const processReviewRatingServiceAccount = defineString("PROCESS_REVIEW_RATING_SERVICE_ACCOUNT", {
+  description: "Least-privilege runtime identity for processReviewRating.",
+  input: { text: { nonEmpty: true } },
+});
 const app = initializeApp();
+const auth = getAuth(app);
 const firestore = getFirestore(app);
 const auditStore = new FirestoreUserAuditStore(firestore);
+const reviewService = new ReviewModerationService(firestore, auth);
 const service = new UserManagementService(
-  getAuth(app),
+  auth,
   new FirestoreManagementStore(firestore),
   () => {
     try {
@@ -161,6 +197,75 @@ export const getUserAuditHistory = onCall<{
           request.data?.beforeSequence,
         ),
     ),
+);
+
+/** Atomically report one public review version and open or escalate its moderation cycle. */
+export const reportReview = onCall<ReportReviewInput>(
+  { ...callableOptions, serviceAccount: reportReviewServiceAccount },
+  async (request) =>
+    await translateErrors(async () => await reviewService.report(request.auth?.uid, request.data)),
+);
+
+/** Apply a version-aware Moderator decision without allowing text rewrites. */
+export const moderateReview = onCall<ModerateReviewInput>(
+  { ...callableOptions, serviceAccount: moderateReviewServiceAccount },
+  async (request) =>
+    await translateErrors(
+      async () => await reviewService.moderate(request.auth?.uid, request.data),
+    ),
+);
+
+/** Return one protected, paginated moderation queue view and its audit context. */
+export const loadReviewModerationQueue = onCall<{
+  kind: "security" | "reported" | "revised";
+  revealSecurity?: boolean;
+  cursor?: { pendingSinceMillis: number; id: string };
+}>(
+  { ...callableOptions, serviceAccount: loadReviewModerationQueueServiceAccount },
+  async (request) =>
+    await translateErrors(
+      async () =>
+        await reviewService.list(
+          request.auth?.uid,
+          request.data.kind,
+          request.data.revealSecurity === true,
+          request.data.cursor,
+        ),
+    ),
+);
+
+/** Audit author revisions and maintain the non-leaking public review projection. */
+export const processReviewRevision = onDocumentWritten(
+  {
+    document: "profiles/{authorId}/reviews/{sodaId}",
+    region: REGION,
+    retry: true,
+    serviceAccount: processReviewRevisionServiceAccount,
+  },
+  async (event) => {
+    const before = event.data?.before;
+    const after = event.data?.after;
+    await processReviewWrite(
+      firestore,
+      event.params.authorId,
+      event.params.sodaId,
+      before?.exists ? before : undefined,
+      after?.exists ? after : undefined,
+    );
+  },
+);
+
+/** Keep a visible review's rating metadata independent and current. */
+export const processReviewRating = onDocumentWritten(
+  {
+    document: "profiles/{authorId}/ratings/{sodaId}",
+    region: REGION,
+    retry: true,
+    serviceAccount: processReviewRatingServiceAccount,
+  },
+  async (event) => {
+    await syncPublishedReviewRating(firestore, event.params.authorId, event.params.sodaId);
+  },
 );
 
 /** Record post-rollout account creation with an explicit non-human system actor. */

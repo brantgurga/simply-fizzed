@@ -25,7 +25,16 @@ import { readFile } from "node:fs/promises";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, it } from "vitest";
 
 const PROJECT_ID = "demo-simply-fizzed";
-const USER_ID = "rules-test-user";
+const SIGNED_IN_FAN_ID = "authenticated-soda-fan";
+const OTHER_SIGNED_IN_FAN_ID = "other-authenticated-soda-fan";
+const MODERATOR_USER_ID = "moderator-user";
+const OPERATOR_USER_ID = "operator-user";
+const MUTATION_ONE = "00000000-0000-4000-8000-000000000001";
+const MUTATION_TWO = "00000000-0000-4000-8000-000000000002";
+const MUTATION_THREE = "00000000-0000-4000-8000-000000000003";
+const MUTATION_FOUR = "00000000-0000-4000-8000-000000000004";
+const MUTATION_FIVE = "00000000-0000-4000-8000-000000000005";
+const MUTATION_SIX = "00000000-0000-4000-8000-000000000006";
 const RULES_PATH = new URL("../firestore.rules", import.meta.url);
 
 let testEnvironment: RulesTestEnvironment;
@@ -41,10 +50,10 @@ function validLocation(overrides: Record<string, unknown> = {}): Record<string, 
     },
     geo: { lat: 39.7684, lng: -86.1581 },
     geohash: "dp4dpr",
-    createdBy: USER_ID,
+    createdBy: SIGNED_IN_FAN_ID,
     createdByName: "Rules Test Fan",
     createdAt: serverTimestamp(),
-    updatedBy: USER_ID,
+    updatedBy: SIGNED_IN_FAN_ID,
     updatedByName: "Rules Test Fan",
     updatedAt: serverTimestamp(),
     ...overrides,
@@ -64,10 +73,10 @@ function validNewSoda(overrides: Record<string, unknown> = {}): Record<string, u
     brand: "Sprecher",
     flavor: "Original",
     initialAvailabilityId: "existing-location$new-soda$draft",
-    createdBy: USER_ID,
+    createdBy: SIGNED_IN_FAN_ID,
     createdByName: "Rules Test Fan",
     createdAt: serverTimestamp(),
-    updatedBy: USER_ID,
+    updatedBy: SIGNED_IN_FAN_ID,
     updatedByName: "Rules Test Fan",
     updatedAt: serverTimestamp(),
     ...overrides,
@@ -84,10 +93,10 @@ function validAvailability(overrides: Record<string, unknown> = {}): Record<stri
     sodaFlavor: validSoda.flavor,
     canSample: "unknown",
     canPurchase: "unknown",
-    createdBy: USER_ID,
+    createdBy: SIGNED_IN_FAN_ID,
     createdByName: "Rules Test Fan",
     createdAt: serverTimestamp(),
-    updatedBy: USER_ID,
+    updatedBy: SIGNED_IN_FAN_ID,
     updatedByName: "Rules Test Fan",
     updatedAt: serverTimestamp(),
     ...overrides,
@@ -109,7 +118,7 @@ function canonicalAvailabilityId(availability: Record<string, unknown>): string 
 function validVerification(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     locationId: "existing-location",
-    verifiedBy: USER_ID,
+    verifiedBy: SIGNED_IN_FAN_ID,
     verifiedByName: "Rules Test Fan",
     verifiedAt: Timestamp.fromMillis(1_000),
     ...overrides,
@@ -126,7 +135,7 @@ function validProfile(overrides: Record<string, unknown> = {}): Record<string, u
 
 function validRating(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    userId: USER_ID,
+    userId: SIGNED_IN_FAN_ID,
     sodaOfferingId: "existing-soda",
     sodaName: validSoda.name,
     sodaBrand: validSoda.brand,
@@ -134,6 +143,25 @@ function validRating(overrides: Record<string, unknown> = {}): Record<string, un
     rating: null,
     firstRecorded: serverTimestamp(),
     lastRatedAt: null,
+    ...overrides,
+  };
+}
+
+function validReview(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    authorId: SIGNED_IN_FAN_ID,
+    authorName: "Rules Test Fan",
+    sodaOfferingId: "existing-soda",
+    sodaName: validSoda.name,
+    sodaBrand: validSoda.brand,
+    sodaFlavor: validSoda.flavor,
+    markdown: "A **great** cola.",
+    contentLength: 13,
+    version: 1,
+    authoredAt: Timestamp.fromMillis(1_000),
+    baseModerationCycle: 0,
+    baseApprovedVersion: null,
+    mutationId: MUTATION_ONE,
     ...overrides,
   };
 }
@@ -152,9 +180,9 @@ async function seedRestriction(userId: string, expiresAt?: unknown): Promise<voi
   await testEnvironment.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), "restrictions", userId), {
       publicReason: "Pause inaccurate community contributions",
-      originallyRestrictedBy: "moderator-user",
+      originallyRestrictedBy: MODERATOR_USER_ID,
       originallyRestrictedAt: Timestamp.fromMillis(1_000),
-      restrictionLastUpdatedBy: "moderator-user",
+      restrictionLastUpdatedBy: MODERATOR_USER_ID,
       restrictionLastUpdatedAt: Timestamp.fromMillis(1_000),
       ...(expiresAt === undefined ? {} : { expiresAt }),
     });
@@ -196,20 +224,20 @@ describe("location creation", () => {
   });
 
   it("allows authenticated creation with matching attribution and a server timestamp", async () => {
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
 
     await assertSucceeds(setDoc(doc(database, "locations", "valid"), validLocation()));
   });
 
   it("allows an empty sentinel when no friendly name is available", async () => {
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
     const location = validLocation({ createdByName: "", updatedByName: "" });
 
     await assertSucceeds(setDoc(doc(database, "locations", "unknown-friendly-name"), location));
   });
 
   it("allows representative maximum string and coordinate boundaries", async () => {
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
     const boundaryLocation = validLocation({
       name: "N".repeat(200),
       address: {
@@ -238,7 +266,7 @@ describe("location creation", () => {
     ["missing update timestamp", { updatedAt: undefined }],
     ["client-generated update timestamp", { updatedAt: Timestamp.fromMillis(0) }],
   ])("denies %s", async (_description, overrides) => {
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
     const location = validLocation(overrides);
     if (location["createdByName"] === undefined) delete location["createdByName"];
     if (location["updatedByName"] === undefined) delete location["updatedByName"];
@@ -275,7 +303,7 @@ describe("location creation", () => {
     ["out-of-range latitude", { geo: { lat: 90.0001, lng: 0 } }],
     ["out-of-range longitude", { geo: { lat: 0, lng: -180.0001 } }],
   ])("rejects %s", async (_description, overrides) => {
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
     const location = validLocation(overrides);
     if (location["geohash"] === undefined) delete location["geohash"];
 
@@ -289,7 +317,7 @@ describe("immutable locations", () => {
       await setDoc(doc(context.firestore(), "locations", "existing"), validLocation());
     });
     const reference = doc(
-      testEnvironment.authenticatedContext(USER_ID).firestore(),
+      testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore(),
       "locations",
       "existing",
     );
@@ -304,7 +332,7 @@ describe("availability creation", () => {
   beforeEach(seedAvailabilityReferences);
 
   it("allows an authenticated exact, attributed record with independent details", async () => {
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
 
     await assertSucceeds(
       setDoc(
@@ -315,7 +343,7 @@ describe("availability creation", () => {
   });
 
   it("accepts the client action time used by offline-capable writes", async () => {
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
     const actionTime = Timestamp.fromMillis(1_000);
 
     await assertSucceeds(
@@ -327,7 +355,7 @@ describe("availability creation", () => {
   });
 
   it("allows a new soda and its first availability in one atomic write", async () => {
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
     const batch = writeBatch(database);
     batch.set(doc(database, "sodas", "new-soda"), validNewSoda());
     batch.set(
@@ -355,7 +383,7 @@ describe("availability creation", () => {
   });
 
   it("denies a duplicate tuple under a non-canonical document ID", async () => {
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
 
     await assertFails(setDoc(doc(database, "availability", "duplicate-copy"), validAvailability()));
   });
@@ -364,7 +392,7 @@ describe("availability creation", () => {
     await testEnvironment.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), "locations", "location$one"), validLocation());
     });
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
 
     await assertFails(
       setDoc(
@@ -398,7 +426,7 @@ describe("availability creation", () => {
     ["a missing location", { locationId: "missing-location" }],
     ["a missing soda", { sodaId: "missing-soda" }],
   ])("denies %s", async (_description, overrides) => {
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
     const availability = validAvailability(overrides);
     for (const [key, value] of Object.entries(availability)) {
       if (value === undefined) delete availability[key];
@@ -414,7 +442,7 @@ describe("availability creation", () => {
       await setDoc(doc(context.firestore(), "availability", "existing"), validAvailability());
     });
     const reference = doc(
-      testEnvironment.authenticatedContext(USER_ID).firestore(),
+      testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore(),
       "availability",
       "existing",
     );
@@ -438,13 +466,13 @@ describe("availability detail updates", () => {
   });
 
   it("allows independent attributed detail updates with a meaningful action time", async () => {
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
 
     await assertSucceeds(
       updateDoc(doc(database, "availability", "existing-location$existing-soda$can"), {
         canSample: "yes",
         canPurchase: "no",
-        updatedBy: USER_ID,
+        updatedBy: SIGNED_IN_FAN_ID,
         updatedByName: "Rules Test Fan",
         updatedAt: Timestamp.fromMillis(2_000),
       }),
@@ -452,14 +480,14 @@ describe("availability detail updates", () => {
   });
 
   it("rejects stale, forged, and immutable-field updates", async () => {
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
     const reference = doc(database, "availability", "existing-location$existing-soda$can");
 
     await assertFails(updateDoc(reference, { updatedAt: Timestamp.fromMillis(500) }));
     await assertFails(
       updateDoc(reference, {
         canSample: "yes",
-        updatedBy: USER_ID,
+        updatedBy: SIGNED_IN_FAN_ID,
         updatedByName: "Rules Test Fan",
         updatedAt: Timestamp.fromMillis(1_000),
       }),
@@ -494,13 +522,13 @@ describe("availability detail updates", () => {
         canPurchase: "yes",
       });
     });
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
 
     await assertSucceeds(
       updateDoc(doc(database, "availability", "legacy"), {
         canSample: "unknown",
         canPurchase: "no",
-        updatedBy: USER_ID,
+        updatedBy: SIGNED_IN_FAN_ID,
         updatedByName: "of…@example.com",
         updatedAt: Timestamp.fromMillis(2_000),
       }),
@@ -512,7 +540,7 @@ describe("availability verification", () => {
   beforeEach(seedAvailabilityReferences);
 
   it("allows public history reads and authenticated append-only events", async () => {
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
     await assertSucceeds(
       setDoc(doc(database, "verifications", "verification-one"), validVerification()),
     );
@@ -522,7 +550,7 @@ describe("availability verification", () => {
   });
 
   it("accepts action times independent of synchronization time and equal times", async () => {
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
     const actionTime = Timestamp.fromMillis(1_000);
 
     await assertSucceeds(
@@ -545,7 +573,7 @@ describe("availability verification", () => {
       setDoc(doc(unauthenticated, "verifications", "anonymous"), validVerification()),
     );
 
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
     await assertFails(
       setDoc(
         doc(database, "verifications", "forged"),
@@ -577,14 +605,14 @@ describe("availability verification", () => {
 
 describe("soda creation and immutability", () => {
   it("denies standalone creation without its initial availability", async () => {
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
 
     await assertFails(setDoc(doc(database, "sodas", "new-soda"), validNewSoda()));
   });
 
   it("denies unauthenticated or malformed creation", async () => {
     const unauthenticated = testEnvironment.unauthenticatedContext().firestore();
-    const authenticated = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const authenticated = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
 
     await assertFails(setDoc(doc(unauthenticated, "sodas", "unauthenticated"), validNewSoda()));
     await assertFails(
@@ -598,7 +626,7 @@ describe("soda creation and immutability", () => {
       await setDoc(doc(context.firestore(), "sodas", "existing"), validSoda);
     });
     const reference = doc(
-      testEnvironment.authenticatedContext(USER_ID).firestore(),
+      testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore(),
       "sodas",
       "existing",
     );
@@ -616,11 +644,11 @@ describe("public profiles and rating inventories", () => {
       await Promise.all([
         setDoc(doc(database, "sodas", "existing-soda"), validSoda),
         setDoc(doc(database, "sodas", "validation-soda"), validSoda),
-        setDoc(doc(database, "profiles", USER_ID), {
+        setDoc(doc(database, "profiles", SIGNED_IN_FAN_ID), {
           publicName: "Rules Test Fan",
           updatedAt: Timestamp.now(),
         }),
-        setDoc(doc(database, "profiles", USER_ID, "ratings", "existing-soda"), {
+        setDoc(doc(database, "profiles", SIGNED_IN_FAN_ID, "ratings", "existing-soda"), {
           ...validRating(),
           firstRecorded: Timestamp.now(),
         }),
@@ -631,21 +659,24 @@ describe("public profiles and rating inventories", () => {
   it("allows unauthenticated profile and inventory reads without enumerating profiles", async () => {
     const database = testEnvironment.unauthenticatedContext().firestore();
 
-    await assertSucceeds(getDoc(doc(database, "profiles", USER_ID)));
-    await assertSucceeds(getDocs(collection(database, "profiles", USER_ID, "ratings")));
+    await assertSucceeds(getDoc(doc(database, "profiles", SIGNED_IN_FAN_ID)));
+    await assertSucceeds(getDocs(collection(database, "profiles", SIGNED_IN_FAN_ID, "ratings")));
     await assertSucceeds(getDocs(collectionGroup(database, "ratings")));
     await assertFails(getDocs(collection(database, "profiles")));
   });
 
   it("requires trusted functions for profile and audit writes", async () => {
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
 
-    await assertFails(setDoc(doc(database, "profiles", USER_ID), validProfile()));
+    await assertFails(setDoc(doc(database, "profiles", SIGNED_IN_FAN_ID), validProfile()));
     await assertFails(
-      updateDoc(doc(database, "profiles", USER_ID), validProfile({ publicName: "Updated Fan" })),
+      updateDoc(
+        doc(database, "profiles", SIGNED_IN_FAN_ID),
+        validProfile({ publicName: "Updated Fan" }),
+      ),
     );
-    await assertFails(getDocs(collection(database, "userAudit", USER_ID, "events")));
-    await assertFails(setDoc(doc(database, "userAudit", USER_ID, "events", "forged"), {}));
+    await assertFails(getDocs(collection(database, "userAudit", SIGNED_IN_FAN_ID, "events")));
+    await assertFails(setDoc(doc(database, "userAudit", SIGNED_IN_FAN_ID, "events", "forged"), {}));
   });
 
   it("allows unrated and rated record creation", async () => {
@@ -653,17 +684,17 @@ describe("public profiles and rating inventories", () => {
       await setDoc(doc(context.firestore(), "sodas", "new-unrated"), validSoda);
       await setDoc(doc(context.firestore(), "sodas", "new-rated"), validSoda);
     });
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
 
     await assertSucceeds(
       setDoc(
-        doc(database, "profiles", USER_ID, "ratings", "new-unrated"),
+        doc(database, "profiles", SIGNED_IN_FAN_ID, "ratings", "new-unrated"),
         validRating({ sodaOfferingId: "new-unrated" }),
       ),
     );
     await assertSucceeds(
       setDoc(
-        doc(database, "profiles", USER_ID, "ratings", "new-rated"),
+        doc(database, "profiles", SIGNED_IN_FAN_ID, "ratings", "new-rated"),
         validRating({
           sodaOfferingId: "new-rated",
           rating: 4.5,
@@ -674,8 +705,8 @@ describe("public profiles and rating inventories", () => {
   });
 
   it("allows rating, clearing, and deleting an owned rating record", async () => {
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
-    const reference = doc(database, "profiles", USER_ID, "ratings", "existing-soda");
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
+    const reference = doc(database, "profiles", SIGNED_IN_FAN_ID, "ratings", "existing-soda");
 
     await assertSucceeds(updateDoc(reference, { rating: 4.5, lastRatedAt: serverTimestamp() }));
     await assertSucceeds(updateDoc(reference, { rating: null, lastRatedAt: null }));
@@ -692,11 +723,11 @@ describe("public profiles and rating inventories", () => {
     ["a client first-recorded timestamp", { firstRecorded: Timestamp.fromMillis(0) }],
     ["an unexpected field", { review: "Great" }],
   ])("denies %s", async (_description, overrides) => {
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
 
     await assertFails(
       setDoc(
-        doc(database, "profiles", USER_ID, "ratings", "validation-soda"),
+        doc(database, "profiles", SIGNED_IN_FAN_ID, "ratings", "validation-soda"),
         validRating({ sodaOfferingId: "validation-soda", ...overrides }),
       ),
     );
@@ -705,20 +736,250 @@ describe("public profiles and rating inventories", () => {
   it("denies profile and rating writes by another user", async () => {
     const database = testEnvironment.authenticatedContext("another-user").firestore();
 
-    await assertFails(setDoc(doc(database, "profiles", USER_ID), validProfile()));
+    await assertFails(setDoc(doc(database, "profiles", SIGNED_IN_FAN_ID), validProfile()));
     await assertFails(
-      setDoc(doc(database, "profiles", USER_ID, "ratings", "existing-soda"), validRating()),
+      setDoc(
+        doc(database, "profiles", SIGNED_IN_FAN_ID, "ratings", "existing-soda"),
+        validRating(),
+      ),
     );
-    await assertFails(deleteDoc(doc(database, "profiles", USER_ID, "ratings", "existing-soda")));
+    await assertFails(
+      deleteDoc(doc(database, "profiles", SIGNED_IN_FAN_ID, "ratings", "existing-soda")),
+    );
+  });
+});
+
+describe("textual review privacy and author writes", () => {
+  beforeEach(async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const database = context.firestore();
+      await Promise.all([
+        setDoc(doc(database, "sodas", "existing-soda"), validSoda),
+        setDoc(doc(database, "profiles", SIGNED_IN_FAN_ID), validProfile()),
+        setDoc(
+          doc(database, "profiles", SIGNED_IN_FAN_ID, "ratings", "existing-soda"),
+          validRating({
+            rating: 4,
+            lastRatedAt: Timestamp.fromMillis(1_000),
+            firstRecorded: Timestamp.fromMillis(1_000),
+          }),
+        ),
+      ]);
+    });
+  });
+
+  it("allows an offline-capable author review but denies anonymous current-text reads", async () => {
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
+    const reference = doc(database, "profiles", SIGNED_IN_FAN_ID, "reviews", "existing-soda");
+    await assertSucceeds(setDoc(reference, validReview()));
+    await assertSucceeds(getDoc(reference));
+
+    const anonymous = testEnvironment.unauthenticatedContext().firestore();
+    await assertFails(
+      getDoc(doc(anonymous, "profiles", SIGNED_IN_FAN_ID, "reviews", "existing-soda")),
+    );
+    await assertFails(getDocs(collection(anonymous, "profiles", SIGNED_IN_FAN_ID, "reviews")));
+  });
+
+  it("requires safe UUID mutation identities", async () => {
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
+    await assertFails(
+      setDoc(
+        doc(database, "profiles", SIGNED_IN_FAN_ID, "reviews", "existing-soda"),
+        validReview({ mutationId: "../replayed/revision" }),
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(database, "profiles", SIGNED_IN_FAN_ID, "reviews", "existing-soda"),
+        validReview({ mutationId: "not-a-uuid" }),
+      ),
+    );
+  });
+
+  it("requires a point rating and validates physical and claimed logical limits", async () => {
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
+    await assertFails(
+      setDoc(
+        doc(database, "profiles", SIGNED_IN_FAN_ID, "reviews", "oversized"),
+        validReview({
+          sodaOfferingId: "oversized",
+          markdown: "x".repeat(3_001),
+          contentLength: 2_000,
+        }),
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(database, "profiles", SIGNED_IN_FAN_ID, "reviews", "existing-soda"),
+        validReview({ contentLength: 2_001 }),
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(database, "profiles", SIGNED_IN_FAN_ID, "reviews", "existing-soda"),
+        validReview({ markdown: null, contentLength: 0 }),
+      ),
+    );
+  });
+
+  it("allows revisions and clearing but protects server moderation fields", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "profiles", SIGNED_IN_FAN_ID, "reviews", "existing-soda"),
+        {
+          ...validReview(),
+          moderationStatus: "hidden",
+          moderationCycle: 2,
+          moderationSecuritySafety: true,
+          approvedVersion: null,
+          hiddenReason: "Please revise",
+        },
+      );
+    });
+    const reference = doc(
+      testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore(),
+      "profiles",
+      SIGNED_IN_FAN_ID,
+      "reviews",
+      "existing-soda",
+    );
+    await assertSucceeds(
+      updateDoc(reference, {
+        markdown: "A revised opinion.",
+        contentLength: 18,
+        version: 2,
+        authoredAt: Timestamp.fromMillis(2_000),
+        baseModerationCycle: 2,
+        baseApprovedVersion: null,
+        mutationId: MUTATION_TWO,
+      }),
+    );
+    await assertFails(updateDoc(reference, { moderationStatus: "visible" }));
+    await assertFails(updateDoc(reference, { moderationSecuritySafety: false }));
+    await assertFails(
+      updateDoc(reference, {
+        markdown: "A second revision.",
+        contentLength: 18,
+        version: 3,
+        authoredAt: Timestamp.fromMillis(3_000),
+        baseModerationCycle: 2,
+        baseApprovedVersion: null,
+        mutationId: MUTATION_TWO,
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(reference, {
+        markdown: null,
+        contentLength: 0,
+        version: 3,
+        authoredAt: Timestamp.fromMillis(3_000),
+        baseModerationCycle: 2,
+        baseApprovedVersion: null,
+        mutationId: MUTATION_THREE,
+      }),
+    );
+  });
+
+  it("requires rating and review clearing to be atomic", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "profiles", SIGNED_IN_FAN_ID, "reviews", "existing-soda"),
+        {
+          ...validReview(),
+          moderationStatus: "visible",
+          moderationCycle: 0,
+        },
+      );
+    });
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
+    const rating = doc(database, "profiles", SIGNED_IN_FAN_ID, "ratings", "existing-soda");
+    const review = doc(database, "profiles", SIGNED_IN_FAN_ID, "reviews", "existing-soda");
+    await assertFails(updateDoc(rating, { rating: null, lastRatedAt: null }));
+
+    const batch = writeBatch(database);
+    batch.update(rating, { rating: null, lastRatedAt: null });
+    batch.update(review, {
+      markdown: null,
+      contentLength: 0,
+      version: 2,
+      authoredAt: Timestamp.fromMillis(2_000),
+      baseModerationCycle: 0,
+      baseApprovedVersion: null,
+      mutationId: MUTATION_FOUR,
+    });
+    await assertSucceeds(batch.commit());
+  });
+
+  it("blocks restricted revisions while still allowing authors to clear current text", async () => {
+    await seedRestriction(SIGNED_IN_FAN_ID);
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), "profiles", SIGNED_IN_FAN_ID, "reviews", "existing-soda"),
+        {
+          ...validReview(),
+          moderationStatus: "hidden",
+          moderationCycle: 1,
+        },
+      );
+    });
+    const reference = doc(
+      testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore(),
+      "profiles",
+      SIGNED_IN_FAN_ID,
+      "reviews",
+      "existing-soda",
+    );
+    await assertFails(
+      updateDoc(reference, {
+        markdown: "A restricted revision.",
+        contentLength: 22,
+        version: 2,
+        authoredAt: Timestamp.fromMillis(2_000),
+        baseModerationCycle: 1,
+        baseApprovedVersion: null,
+        mutationId: MUTATION_FIVE,
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(reference, {
+        markdown: null,
+        contentLength: 0,
+        version: 2,
+        authoredAt: Timestamp.fromMillis(2_000),
+        baseModerationCycle: 1,
+        baseApprovedVersion: null,
+        mutationId: MUTATION_SIX,
+      }),
+    );
+  });
+
+  it("exposes only trusted public projections and keeps moderation audit private", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const database = context.firestore();
+      await setDoc(doc(database, "publishedReviews", "public-review"), {
+        markdown: "Public text",
+      });
+      await setDoc(doc(database, "reviewAudit", "review", "reports", "report"), {
+        reporterId: "private-reporter",
+      });
+    });
+    const anonymous = testEnvironment.unauthenticatedContext().firestore();
+    await assertSucceeds(getDocs(collection(anonymous, "publishedReviews")));
+    await assertFails(getDocs(collection(anonymous, "reviewAudit", "review", "reports")));
   });
 });
 
 describe("restrictions and authorization-document privacy", () => {
   it("denies every community write while restricted despite client claim assertions", async () => {
     await seedAvailabilityReferences();
-    await seedRestriction(USER_ID);
+    await seedRestriction(SIGNED_IN_FAN_ID);
     const database = testEnvironment
-      .authenticatedContext(USER_ID, { moderator: true, operator: true, restricted: false })
+      .authenticatedContext(SIGNED_IN_FAN_ID, {
+        moderator: true,
+        operator: true,
+        restricted: false,
+      })
       .firestore();
 
     await assertFails(setDoc(doc(database, "locations", "restricted-location"), validLocation()));
@@ -750,57 +1011,62 @@ describe("restrictions and authorization-document privacy", () => {
 
   it("keeps ratings available while requiring trusted profile writes when restricted", async () => {
     await seedAvailabilityReferences();
-    await seedRestriction(USER_ID);
+    await seedRestriction(SIGNED_IN_FAN_ID);
     await testEnvironment.withSecurityRulesDisabled(async (context) => {
-      await setDoc(doc(context.firestore(), "profiles", USER_ID), validProfile());
+      await setDoc(doc(context.firestore(), "profiles", SIGNED_IN_FAN_ID), validProfile());
     });
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
 
-    await assertFails(setDoc(doc(database, "profiles", USER_ID), validProfile()));
+    await assertFails(setDoc(doc(database, "profiles", SIGNED_IN_FAN_ID), validProfile()));
     await assertSucceeds(
-      setDoc(doc(database, "profiles", USER_ID, "ratings", "existing-soda"), validRating()),
+      setDoc(
+        doc(database, "profiles", SIGNED_IN_FAN_ID, "ratings", "existing-soda"),
+        validRating(),
+      ),
     );
   });
 
   it("enforces no-expiration and future restrictions but ignores stale expired metadata", async () => {
-    await seedRestriction(USER_ID, Timestamp.fromMillis(Date.now() + 60_000));
-    let database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    await seedRestriction(SIGNED_IN_FAN_ID, Timestamp.fromMillis(Date.now() + 60_000));
+    let database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
     await assertFails(setDoc(doc(database, "locations", "future-restricted"), validLocation()));
 
     await testEnvironment.clearFirestore();
-    await seedRestriction(USER_ID, Timestamp.fromMillis(Date.now() - 60_000));
-    database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    await seedRestriction(SIGNED_IN_FAN_ID, Timestamp.fromMillis(Date.now() - 60_000));
+    database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
     await assertSucceeds(
       setDoc(doc(database, "locations", "expired-restriction"), validLocation()),
     );
   });
 
   it("fails closed when persisted expiration metadata is malformed", async () => {
-    await seedRestriction(USER_ID, "not-a-timestamp");
-    const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+    await seedRestriction(SIGNED_IN_FAN_ID, "not-a-timestamp");
+    const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
 
     await assertFails(setDoc(doc(database, "locations", "malformed-expiration"), validLocation()));
   });
 
   it("allows only the affected user to get the public restriction document", async () => {
-    await seedRestriction(USER_ID);
+    await seedRestriction(SIGNED_IN_FAN_ID);
     await testEnvironment.withSecurityRulesDisabled(async (context) => {
-      await setDoc(doc(context.firestore(), "userModeration", USER_ID), {
+      await setDoc(doc(context.firestore(), "userModeration", SIGNED_IN_FAN_ID), {
         internalReason: "Private moderator context",
-        moderatorGrantedBy: "operator-user",
+        moderatorGrantedBy: OPERATOR_USER_ID,
       });
     });
-    const ownDatabase = testEnvironment.authenticatedContext(USER_ID).firestore();
-    const otherDatabase = testEnvironment.authenticatedContext("other-user").firestore();
+    const ownDatabase = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
+    const otherDatabase = testEnvironment.authenticatedContext(OTHER_SIGNED_IN_FAN_ID).firestore();
     const publicDatabase = testEnvironment.unauthenticatedContext().firestore();
 
-    await assertSucceeds(getDoc(doc(ownDatabase, "restrictions", USER_ID)));
-    await assertFails(getDoc(doc(otherDatabase, "restrictions", USER_ID)));
-    await assertFails(getDoc(doc(publicDatabase, "restrictions", USER_ID)));
+    await assertSucceeds(getDoc(doc(ownDatabase, "restrictions", SIGNED_IN_FAN_ID)));
+    await assertFails(getDoc(doc(otherDatabase, "restrictions", SIGNED_IN_FAN_ID)));
+    await assertFails(getDoc(doc(publicDatabase, "restrictions", SIGNED_IN_FAN_ID)));
     await assertFails(getDocs(collection(ownDatabase, "restrictions")));
-    await assertFails(getDoc(doc(ownDatabase, "userModeration", USER_ID)));
+    await assertFails(getDoc(doc(ownDatabase, "userModeration", SIGNED_IN_FAN_ID)));
     await assertFails(
-      updateDoc(doc(ownDatabase, "restrictions", USER_ID), { publicReason: "Removed" }),
+      updateDoc(doc(ownDatabase, "restrictions", SIGNED_IN_FAN_ID), {
+        publicReason: "Removed",
+      }),
     );
   });
 });
@@ -809,7 +1075,7 @@ describe("protected unmatched paths", () => {
   it.each(["private/document", "locations/location/private/document"])(
     "denies reads and writes to unmatched path %s",
     async (path) => {
-      const database = testEnvironment.authenticatedContext(USER_ID).firestore();
+      const database = testEnvironment.authenticatedContext(SIGNED_IN_FAN_ID).firestore();
       const reference = doc(database, path);
 
       await assertFails(getDoc(reference));

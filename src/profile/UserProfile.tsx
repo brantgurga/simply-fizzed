@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // See LICENSE for copying terms.
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import SportsBarIcon from "@mui/icons-material/SportsBar";
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -18,6 +18,8 @@ import Select from "@mui/material/Select";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { db } from "../firebase";
+import { PublicReviewList } from "../review/ReviewList";
+import { loadProfileReviews } from "../review/reviews";
 import { sodaRoute } from "../routes";
 import {
   compareAlphabetically,
@@ -29,6 +31,12 @@ import {
 
 interface UserProfileProps {
   userId: string;
+  viewerId?: string | undefined;
+  onSignIn?: (() => void) | undefined;
+  canModerateReviews?: boolean;
+  reviewListLoader?: (
+    cursor?: Parameters<typeof loadProfileReviews>[2],
+  ) => ReturnType<typeof loadProfileReviews>;
   loader?: (id: string) => Promise<InventoryLoad>;
 }
 
@@ -38,10 +46,25 @@ type SortOrder = "alphabetical" | "recent";
 const defaultLoader = (id: string) => loadInventory(db, id);
 const ratingLabel = (value: number) => `${value} mug${value === 1 ? "" : "s"}`;
 
-export default function UserProfile({ userId, loader = defaultLoader }: UserProfileProps) {
+export default function UserProfile({
+  userId,
+  viewerId,
+  onSignIn,
+  canModerateReviews = false,
+  reviewListLoader,
+  loader = defaultLoader,
+}: UserProfileProps) {
   const [state, setState] = useState<State>({ status: "loading" });
   const [sortOrder, setSortOrder] = useState<SortOrder>("alphabetical");
   const [request, setRequest] = useState({ userId, loader });
+  const reviewLoader = useCallback(
+    (cursor?: Parameters<typeof loadProfileReviews>[2]) =>
+      reviewListLoader?.(cursor) ??
+      (loader === defaultLoader
+        ? loadProfileReviews(db, userId, cursor)
+        : Promise.resolve({ reviews: [] })),
+    [loader, reviewListLoader, userId],
+  );
 
   if (request.userId !== userId || request.loader !== loader) {
     setRequest({ userId, loader });
@@ -142,6 +165,15 @@ export default function UserProfile({ userId, loader = defaultLoader }: UserProf
           })}
         </List>
       )}
+
+      <PublicReviewList
+        label="Reviews"
+        loader={reviewLoader}
+        viewerId={viewerId}
+        onSignIn={onSignIn}
+        showSoda
+        canModerate={canModerateReviews}
+      />
     </Stack>
   );
 }

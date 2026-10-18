@@ -11,6 +11,7 @@ export type AppRoute =
   | { page: "soda"; id: string }
   | { page: "profile"; id: string }
   | { page: "manageUsers" }
+  | { page: "moderateReviews" }
   | { page: "notFound" };
 
 function decodeId(value: string): string | undefined {
@@ -26,6 +27,7 @@ function decodeId(value: string): string | undefined {
 export function parseHashRoute(hash: string): AppRoute {
   if (hash === "" || hash === "#" || hash === "#/") return { page: "home" };
   if (hash === "#/manage/users") return { page: "manageUsers" };
+  if (hash === "#/moderate/reviews") return { page: "moderateReviews" };
   const catalogMatch = /^#\/sodas(?:\?(.*))?$/.exec(hash);
   if (catalogMatch !== null)
     return { page: "catalog", parameters: new URLSearchParams(catalogMatch[1]) };
@@ -57,6 +59,7 @@ export function profileRoute(id: string): string {
 }
 
 export const manageUsersRoute = "#/manage/users";
+export const moderateReviewsRoute = "#/moderate/reviews";
 
 /** Keep React in sync with browser back/forward navigation between hash routes. */
 export function useHashRoute(): AppRoute {

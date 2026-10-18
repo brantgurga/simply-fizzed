@@ -43,7 +43,15 @@ import UserManagement from "./management/UserManagement";
 import NearbySearch from "./nearby/NearbySearch";
 import { searchNearby } from "./nearby/nearby";
 import UserProfile from "./profile/UserProfile";
-import { manageUsersRoute, profileRoute, sodaCatalogRoute, useHashRoute } from "./routes";
+import ModerationPage from "./review/ModerationPage";
+import ReviewAttention from "./review/ReviewAttention";
+import {
+  manageUsersRoute,
+  moderateReviewsRoute,
+  profileRoute,
+  sodaCatalogRoute,
+  useHashRoute,
+} from "./routes";
 import { savePublicProfile } from "./rating/ratings";
 import SodaCatalog from "./soda/SodaCatalog";
 import SodaDetail from "./soda/SodaDetail";
@@ -357,6 +365,12 @@ function App() {
                   {user.displayName ?? user.email ?? "Signed in"}
                 </Typography>
               )}
+              <ReviewAttention userId={user.uid} />
+              {authorization?.moderator === true && (
+                <Link href={moderateReviewsRoute} color="inherit" variant="body2">
+                  Moderate reviews
+                </Link>
+              )}
               {authorization?.canManageUsers === true && (
                 <Link href={manageUsersRoute} color="inherit" variant="body2">
                   Manage users
@@ -427,9 +441,28 @@ function App() {
               onCommunityWriteRejected={() => void refreshAuthorization()}
             />
           ) : route.page === "soda" ? (
-            <SodaDetail sodaId={route.id} user={user} onSignIn={requestSignIn} />
+            <SodaDetail
+              sodaId={route.id}
+              user={user}
+              onSignIn={requestSignIn}
+              canReview={communityWritable}
+              canModerateReviews={authorization?.moderator === true}
+            />
           ) : route.page === "profile" ? (
-            <UserProfile userId={route.id} />
+            <UserProfile
+              userId={route.id}
+              viewerId={user?.uid}
+              onSignIn={requestSignIn}
+              canModerateReviews={authorization?.moderator === true}
+            />
+          ) : route.page === "moderateReviews" ? (
+            authorization?.moderator === true ? (
+              <ModerationPage />
+            ) : authorizationLoading && user !== null ? (
+              <Typography>Confirming Moderator access…</Typography>
+            ) : (
+              <Alert severity="warning">Current Moderator authority is required.</Alert>
+            )
           ) : route.page === "manageUsers" ? (
             authorization?.canManageUsers === true ? (
               <UserManagement authorization={authorization} />
