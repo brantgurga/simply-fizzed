@@ -126,6 +126,8 @@ jobs:
     name: Plan production infrastructure
     needs: build-staging
     runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.plan.outputs.has_changes }}
     permissions:
       actions: read
       contents: read
@@ -157,11 +159,21 @@ jobs:
           -backend-config="prefix=production"
 
       - name: Terraform plan
+        id: plan
         working-directory: infra/environments/production
         env:
           TF_VAR_project_id: ${{ env.PROJECT_ID }}
           TF_VAR_import_existing_production_resources: true
-        run: terraform plan -input=false -out=production.tfplan
+        run: |
+          set +e
+          terraform plan -input=false -detailed-exitcode -out=production.tfplan
+          status=$?
+          set -e
+          case "$status" in
+            0) echo "has_changes=false" >> "$GITHUB_OUTPUT" ;;
+            2) echo "has_changes=true" >> "$GITHUB_OUTPUT" ;;
+            *) exit "$status" ;;
+          esac
 
       - name: Publish Terraform plan for approval
         working-directory: infra/environments/production
@@ -181,12 +193,63 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  deploy-staging:
-    name: Apply infrastructure and deploy staging channel
-    needs: [build-staging, terraform-plan]
+  terraform-apply:
+    name: Apply approved infrastructure plan
+    needs: terraform-plan
+    if: ${{ needs.terraform-plan.outputs.has_changes == 'true' }}
     runs-on: ubuntu-latest
-    # Configure this environment with a required reviewer. The plan job finishes
-    # and publishes its summary before this protected apply job can start.
+    environment: production-infrastructure
+    permissions:
+      actions: read
+      id-token: write
+    steps:
+      - name: Download production artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: firebase-hosting
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: github-deployer@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.16.6
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: infra/environments/production
+        run: >-
+          terraform init -input=false
+          -backend-config="bucket=${PROJECT_ID}-terraform-state"
+          -backend-config="prefix=production"
+
+      - name: Download approved Terraform plan
+        uses: actions/download-artifact@v8
+        with:
+          name: terraform-production-plan
+          path: infra/environments/production
+
+      - name: Terraform apply approved plan
+        working-directory: infra/environments/production
+        run: terraform apply production.tfplan
+
+  deploy-staging:
+    name: Deploy staging channel
+    needs: [build-staging, terraform-plan, terraform-apply]
+    if: >-
+      ${{
+        always() &&
+        needs.build-staging.result == 'success' &&
+        needs.terraform-plan.result == 'success' &&
+        (needs.terraform-apply.result == 'success' ||
+          needs.terraform-apply.result == 'skipped')
+      }}
+    runs-on: ubuntu-latest
     environment: production
     permissions:
       actions: read
@@ -226,16 +289,6 @@ jobs:
           terraform init -input=false
           -backend-config="bucket=${PROJECT_ID}-terraform-state"
           -backend-config="prefix=production"
-
-      - name: Download approved Terraform plan
-        uses: actions/download-artifact@v8
-        with:
-          name: terraform-production-plan
-          path: infra/environments/production
-
-      - name: Terraform apply approved plan
-        working-directory: infra/environments/production
-        run: terraform apply production.tfplan
 
       - name: Read Terraform deployment outputs
         working-directory: infra/environments/production

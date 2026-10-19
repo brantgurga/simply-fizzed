@@ -11,6 +11,11 @@ import { describe, expect, it } from "vitest";
 /** @param {string} path */
 const read = (path) => readFileSync(path, "utf8");
 const workflow = read(".github/workflows/firebase-hosting.yml");
+const terraformPlanScript = workflow
+  .match(
+    /      - name: Terraform plan\n[\s\S]*?        run: \|\n(?<script>(?:          .*\n)+)\n      - name: Publish Terraform plan/u,
+  )
+  ?.groups?.script.replace(/^ {10}/gmu, "");
 const moduleMain = read("infra/modules/firebase/main.tf");
 const productionImports = read("infra/environments/production/imports.tf");
 const bootstrapScript = resolve("scripts/bootstrap-firebase-project.sh");
@@ -120,27 +125,63 @@ describe("Terraform infrastructure contracts", () => {
 });
 
 describe("Terraform Firebase delivery contracts", () => {
-  it("publishes a plan before a protected job applies that exact artifact", () => {
+  it("requires approval to apply a changed plan and skips approval for a no-op", () => {
     const planStart = workflow.indexOf("  terraform-plan:");
-    const applyStart = workflow.indexOf("  deploy-staging:");
+    const applyStart = workflow.indexOf("  terraform-apply:");
+    const deployStart = workflow.indexOf("  deploy-staging:");
     const planJob = workflow.slice(planStart, applyStart);
-    const applyJob = workflow.slice(applyStart, workflow.indexOf("  promote-production:"));
+    const applyJob = workflow.slice(applyStart, deployStart);
+    const deployJob = workflow.slice(deployStart, workflow.indexOf("  promote-production:"));
 
     expect(planStart).toBeGreaterThan(0);
     expect(applyStart).toBeGreaterThan(planStart);
-    expect(planJob).toContain("terraform plan -input=false -out=production.tfplan");
+    expect(deployStart).toBeGreaterThan(applyStart);
+    expect(planJob).toContain("outputs:");
+    expect(planJob).toContain("terraform plan -input=false -detailed-exitcode");
+    expect(planJob).toContain("has_changes");
     expect(planJob).toContain("Publish Terraform plan for approval");
     expect(planJob).toContain("terraform show -no-color production.tfplan");
     expect(planJob).toContain("name: terraform-production-plan");
     expect(planJob).not.toMatch(/\n\s+environment:/u);
-    expect(applyJob).toContain("needs: [build-staging, terraform-plan]");
-    expect(applyJob).toContain("environment: production");
-    expect(workflow).not.toContain("production-infrastructure");
+    expect(applyJob).toContain("needs: terraform-plan");
+    expect(applyJob).toContain("needs.terraform-plan.outputs.has_changes == 'true'");
+    expect(applyJob).toContain("environment: production-infrastructure");
     expect(applyJob).toContain("Download approved Terraform plan");
     expect(applyJob).toContain("terraform apply production.tfplan");
-    expect(applyJob.indexOf("Terraform apply approved plan")).toBeLessThan(
-      applyJob.indexOf("Read Terraform deployment outputs"),
-    );
+    expect(deployJob).toContain("terraform-apply");
+    expect(deployJob).toContain("needs.terraform-apply.result == 'skipped'");
+    expect(deployJob).not.toContain("terraform apply production.tfplan");
+  });
+
+  it.each([
+    [0, 0, "has_changes=false\n"],
+    [2, 0, "has_changes=true\n"],
+    [42, 42, ""],
+  ])("maps Terraform plan exit code %i to the expected result", (planStatus, status, output) => {
+    expect(terraformPlanScript).toBeDefined();
+    const root = mkdtempSync(join(tmpdir(), "terraform-plan-"));
+    const terraform = join(root, "terraform");
+    const githubOutput = join(root, "github-output");
+    writeFileSync(terraform, '#!/usr/bin/env bash\n: > production.tfplan\nexit "$MOCK_STATUS"\n');
+    writeFileSync(githubOutput, "");
+    chmodSync(terraform, 0o755);
+
+    try {
+      const result = spawnSync("bash", ["-c", terraformPlanScript], {
+        cwd: root,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          GITHUB_OUTPUT: githubOutput,
+          MOCK_STATUS: String(planStatus),
+          PATH: `${root}:${process.env.PATH}`,
+        },
+      });
+      expect(result.status).toBe(status);
+      expect(readFileSync(githubOutput, "utf8")).toBe(output);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("maps all runtime identities from Terraform rather than GitHub variables", () => {
