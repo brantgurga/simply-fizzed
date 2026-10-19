@@ -229,6 +229,14 @@ describe("administrator bootstrap contracts", () => {
       expect(commands).not.toContain("firebase.googleapis.com");
       expect(commands).not.toContain("workload-identity-pools create");
       expect(commands).toContain("gcloud iam roles update terraformFirestoreAdmin");
+      expect(commands).toContain("]) || api.getAttribute(");
+      const roleLists = [...commands.matchAll(/hasOnly\(\[([^\]]*)\]\)/gu)];
+      expect(roleLists.length).toBeGreaterThan(0);
+      for (const roleList of roleLists) {
+        const roles = roleList[1] ?? "";
+        expect(roles).not.toBe("");
+        expect(roles.split(",").length).toBeLessThanOrEqual(10);
+      }
     } finally {
       rmSync(mock.root, { recursive: true, force: true });
     }
