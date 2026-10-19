@@ -22,6 +22,24 @@ const bootstrapArguments = [
   "--folder",
   "987654321",
 ];
+const expectedManagedRoles = [
+  "projects/valid-project/roles/terraformFirestoreAdmin",
+  "roles/cloudfunctions.admin",
+  "roles/datastore.indexAdmin",
+  "roles/datastore.user",
+  "roles/datastore.viewer",
+  "roles/eventarc.eventReceiver",
+  "roles/firebaseauth.editor",
+  "roles/firebaseauth.viewer",
+  "roles/firebasehosting.admin",
+  "roles/firebaserules.admin",
+  "roles/iam.serviceAccountAdmin",
+  "roles/iam.serviceAccountUser",
+  "roles/run.invoker",
+  "roles/serviceusage.apiKeysViewer",
+  "roles/serviceusage.serviceUsageAdmin",
+  "roles/serviceusage.serviceUsageConsumer",
+];
 
 const runtimeAccounts = {
   GET_MY_AUTHORIZATION_SERVICE_ACCOUNT: "get-my-authorization",
@@ -229,6 +247,21 @@ describe("administrator bootstrap contracts", () => {
       expect(commands).not.toContain("firebase.googleapis.com");
       expect(commands).not.toContain("workload-identity-pools create");
       expect(commands).toContain("gcloud iam roles update terraformFirestoreAdmin");
+      const iamAdminBindings = commands
+        .split("\n")
+        .filter((command) => command.includes("--role=roles/resourcemanager.projectIamAdmin"));
+      expect(iamAdminBindings).toHaveLength(2);
+      for (const command of iamAdminBindings) {
+        expect(command).toContain("]) || api.getAttribute(");
+        const roleLists = [...command.matchAll(/hasOnly\(\[([^\]]*)\]\)/gu)];
+        const managedRoles = roleLists.flatMap((roleList) =>
+          [...(roleList[1] ?? "").matchAll(/'([^']+)'/gu)].map((match) => match[1]),
+        );
+        expect(managedRoles).toEqual(expectedManagedRoles);
+        for (const roleList of roleLists) {
+          expect([...(roleList[1] ?? "").matchAll(/'[^']+'/gu)].length).toBeLessThanOrEqual(10);
+        }
+      }
     } finally {
       rmSync(mock.root, { recursive: true, force: true });
     }

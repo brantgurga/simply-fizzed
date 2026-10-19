@@ -261,10 +261,18 @@ readonly -a terraform_managed_project_roles=(
   roles/serviceusage.serviceUsageAdmin
   roles/serviceusage.serviceUsageConsumer
 )
-printf -v managed_roles "'%s'," "${terraform_managed_project_roles[@]}"
-managed_roles="${managed_roles%,}"
-readonly managed_roles
-readonly iam_condition="api.getAttribute('iam.googleapis.com/modifiedGrantsByRole', []).hasOnly([$managed_roles])"
+# IAM conditions allow at most 10 constants in each hasOnly() list. Terraform's
+# additive IAM resources change one role per request, so matching any chunk
+# preserves least privilege while supporting the complete managed role set.
+iam_condition=""
+for ((role_offset = 0; role_offset < ${#terraform_managed_project_roles[@]}; role_offset += 10)); do
+  managed_role_chunk=("${terraform_managed_project_roles[@]:role_offset:10}")
+  printf -v managed_roles "'%s'," "${managed_role_chunk[@]}"
+  managed_roles="${managed_roles%,}"
+  [[ -z "$iam_condition" ]] || iam_condition+=" || "
+  iam_condition+="api.getAttribute('iam.googleapis.com/modifiedGrantsByRole', []).hasOnly([$managed_roles])"
+done
+readonly iam_condition
 unconditional_project_iam_admin=$(
   gcloud projects get-iam-policy "$project_id" \
     --flatten="bindings[].members" \
