@@ -28,6 +28,8 @@ concurrency:
 
 env:
   HUSKY: 0
+  PROJECT_ID: simply-fizzed-prod
+  TF_IN_AUTOMATION: true
   # Fail delivery when a dependency install script has not been explicitly reviewed.
   NPM_CONFIG_STRICT_ALLOW_SCRIPTS: true
 
@@ -106,6 +108,8 @@ jobs:
             firebase.json
             firestore.indexes.json
             firestore.rules
+            infra/**/*.tf
+            infra/environments/production/.terraform.lock.hcl
             scripts/firebase-deploy.sh
             functions/lib/
             functions/src/
@@ -115,12 +119,74 @@ jobs:
             package.json
             package-lock.json
           if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+
+  terraform-plan:
+    name: Plan production infrastructure
+    needs: build-staging
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - name: Download production artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: firebase-hosting
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: github-deployer@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.16.6
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: infra/environments/production
+        run: >-
+          terraform init -input=false
+          -backend-config="bucket=${PROJECT_ID}-terraform-state"
+          -backend-config="prefix=production"
+
+      - name: Terraform plan
+        working-directory: infra/environments/production
+        env:
+          TF_VAR_project_id: ${{ env.PROJECT_ID }}
+          TF_VAR_import_existing_production_resources: true
+        run: terraform plan -input=false -out=production.tfplan
+
+      - name: Publish Terraform plan for approval
+        working-directory: infra/environments/production
+        run: |
+          {
+            echo "## Terraform production plan"
+            echo '```'
+            terraform show -no-color production.tfplan
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save Terraform plan
+        uses: actions/upload-artifact@v7
+        with:
+          name: terraform-production-plan
+          path: infra/environments/production/production.tfplan
+          if-no-files-found: error
           retention-days: 30
 
   deploy-staging:
-    name: Deploy staging channel
-    needs: build-staging
+    name: Apply infrastructure and deploy staging channel
+    needs: [build-staging, terraform-plan]
     runs-on: ubuntu-latest
+    # Configure this environment with a required reviewer. The plan job finishes
+    # and publishes its summary before this protected apply job can start.
     environment: production
     permissions:
       actions: read
@@ -141,23 +207,46 @@ jobs:
           npm ci
           npm --prefix functions ci
 
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: github-deployer@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.16.6
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: infra/environments/production
+        run: >-
+          terraform init -input=false
+          -backend-config="bucket=${PROJECT_ID}-terraform-state"
+          -backend-config="prefix=production"
+
+      - name: Download approved Terraform plan
+        uses: actions/download-artifact@v8
+        with:
+          name: terraform-production-plan
+          path: infra/environments/production
+
+      - name: Terraform apply approved plan
+        working-directory: infra/environments/production
+        run: terraform apply production.tfplan
+
+      - name: Read Terraform deployment outputs
+        working-directory: infra/environments/production
+        run: >-
+          terraform output -json function_service_accounts
+          > "$RUNNER_TEMP/function-service-accounts.json"
+
       - name: Validate Functions deployment configuration
         env:
           OPERATOR_UIDS_JSON: ${{ vars.FIREBASE_OPERATOR_UIDS_JSON }}
           ENFORCE_APP_CHECK: ${{ vars.FIREBASE_ENFORCE_FUNCTIONS_APP_CHECK }}
-          GET_MY_AUTHORIZATION_SERVICE_ACCOUNT: ${{ vars.FIREBASE_GET_MY_AUTHORIZATION_SERVICE_ACCOUNT }}
-          SEARCH_USERS_SERVICE_ACCOUNT: ${{ vars.FIREBASE_SEARCH_USERS_SERVICE_ACCOUNT }}
-          REVEAL_USER_EMAIL_SERVICE_ACCOUNT: ${{ vars.FIREBASE_REVEAL_USER_EMAIL_SERVICE_ACCOUNT }}
-          SAVE_MY_PROFILE_SERVICE_ACCOUNT: ${{ vars.FIREBASE_SAVE_MY_PROFILE_SERVICE_ACCOUNT }}
-          APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT: ${{ vars.FIREBASE_APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT }}
-          GET_USER_AUDIT_HISTORY_SERVICE_ACCOUNT: ${{ vars.FIREBASE_GET_USER_AUDIT_HISTORY_SERVICE_ACCOUNT }}
-          RECORD_ACCOUNT_CREATION_SERVICE_ACCOUNT: ${{ vars.FIREBASE_RECORD_ACCOUNT_CREATION_SERVICE_ACCOUNT }}
-          REPORT_REVIEW_SERVICE_ACCOUNT: ${{ vars.FIREBASE_REPORT_REVIEW_SERVICE_ACCOUNT }}
-          MODERATE_REVIEW_SERVICE_ACCOUNT: ${{ vars.FIREBASE_MODERATE_REVIEW_SERVICE_ACCOUNT }}
-          LOAD_REVIEW_MODERATION_QUEUE_SERVICE_ACCOUNT: >-
-            ${{ vars.FIREBASE_LOAD_REVIEW_MODERATION_QUEUE_SERVICE_ACCOUNT }}
-          PROCESS_REVIEW_REVISION_SERVICE_ACCOUNT: ${{ vars.FIREBASE_PROCESS_REVIEW_REVISION_SERVICE_ACCOUNT }}
-          PROCESS_REVIEW_RATING_SERVICE_ACCOUNT: ${{ vars.FIREBASE_PROCESS_REVIEW_RATING_SERVICE_ACCOUNT }}
         run: |
           node --input-type=module <<'NODE'
           import fs from "node:fs";
@@ -188,24 +277,35 @@ jobs:
             console.error("::error::FIREBASE_ENFORCE_FUNCTIONS_APP_CHECK must be true or false");
             process.exit(1);
           }
-          const serviceAccounts = [
-            ["GET_MY_AUTHORIZATION_SERVICE_ACCOUNT", process.env.GET_MY_AUTHORIZATION_SERVICE_ACCOUNT],
-            ["SEARCH_USERS_SERVICE_ACCOUNT", process.env.SEARCH_USERS_SERVICE_ACCOUNT],
-            ["REVEAL_USER_EMAIL_SERVICE_ACCOUNT", process.env.REVEAL_USER_EMAIL_SERVICE_ACCOUNT],
-            ["SAVE_MY_PROFILE_SERVICE_ACCOUNT", process.env.SAVE_MY_PROFILE_SERVICE_ACCOUNT],
-            ["APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT", process.env.APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT],
-            ["GET_USER_AUDIT_HISTORY_SERVICE_ACCOUNT", process.env.GET_USER_AUDIT_HISTORY_SERVICE_ACCOUNT],
-            ["RECORD_ACCOUNT_CREATION_SERVICE_ACCOUNT", process.env.RECORD_ACCOUNT_CREATION_SERVICE_ACCOUNT],
-            ["REPORT_REVIEW_SERVICE_ACCOUNT", process.env.REPORT_REVIEW_SERVICE_ACCOUNT],
-            ["MODERATE_REVIEW_SERVICE_ACCOUNT", process.env.MODERATE_REVIEW_SERVICE_ACCOUNT],
-            ["LOAD_REVIEW_MODERATION_QUEUE_SERVICE_ACCOUNT", process.env.LOAD_REVIEW_MODERATION_QUEUE_SERVICE_ACCOUNT],
-            ["PROCESS_REVIEW_REVISION_SERVICE_ACCOUNT", process.env.PROCESS_REVIEW_REVISION_SERVICE_ACCOUNT],
-            ["PROCESS_REVIEW_RATING_SERVICE_ACCOUNT", process.env.PROCESS_REVIEW_RATING_SERVICE_ACCOUNT],
+          const expectedParameters = [
+            "GET_MY_AUTHORIZATION_SERVICE_ACCOUNT",
+            "SEARCH_USERS_SERVICE_ACCOUNT",
+            "REVEAL_USER_EMAIL_SERVICE_ACCOUNT",
+            "SAVE_MY_PROFILE_SERVICE_ACCOUNT",
+            "APPLY_USER_MANAGEMENT_SERVICE_ACCOUNT",
+            "GET_USER_AUDIT_HISTORY_SERVICE_ACCOUNT",
+            "RECORD_ACCOUNT_CREATION_SERVICE_ACCOUNT",
+            "REPORT_REVIEW_SERVICE_ACCOUNT",
+            "MODERATE_REVIEW_SERVICE_ACCOUNT",
+            "LOAD_REVIEW_MODERATION_QUEUE_SERVICE_ACCOUNT",
+            "PROCESS_REVIEW_REVISION_SERVICE_ACCOUNT",
+            "PROCESS_REVIEW_RATING_SERVICE_ACCOUNT",
           ];
-          const serviceAccountPattern = /^[^@\s]+@simply-fizzed-prod\.iam\.gserviceaccount\.com$/;
-          for (const [name, value = ""] of serviceAccounts) {
-            if (!serviceAccountPattern.test(value)) {
-              console.error(`::error::Set FIREBASE_${name} for simply-fizzed-prod`);
+          const projectId = process.env.PROJECT_ID ?? "";
+          if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(projectId)) {
+            console.error("::error::PROJECT_ID is not a valid Google Cloud project ID");
+            process.exit(1);
+          }
+          const outputPath = `${process.env.RUNNER_TEMP}/function-service-accounts.json`;
+          const outputs = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+          const escapedProject = projectId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const serviceAccountPattern = new RegExp(
+            `^[^@\\s]+@${escapedProject}\\.iam\\.gserviceaccount\\.com$`,
+          );
+          const serviceAccounts = expectedParameters.map((name) => [name, outputs[name]]);
+          for (const [name, value] of serviceAccounts) {
+            if (typeof value !== "string" || !serviceAccountPattern.test(value)) {
+              console.error(`::error::Terraform output ${name} is not valid for ${projectId}`);
               process.exit(1);
             }
           }
@@ -214,7 +314,7 @@ jobs:
             process.exit(1);
           }
           fs.writeFileSync(
-            "functions/.env.simply-fizzed-prod",
+            `functions/.env.${projectId}`,
             `OPERATOR_UIDS_JSON=${JSON.stringify(raw)}\n` +
               `ENFORCE_APP_CHECK=${enforceAppCheck}\n` +
               serviceAccounts
@@ -224,15 +324,8 @@ jobs:
           );
           NODE
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v3
-        with:
-          project_id: simply-fizzed-prod
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: github-deployer@simply-fizzed-prod.iam.gserviceaccount.com
-
       - name: Deploy Functions, Firestore rules, and indexes
-        run: bash scripts/firebase-deploy.sh
+        run: bash scripts/firebase-deploy.sh "$PROJECT_ID"
 
       - name: Deploy staging channel
         id: deploy
@@ -242,7 +335,7 @@ jobs:
           set -euo pipefail
           output="$RUNNER_TEMP/firebase-hosting-staging.json"
           npx --no-install firebase hosting:channel:deploy "$CHANNEL_ID" \
-            --project simply-fizzed-prod \
+            --project "$PROJECT_ID" \
             --expires 30d \
             --non-interactive \
             --json | tee "$output"
@@ -311,14 +404,14 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
         with:
-          project_id: simply-fizzed-prod
+          project_id: ${{ env.PROJECT_ID }}
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: github-deployer@simply-fizzed-prod.iam.gserviceaccount.com
+          service_account: github-deployer@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
 
       - name: Deploy live channel
         run: >-
           npx --no-install firebase deploy --only hosting
-          --project simply-fizzed-prod --non-interactive
+          --project "$PROJECT_ID" --non-interactive
 
       - name: Summarize production deployment
         env:

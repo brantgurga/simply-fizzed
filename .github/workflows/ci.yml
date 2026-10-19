@@ -45,6 +45,17 @@ jobs:
           npm ci
           npm --prefix functions ci
 
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.16.6
+
+      - name: Validate Terraform
+        run: |
+          terraform fmt -check -recursive infra
+          terraform -chdir=infra/environments/production init -backend=false -input=false
+          terraform -chdir=infra/environments/production validate
+
       - name: Type-check
         run: npm run typecheck
 

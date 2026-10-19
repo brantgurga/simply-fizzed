@@ -241,7 +241,8 @@ assets.
 
 ### Firestore edition
 
-Create the production database in **Firestore Native mode, Standard edition**.
+The bootstrap script creates the production database in **Firestore Native mode,
+Standard edition** in `us-central1` when it does not already exist.
 The current roadmap needs client SDK access, offline and real-time support,
 security rules, indexed document queries, and modest geospatial lookups—all Core
 operations supported by Standard. Enterprise's Pipeline operations, optional
@@ -272,6 +273,69 @@ from `VITE_FIREBASE_*` environment variables and exports shared Auth and
 Firestore instances. A `demo-` project automatically connects both services to
 the local emulators; other project ids use real Firebase with no manual flag.
 See [Environment variables](#environment-variables) for configuration details.
+
+### Terraform infrastructure
+
+Terraform owns the public Google APIs, twelve deterministic Functions runtime service
+accounts, their behavior-specific IAM memberships, and the deployment identity's
+project/runtime access. The Firebase CLI continues to own Functions, Hosting releases,
+Firestore rules, and Firestore indexes. Google- and Firebase-managed service agents stay
+outside both configurations. IAM changes use additive member resources so managed or
+administrator-created policy members are not overwritten. The bootstrap conditions the
+deployer's project-IAM permission so it can change only the roles declared by this
+module, rather than grant itself arbitrary project access.
+
+A project administrator needs authenticated `gcloud` and Firebase CLIs plus `jq`, and
+must accept the Firebase terms. Bootstrap a new or existing project with:
+
+```sh
+bash scripts/bootstrap-firebase-project.sh PROJECT_ID \
+  --workload-identity-provider \
+    projects/IDENTITY_PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL/providers/PROVIDER \
+  --folder FOLDER_ID \
+  --billing-account 000000-000000-000000
+```
+
+Omit `--billing-account` when the project is already linked or billing is not yet
+required. Use at most one of `--folder` or `--organization` to place a newly created
+project; neither changes an existing project's parent. The provider must already exist
+in the dedicated identity-federation project and map `attribute.repository_id`; its own
+condition should restrict `refs/heads/main` and this delivery workflow.
+
+The idempotent script initializes Firebase, creates the hardened
+`${PROJECT_ID}-terraform-state` bucket and keyless deployer, and binds repository ID
+`1320193089` through the supplied pool. It enables only the APIs needed to run Terraform;
+Terraform creates the Standard `(default)` Firestore database in `us-central1` and owns
+application API enablement. Put the supplied provider resource name in the
+`GCP_WORKLOAD_IDENTITY_PROVIDER` repository variable. No service-account key is created
+or needed.
+
+The production root is [`infra/environments/production`](./infra/environments/production)
+and requires an explicit `project_id`. Its configuration-driven imports adopt the
+pre-existing Firestore database and twelve production accounts by deterministic ID when
+`import_existing_production_resources` is true; it defaults to false so a newly
+bootstrapped project creates them. The imports intentionally live only in that root; a
+future environment should call the reusable
+[`infra/modules/firebase`](./infra/modules/firebase) module without copying
+`imports.tf`. For the existing production migration, initialize remote state, enable the
+imports, save and review a plan, then apply that exact file:
+
+```sh
+terraform -chdir=infra/environments/production init \
+  -backend-config="bucket=PROJECT_ID-terraform-state" \
+  -backend-config="prefix=production"
+TF_VAR_project_id=PROJECT_ID \
+TF_VAR_import_existing_production_resources=true \
+  terraform -chdir=infra/environments/production plan -out=production.tfplan
+terraform -chdir=infra/environments/production show production.tfplan
+terraform -chdir=infra/environments/production apply production.tfplan
+```
+
+Confirm the import plan adopts the database and every account without replacement before applying. Local
+operators should use Application Default Credentials or service-account impersonation,
+never downloaded keys. Remote state is durable in GCS; state and plan files are ignored
+locally, may contain infrastructure metadata, and must not be committed. After migration,
+an unchanged plan should report no infrastructure changes.
 
 ### App Check
 
@@ -359,18 +423,12 @@ integration suites run with Mocha independently of the PWA's Vitest configuratio
 Its standalone oxlint configuration enforces type-aware promise handling, including
 explicit async/await flow, and CI runs both syntax and type-aware Functions linting.
 
-Before the first hosted Functions deployment, confirm Blaze billing, required Cloud
-Functions/Run/Build and Artifact Registry APIs, and deployment-service-account
-permissions. Set `FIREBASE_OPERATOR_UIDS_JSON` plus one distinct runtime identity for
-all twelve Functions using the `FIREBASE_*_SERVICE_ACCOUNT` variables validated in the
-hosting workflow. This includes separate identities for profile writes, user-management
-writes, audit-history reads, account-creation auditing, and each review operation. Configure
-these as `production` environment variables. Leave the optional `FIREBASE_ENFORCE_FUNCTIONS_APP_CHECK`
-environment variable unset or `false` for the observe-first rollout described above.
-The delivery workflow validates these values
-before writing the Functions environment file. Grant each Function's identity only the
-Firebase Auth and Firestore operations that callable needs; do not grant broad project
-ownership to any runtime or deployment identity.
+Before the first hosted Functions deployment, bootstrap the project, confirm Blaze
+billing, and review the initial Terraform import plan. Configure
+`FIREBASE_OPERATOR_UIDS_JSON` in the `production` environment. Leave the
+optional `FIREBASE_ENFORCE_FUNCTIONS_APP_CHECK` variable unset or `false` there for the observe-first
+rollout described above. Terraform outputs supply all twelve distinct runtime identities;
+no GitHub variable duplicates those account addresses.
 
 When enabling retries for a background Function, add its export name to
 `retry_bootstrap_functions` in `scripts/firebase-deploy.sh` in the same change.
@@ -396,7 +454,11 @@ declared in [`src/vite-env.d.ts`](./src/vite-env.d.ts):
 ### Firebase Hosting delivery
 
 After CI passes on `main`, [the delivery workflow](./.github/workflows/firebase-hosting.yml)
-builds with the production Firebase configuration and deploys the exact artifact
+builds with the production Firebase configuration and includes the tested Terraform
+source in the exact artifact. The deployment job authenticates first, initializes the
+production GCS backend, saves and applies one Terraform plan, maps the
+`function_service_accounts` output into the Functions environment file, and only then
+runs Firebase. A Terraform failure blocks every dependent Firebase deployment. It deploys
 to the fixed `staging` preview channel. Redeploying refreshes the channel's 30-day
 expiration while preserving its URL. Tests remain on the committed demo
 configuration and explicit `demo-simply-fizzed` emulator project.
@@ -430,19 +492,18 @@ scripts run in a separate job without OIDC access. Configure `VITE_FIREBASE_API_
 `GCP_WORKLOAD_IDENTITY_PROVIDER` as a repository
 variable (the provider's full resource name).
 
-The dedicated `github-deployer@simply-fizzed-prod.iam.gserviceaccount.com`
-service account needs Firebase Hosting Admin and Firebase Rules Admin, plus the
-validated least-privilege Gen 2 Functions deployment permissions and permission to
-act as the configured Functions runtime identities. Browser sign-in does not require
-Auth administration on the deployment identity. Restrict the provider to repository ID
-`1320193089`, `refs/heads/main`, and this workflow, then grant only that identity
-`roles/iam.workloadIdentityUser`.
+The bootstrap establishes the initial minimum grants for
+`github-deployer@simply-fizzed-prod.iam.gserviceaccount.com`; Terraform then reconciles
+the same additive project memberships and grants `serviceAccountUser` on its twelve
+runtime identities plus the legacy App Engine identity checked by Firebase CLI. Browser
+sign-in does not require Auth administration on the deployment identity.
 
-Functions, rules, and indexes deploy together before the staging Hosting channel, so
-that backend deployment affects the shared production Firebase project immediately.
-Validate billing, APIs, runtime IAM, Operator UIDs, App Check registration, and the
-Functions service account before merging a change that enables this step; the workflow
-does not create or broaden cloud IAM automatically.
+Terraform planning runs in a separate job, publishes the readable plan in the job
+summary, and saves that exact plan as an artifact. Configure the
+`production` GitHub environment with a required reviewer; only its
+approved job can apply the saved plan and continue to the shared backend and staging
+Hosting deployment. Validate billing, Operator UIDs, and App Check registration before
+approving the plan.
 
 ### Firestore data model
 

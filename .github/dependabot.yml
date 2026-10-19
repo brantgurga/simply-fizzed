@@ -5,9 +5,9 @@
 # Dependabot version updates.
 # Docs: https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference
 #
-# Two ecosystems cover this repo: npm (package.json + package-lock.json) and the
-# GitHub Actions used by the CI workflow. Updates are grouped to keep PR volume
-# low, and commit prefixes follow the repo's Conventional Commits style.
+# npm, GitHub Actions, and Terraform providers are updated here. Updates are
+# grouped to keep PR volume low, and commit prefixes follow the repo's
+# Conventional Commits style.
 version: 2
 updates:
   # npm dependencies (package.json / package-lock.json) in the repo root.
@@ -32,6 +32,19 @@ updates:
         update-types:
           - minor
           - patch
+
+  # Terraform providers used by the production root module.
+  - package-ecosystem: terraform
+    directory: "/infra/environments/production"
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: build
+      include: scope
+    labels:
+      - dependencies
+      - terraform
 
   # GitHub Actions used in .github/workflows. "directory: /" is correct here;
   # Dependabot always scans .github/workflows regardless of this value.

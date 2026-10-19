@@ -5,7 +5,11 @@
 
 set -euo pipefail
 
-readonly project="simply-fizzed-prod"
+if [[ $# -ne 1 || ! ${1:-} =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]]; then
+  echo "Usage: scripts/firebase-deploy.sh PROJECT_ID" >&2
+  exit 2
+fi
+readonly project_id=$1
 readonly full_targets="functions,firestore:rules,firestore:indexes"
 readonly retry_policy_error="Pass the --force option to deploy functions with a failure policy"
 # Add a Function export here in the same change that first enables its retry policy.
@@ -19,7 +23,7 @@ deploy_log=$(mktemp "${RUNNER_TEMP:-/tmp}/firebase-deploy.XXXXXX.log")
 trap 'rm -f "$deploy_log"' EXIT
 
 deploy() {
-  npx --no-install firebase deploy --project "$project" --non-interactive "$@"
+  npx --no-install firebase deploy --project "$project_id" --non-interactive "$@"
 }
 
 if deploy --only "$full_targets" 2>&1 | tee "$deploy_log"; then

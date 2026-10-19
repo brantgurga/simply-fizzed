@@ -20,6 +20,8 @@ describe("license policy", () => {
     expect(noticeStyle("firestore.rules")).toBe("line");
     expect(noticeStyle("index.html")).toBe("xml");
     expect(noticeStyle(".github/workflows/ci.yml")).toBe("hash");
+    expect(noticeStyle("infra/modules/firebase/main.tf")).toBe("hash");
+    expect(noticeStyle("scripts/firebase-deploy.sh")).toBe("hash");
     expect(noticeStyle("public/favicon.svg")).toBe("xml");
   });
 
