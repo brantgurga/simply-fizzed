@@ -164,32 +164,28 @@ resource "google_project_service" "required" {
 }
 
 resource "google_firestore_database" "default" {
-  project                 = var.project_id
+  project                 = google_project_service.required["firestore.googleapis.com"].project
   name                    = "(default)"
   location_id             = "us-central1"
   type                    = "FIRESTORE_NATIVE"
   database_edition        = "STANDARD"
   delete_protection_state = "DELETE_PROTECTION_ENABLED"
   deletion_policy         = "ABANDON"
-
-  depends_on = [google_project_service.required["firestore.googleapis.com"]]
 }
 
 resource "google_service_account" "runtime" {
   for_each = local.runtime_accounts
 
-  project      = var.project_id
+  project      = google_project_service.required["iam.googleapis.com"].project
   account_id   = each.value.account_id
   display_name = each.value.display_name
   description  = each.value.description
-
-  depends_on = [google_project_service.required]
 }
 
 resource "google_project_iam_member" "runtime" {
   for_each = local.runtime_role_memberships
 
-  project = var.project_id
+  project = google_project_service.required["cloudresourcemanager.googleapis.com"].project
   role    = each.value.role
   member  = "serviceAccount:${google_service_account.runtime[each.value.parameter].email}"
 }
@@ -197,11 +193,9 @@ resource "google_project_iam_member" "runtime" {
 resource "google_project_iam_member" "deployment" {
   for_each = local.deployment_roles
 
-  project = var.project_id
+  project = google_project_service.required["cloudresourcemanager.googleapis.com"].project
   role    = each.value
   member  = "serviceAccount:${var.deployment_service_account_email}"
-
-  depends_on = [google_project_service.required]
 }
 
 resource "google_service_account_iam_member" "deployment_can_use_runtime" {
@@ -215,7 +209,7 @@ resource "google_service_account_iam_member" "deployment_can_use_runtime" {
 # Firebase CLI checks this legacy default identity before every Functions deploy.
 # Keep the project-level grant constrained to that single service account.
 resource "google_project_iam_member" "deployment_can_use_app_engine_default" {
-  project = var.project_id
+  project = google_project_service.required["cloudresourcemanager.googleapis.com"].project
   role    = "roles/iam.serviceAccountUser"
   member  = "serviceAccount:${var.deployment_service_account_email}"
 

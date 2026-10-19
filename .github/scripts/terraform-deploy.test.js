@@ -72,6 +72,19 @@ describe("Terraform infrastructure contracts", () => {
     expect(moduleMain).toContain('delete_protection_state = "DELETE_PROTECTION_ENABLED"');
   });
 
+  it("uses implicit API dependencies instead of explicit graph edges", () => {
+    expect(moduleMain).not.toContain("depends_on");
+    expect(moduleMain).toContain(
+      'project                 = google_project_service.required["firestore.googleapis.com"].project',
+    );
+    expect(moduleMain).toContain(
+      'project      = google_project_service.required["iam.googleapis.com"].project',
+    );
+    expect(moduleMain).toContain(
+      'project = google_project_service.required["cloudresourcemanager.googleapis.com"].project',
+    );
+  });
+
   it("keeps each parameter paired with its exact runtime identity", () => {
     for (const [parameter, accountId] of Object.entries(runtimeAccounts)) {
       const accountBlock = new RegExp(
