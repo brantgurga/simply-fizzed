@@ -12,8 +12,8 @@ variable "project_id" {
   }
 }
 
-variable "import_existing_runtime_service_accounts" {
-  description = "Adopt the twelve runtime identities from the existing production deployment."
+variable "import_existing_production_resources" {
+  description = "Adopt the Firestore database and twelve runtime identities from production."
   type        = bool
   default     = false
 }

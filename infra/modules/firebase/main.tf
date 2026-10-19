@@ -143,6 +143,7 @@ locals {
   # The bootstrap grants project IAM administration with a condition that limits
   # policy changes to this exact set and the runtime roles above.
   deployment_roles = toset([
+    "projects/${var.project_id}/roles/terraformFirestoreAdmin",
     "roles/cloudfunctions.admin",
     "roles/datastore.indexAdmin",
     "roles/firebasehosting.admin",
@@ -160,6 +161,18 @@ resource "google_project_service" "required" {
   project            = var.project_id
   service            = each.value
   disable_on_destroy = false
+}
+
+resource "google_firestore_database" "default" {
+  project                 = var.project_id
+  name                    = "(default)"
+  location_id             = "us-central1"
+  type                    = "FIRESTORE_NATIVE"
+  database_edition        = "STANDARD"
+  delete_protection_state = "DELETE_PROTECTION_ENABLED"
+  deletion_policy         = "ABANDON"
+
+  depends_on = [google_project_service.required["firestore.googleapis.com"]]
 }
 
 resource "google_service_account" "runtime" {

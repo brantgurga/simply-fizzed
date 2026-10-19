@@ -290,23 +290,30 @@ must accept the Firebase terms. Bootstrap a new or existing project with:
 
 ```sh
 bash scripts/bootstrap-firebase-project.sh PROJECT_ID \
+  --workload-identity-provider \
+    projects/IDENTITY_PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL/providers/PROVIDER \
+  --folder FOLDER_ID \
   --billing-account 000000-000000-000000
 ```
 
 Omit `--billing-account` when the project is already linked or billing is not yet
-required. The idempotent script creates or selects the project, initializes Firebase
-and its Standard `(default)` Firestore database in `us-central1`, creates the
-`${PROJECT_ID}-terraform-state` bucket with versioning, public-access
-prevention, and uniform bucket-level access, and creates the keyless GitHub deployer and
-Workload Identity Federation provider. Federation admits only repository ID
-`1320193089`, `refs/heads/main`, and this delivery workflow. Put the printed provider
-resource name in the `GCP_WORKLOAD_IDENTITY_PROVIDER` repository variable. No service
-account key is created or needed.
+required. Use at most one of `--folder` or `--organization` to place a newly created
+project; neither changes an existing project's parent. The provider must already exist
+in the dedicated identity-federation project and map `attribute.repository_id`; its own
+condition should restrict `refs/heads/main` and this delivery workflow.
+
+The idempotent script initializes Firebase, creates the hardened
+`${PROJECT_ID}-terraform-state` bucket and keyless deployer, and binds repository ID
+`1320193089` through the supplied pool. It enables only the APIs needed to run Terraform;
+Terraform creates the Standard `(default)` Firestore database in `us-central1` and owns
+application API enablement. Put the supplied provider resource name in the
+`GCP_WORKLOAD_IDENTITY_PROVIDER` repository variable. No service-account key is created
+or needed.
 
 The production root is [`infra/environments/production`](./infra/environments/production)
-and requires an explicit `project_id`. Its configuration-driven imports adopt the twelve
-pre-existing production accounts by deterministic ID only when
-`import_existing_runtime_service_accounts` is true; it defaults to false so a newly
+and requires an explicit `project_id`. Its configuration-driven imports adopt the
+pre-existing Firestore database and twelve production accounts by deterministic ID when
+`import_existing_production_resources` is true; it defaults to false so a newly
 bootstrapped project creates them. The imports intentionally live only in that root; a
 future environment should call the reusable
 [`infra/modules/firebase`](./infra/modules/firebase) module without copying
@@ -318,13 +325,13 @@ terraform -chdir=infra/environments/production init \
   -backend-config="bucket=PROJECT_ID-terraform-state" \
   -backend-config="prefix=production"
 TF_VAR_project_id=PROJECT_ID \
-TF_VAR_import_existing_runtime_service_accounts=true \
+TF_VAR_import_existing_production_resources=true \
   terraform -chdir=infra/environments/production plan -out=production.tfplan
 terraform -chdir=infra/environments/production show production.tfplan
 terraform -chdir=infra/environments/production apply production.tfplan
 ```
 
-Confirm the import plan adopts every account without replacement before applying. Local
+Confirm the import plan adopts the database and every account without replacement before applying. Local
 operators should use Application Default Credentials or service-account impersonation,
 never downloaded keys. Remote state is durable in GCS; state and plan files are ignored
 locally, may contain infrastructure metadata, and must not be committed. After migration,

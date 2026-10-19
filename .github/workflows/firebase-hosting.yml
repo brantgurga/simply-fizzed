@@ -161,7 +161,7 @@ jobs:
         working-directory: infra/environments/production
         env:
           TF_VAR_project_id: ${{ env.PROJECT_ID }}
-          TF_VAR_import_existing_runtime_service_accounts: true
+          TF_VAR_import_existing_production_resources: true
         run: terraform plan -input=false -out=production.tfplan
 
       - name: Publish Terraform plan for approval

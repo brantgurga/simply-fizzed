@@ -14,6 +14,14 @@ const workflow = read(".github/workflows/firebase-hosting.yml");
 const moduleMain = read("infra/modules/firebase/main.tf");
 const productionImports = read("infra/environments/production/imports.tf");
 const bootstrapScript = resolve("scripts/bootstrap-firebase-project.sh");
+const bootstrapArguments = [
+  bootstrapScript,
+  "valid-project",
+  "--workload-identity-provider",
+  "projects/123456789/locations/global/workloadIdentityPools/existing-pool/providers/github",
+  "--folder",
+  "987654321",
+];
 
 const runtimeAccounts = {
   GET_MY_AUTHORIZATION_SERVICE_ACCOUNT: "get-my-authorization",
@@ -60,6 +68,8 @@ describe("Terraform infrastructure contracts", () => {
     expect(moduleMain).not.toMatch(/display_name\s*=\s*"[^"]* Function"/u);
     expect(moduleMain).not.toContain('"roles/resourcemanager.projectIamAdmin",');
     expect(moduleMain).toContain("firebase-functions-default-service-account");
+    expect(moduleMain).toContain('resource "google_firestore_database" "default"');
+    expect(moduleMain).toContain('delete_protection_state = "DELETE_PROTECTION_ENABLED"');
   });
 
   it("keeps each parameter paired with its exact runtime identity", () => {
@@ -71,7 +81,9 @@ describe("Terraform infrastructure contracts", () => {
       expect(moduleMain).toMatch(accountBlock);
       expect(productionImports).toMatch(new RegExp(`${parameter}\\s*=\\s*"${accountId}"`, "u"));
     }
-    expect(productionImports).toContain("var.import_existing_runtime_service_accounts ?");
+    expect(productionImports).toContain("var.import_existing_production_resources ?");
+    expect(productionImports).toContain("module.firebase.google_firestore_database.default");
+    expect(productionImports).toContain('id = "projects/${each.value}/databases/(default)"');
     expect(moduleMain).not.toContain("import {");
   });
 });
@@ -130,18 +142,12 @@ if [[ "$tool" == firebase ]]; then
 fi
 args="$*"
 case "$args" in
-  *"--format=value(projectNumber)"*) echo 123456789; exit ;;
-  *"--format=value(name)"*) echo projects/123456789/locations/global/workloadIdentityPools/github/providers/simply-fizzed; exit ;;
   "projects describe "*) [[ -f "$MOCK_STATE/project" ]]; exit ;;
   "projects create "*) touch "$MOCK_STATE/project" ;;
-  "firestore databases describe "*) [[ -f "$MOCK_STATE/firestore" ]]; exit ;;
-  "firestore databases create "*) touch "$MOCK_STATE/firestore" ;;
   "storage buckets describe "*) [[ -f "$MOCK_STATE/bucket" ]]; exit ;;
   "storage buckets create "*) touch "$MOCK_STATE/bucket" ;;
-  "iam workload-identity-pools providers describe "*) [[ -f "$MOCK_STATE/provider" ]]; exit ;;
-  "iam workload-identity-pools providers create-oidc "*) touch "$MOCK_STATE/provider" ;;
-  "iam workload-identity-pools describe "*) [[ -f "$MOCK_STATE/pool" ]]; exit ;;
-  "iam workload-identity-pools create "*) touch "$MOCK_STATE/pool" ;;
+  "iam roles describe "*) [[ -f "$MOCK_STATE/database-role" ]]; exit ;;
+  "iam roles create "*) touch "$MOCK_STATE/database-role" ;;
   "iam service-accounts describe "*) [[ -f "$MOCK_STATE/deployer" ]]; exit ;;
   "iam service-accounts create "*) touch "$MOCK_STATE/deployer" ;;
 esac
@@ -177,11 +183,11 @@ describe("administrator bootstrap contracts", () => {
   it("creates prerequisites once and safely reconciles a repeated run", () => {
     const mock = createMockCloudTools();
     try {
-      const first = spawnSync("bash", [bootstrapScript, "valid-project"], {
+      const first = spawnSync("bash", bootstrapArguments, {
         encoding: "utf8",
         env: mock.env,
       });
-      const second = spawnSync("bash", [bootstrapScript, "valid-project"], {
+      const second = spawnSync("bash", bootstrapArguments, {
         encoding: "utf8",
         env: mock.env,
       });
@@ -190,16 +196,21 @@ describe("administrator bootstrap contracts", () => {
       const commands = readFileSync(mock.log, "utf8");
       for (const creation of [
         "gcloud projects create",
-        "gcloud firestore databases create",
         "gcloud storage buckets create",
-        "gcloud iam workload-identity-pools create",
-        "gcloud iam workload-identity-pools providers create-oidc",
+        "gcloud iam roles create",
         "gcloud iam service-accounts create",
         "firebase projects:addfirebase",
       ]) {
         expect(commands.split(creation)).toHaveLength(2);
       }
-      expect(commands).toContain("providers update-oidc");
+      expect(commands).toContain(
+        "gcloud projects create valid-project --name=valid-project --folder=987654321",
+      );
+      expect(commands).not.toContain("gcloud config set project");
+      expect(commands).not.toContain("firestore.googleapis.com");
+      expect(commands).not.toContain("firebase.googleapis.com");
+      expect(commands).not.toContain("workload-identity-pools create");
+      expect(commands).toContain("gcloud iam roles update terraformFirestoreAdmin");
     } finally {
       rmSync(mock.root, { recursive: true, force: true });
     }
@@ -208,7 +219,7 @@ describe("administrator bootstrap contracts", () => {
   it("stops immediately when a cloud command fails", () => {
     const mock = createMockCloudTools();
     try {
-      const result = spawnSync("bash", [bootstrapScript, "valid-project"], {
+      const result = spawnSync("bash", bootstrapArguments, {
         encoding: "utf8",
         env: { ...mock.env, MOCK_FAIL: "gcloud services enable" },
       });
@@ -219,15 +230,15 @@ describe("administrator bootstrap contracts", () => {
     }
   });
 
-  it("hardens remote state, IAM policy changes, and repository federation", () => {
+  it("hardens state and consumes dedicated-project federation without keys", () => {
     expect(bootstrap).toContain("--versioning");
     expect(bootstrap).toContain("--public-access-prevention");
     expect(bootstrap).toContain("--uniform-bucket-level-access");
     expect(bootstrap).toContain("modifiedGrantsByRole");
     expect(bootstrap).toContain("terraform-managed-roles");
-    expect(bootstrap).toContain('repository_id == "1320193089"');
-    expect(bootstrap).toContain('ref == "refs/heads/main"');
-    expect(bootstrap).toContain(".github/workflows/firebase-hosting.yml@refs/heads/main");
+    expect(bootstrap).toContain("--workload-identity-provider");
+    expect(bootstrap).toContain("principalSet://iam.googleapis.com/projects/");
+    expect(bootstrap).not.toContain("workload-identity-pools create");
     expect(bootstrap).not.toMatch(/keys\s+create|service-account-key|credentials\.json/iu);
   });
 });

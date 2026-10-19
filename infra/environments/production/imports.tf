@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See LICENSE for copying terms.
 
-# These imports adopt only the twelve identities that predate Terraform in the
-# existing production project. Future environment roots must not copy this file.
+# These imports adopt resources that predate Terraform in the existing
+# production project. Future environment roots must not copy this file.
 locals {
   production_runtime_account_ids = {
     GET_MY_AUTHORIZATION_SERVICE_ACCOUNT         = "get-my-authorization"
@@ -22,8 +22,15 @@ locals {
 }
 
 import {
-  for_each = var.import_existing_runtime_service_accounts ? local.production_runtime_account_ids : {}
+  for_each = var.import_existing_production_resources ? local.production_runtime_account_ids : {}
 
   to = module.firebase.google_service_account.runtime[each.key]
   id = "projects/${var.project_id}/serviceAccounts/${each.value}@${var.project_id}.iam.gserviceaccount.com"
+}
+
+import {
+  for_each = var.import_existing_production_resources ? { default = var.project_id } : {}
+
+  to = module.firebase.google_firestore_database.default
+  id = "projects/${each.value}/databases/(default)"
 }

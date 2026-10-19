@@ -10,9 +10,12 @@ usage() {
 Usage: scripts/bootstrap-firebase-project.sh PROJECT_ID [options]
 
 Options:
-  --billing-account BILLING_ACCOUNT_ID  Link billing when supplied.
-  --state-location LOCATION             State bucket location (default: US).
-  -h, --help                            Show this help.
+  --workload-identity-provider RESOURCE  Existing provider resource name (required).
+  --billing-account BILLING_ACCOUNT_ID   Link billing when supplied.
+  --organization ORGANIZATION_ID         Create a new project under this organization.
+  --folder FOLDER_ID                     Create a new project under this folder.
+  --state-location LOCATION              State bucket location (default: US).
+  -h, --help                             Show this help.
 USAGE
 }
 
@@ -23,15 +26,42 @@ USAGE
 
 project_id=""
 billing_account=""
+organization_id=""
+folder_id=""
 state_location="US"
+workload_identity_provider=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --workload-identity-provider)
+      [[ $# -ge 2 && -n "$2" ]] || {
+        echo "--workload-identity-provider requires a value" >&2
+        exit 2
+      }
+      workload_identity_provider=$2
+      shift 2
+      ;;
     --billing-account)
       [[ $# -ge 2 && -n "$2" ]] || {
         echo "--billing-account requires a value" >&2
         exit 2
       }
       billing_account=$2
+      shift 2
+      ;;
+    --organization)
+      [[ $# -ge 2 && -n "$2" ]] || {
+        echo "--organization requires a value" >&2
+        exit 2
+      }
+      organization_id=$2
+      shift 2
+      ;;
+    --folder)
+      [[ $# -ge 2 && -n "$2" ]] || {
+        echo "--folder requires a value" >&2
+        exit 2
+      }
+      folder_id=$2
       shift 2
       ;;
     --state-location)
@@ -74,6 +104,25 @@ done
   echo "Billing account must have the form 000000-000000-000000" >&2
   exit 2
 }
+[[ -z "$organization_id" || "$organization_id" =~ ^[0-9]+$ ]] || {
+  echo "Organization ID must contain only digits" >&2
+  exit 2
+}
+[[ -z "$folder_id" || "$folder_id" =~ ^[0-9]+$ ]] || {
+  echo "Folder ID must contain only digits" >&2
+  exit 2
+}
+[[ -z "$organization_id" || -z "$folder_id" ]] || {
+  echo "Use only one of --organization or --folder" >&2
+  exit 2
+}
+if [[ "$workload_identity_provider" =~ ^projects/([0-9]+)/locations/global/workloadIdentityPools/([^/]+)/providers/([^/]+)$ ]]; then
+  identity_project_number=${BASH_REMATCH[1]}
+  workload_identity_pool=${BASH_REMATCH[2]}
+else
+  echo "--workload-identity-provider must be a full global provider resource name" >&2
+  exit 2
+fi
 
 for command in firebase gcloud jq; do
   command -v "$command" >/dev/null 2>&1 || {
@@ -82,17 +131,23 @@ for command in firebase gcloud jq; do
   }
 done
 
-readonly project_id billing_account state_location
+readonly project_id billing_account organization_id folder_id state_location
+readonly workload_identity_provider identity_project_number workload_identity_pool
 readonly state_bucket="${project_id}-terraform-state"
 readonly deployer_email="github-deployer@${project_id}.iam.gserviceaccount.com"
-readonly pool_id="github"
-readonly provider_id="simply-fizzed"
+readonly database_role_id="terraformFirestoreAdmin"
+readonly database_role="projects/${project_id}/roles/${database_role_id}"
 readonly repository_id="1320193089"
 
 if ! gcloud projects describe "$project_id" --format="value(projectId)" >/dev/null 2>&1; then
-  gcloud projects create "$project_id" --name="$project_id"
+  project_create_args=(--name="$project_id")
+  if [[ -n "$organization_id" ]]; then
+    project_create_args+=(--organization="$organization_id")
+  elif [[ -n "$folder_id" ]]; then
+    project_create_args+=(--folder="$folder_id")
+  fi
+  gcloud projects create "$project_id" "${project_create_args[@]}"
 fi
-gcloud config set project "$project_id" >/dev/null
 
 if [[ -n "$billing_account" ]]; then
   current_billing=$(
@@ -103,13 +158,13 @@ if [[ -n "$billing_account" ]]; then
   fi
 fi
 
+# Enable only the APIs needed to create Terraform's backend and deployment
+# identity. Terraform owns all application API enablement.
 gcloud services enable \
-  firebase.googleapis.com \
-  firestore.googleapis.com \
+  cloudresourcemanager.googleapis.com \
   iam.googleapis.com \
   iamcredentials.googleapis.com \
   serviceusage.googleapis.com \
-  sts.googleapis.com \
   storage.googleapis.com \
   --project="$project_id"
 
@@ -117,16 +172,6 @@ if ! firebase projects:list --json --non-interactive |
   jq -e --arg project_id "$project_id" '.result[]? | select(.projectId == $project_id)' \
     >/dev/null; then
   firebase projects:addfirebase "$project_id" --non-interactive
-fi
-
-if ! gcloud firestore databases describe --database="(default)" \
-  --project="$project_id" >/dev/null 2>&1; then
-  gcloud firestore databases create \
-    --database="(default)" \
-    --edition=standard \
-    --location=us-central1 \
-    --project="$project_id" \
-    --type=firestore-native
 fi
 
 if ! gcloud storage buckets describe "gs://$state_bucket" >/dev/null 2>&1; then
@@ -142,35 +187,6 @@ gcloud storage buckets update "gs://$state_bucket" \
   --uniform-bucket-level-access \
   --versioning
 
-if ! gcloud iam workload-identity-pools describe "$pool_id" \
-  --project="$project_id" --location=global >/dev/null 2>&1; then
-  gcloud iam workload-identity-pools create "$pool_id" \
-    --project="$project_id" \
-    --location=global \
-    --display-name="GitHub Actions"
-fi
-
-attribute_mapping="google.subject=assertion.sub,attribute.repository_id=assertion.repository_id,attribute.ref=assertion.ref,attribute.workflow_ref=assertion.workflow_ref"
-attribute_condition='assertion.repository_id == "1320193089" && assertion.ref == "refs/heads/main" && assertion.workflow_ref == "brantgurga/simply-fizzed/.github/workflows/firebase-hosting.yml@refs/heads/main"'
-provider_common=(
-  --project="$project_id"
-  --location=global
-  --workload-identity-pool="$pool_id"
-  --issuer-uri="https://token.actions.githubusercontent.com"
-  --attribute-mapping="$attribute_mapping"
-  --attribute-condition="$attribute_condition"
-)
-if gcloud iam workload-identity-pools providers describe "$provider_id" \
-  --project="$project_id" --location=global --workload-identity-pool="$pool_id" \
-  >/dev/null 2>&1; then
-  gcloud iam workload-identity-pools providers update-oidc "$provider_id" \
-    "${provider_common[@]}"
-else
-  gcloud iam workload-identity-pools providers create-oidc "$provider_id" \
-    --display-name="Simply Fizzed CD" \
-    "${provider_common[@]}"
-fi
-
 if ! gcloud iam service-accounts describe "$deployer_email" \
   --project="$project_id" >/dev/null 2>&1; then
   gcloud iam service-accounts create github-deployer \
@@ -179,7 +195,33 @@ if ! gcloud iam service-accounts describe "$deployer_email" \
     --description="Keyless identity for the repository Firebase and Terraform workflow."
 fi
 
+readonly -a database_role_permissions=(
+  datastore.databases.create
+  datastore.databases.getMetadata
+  datastore.databases.update
+  datastore.locations.get
+  datastore.locations.list
+  datastore.operations.get
+)
+printf -v database_permissions "%s," "${database_role_permissions[@]}"
+database_permissions="${database_permissions%,}"
+readonly database_permissions
+if gcloud iam roles describe "$database_role_id" --project="$project_id" >/dev/null 2>&1; then
+  gcloud iam roles update "$database_role_id" \
+    --project="$project_id" \
+    --permissions="$database_permissions" \
+    --stage=GA
+else
+  gcloud iam roles create "$database_role_id" \
+    --project="$project_id" \
+    --title="Terraform Firestore database administrator" \
+    --description="Create and configure Firestore databases without entity access." \
+    --permissions="$database_permissions" \
+    --stage=GA
+fi
+
 readonly -a deployment_roles=(
+  "$database_role"
   roles/cloudfunctions.admin
   roles/datastore.indexAdmin
   roles/firebasehosting.admin
@@ -201,6 +243,7 @@ done
 # not be able to grant arbitrary roles. modifiedGrantsByRole restricts every
 # policy mutation to roles owned by this module and excludes projectIamAdmin.
 readonly -a terraform_managed_project_roles=(
+  "$database_role"
   roles/cloudfunctions.admin
   roles/datastore.indexAdmin
   roles/datastore.user
@@ -238,9 +281,7 @@ gcloud storage buckets add-iam-policy-binding "gs://$state_bucket" \
   --condition=None \
   --quiet >/dev/null
 
-project_number=$(gcloud projects describe "$project_id" --format="value(projectNumber)")
-readonly project_number
-readonly github_principal="principalSet://iam.googleapis.com/projects/${project_number}/locations/global/workloadIdentityPools/${pool_id}/attribute.repository_id/${repository_id}"
+readonly github_principal="principalSet://iam.googleapis.com/projects/${identity_project_number}/locations/global/workloadIdentityPools/${workload_identity_pool}/attribute.repository_id/${repository_id}"
 gcloud iam service-accounts add-iam-policy-binding "$deployer_email" \
   --project="$project_id" \
   --member="$github_principal" \
@@ -248,15 +289,10 @@ gcloud iam service-accounts add-iam-policy-binding "$deployer_email" \
   --condition=None \
   --quiet >/dev/null
 
-provider_name=$(gcloud iam workload-identity-pools providers describe "$provider_id" \
-  --project="$project_id" \
-  --location=global \
-  --workload-identity-pool="$pool_id" \
-  --format="value(name)")
 cat <<SUMMARY
 Bootstrap complete.
 Project: $project_id
 Terraform state bucket: gs://$state_bucket
 Deployment service account: $deployer_email
-GCP_WORKLOAD_IDENTITY_PROVIDER: $provider_name
+GCP_WORKLOAD_IDENTITY_PROVIDER: $workload_identity_provider
 SUMMARY
