@@ -150,7 +150,7 @@ set -euo pipefail
 tool=$(basename "$0")
 echo "$tool $*" >>"$MOCK_LOG"
 if [[ -n "\${MOCK_FAIL:-}" && "$tool $*" == *"$MOCK_FAIL"* ]]; then exit 42; fi
-if [[ "$tool" == jq ]]; then [[ -f "$MOCK_STATE/firebase" ]]; exit; fi
+if [[ "$tool" == jq ]]; then cat >/dev/null; [[ -f "$MOCK_STATE/firebase" ]]; exit; fi
 if [[ "$tool" == firebase ]]; then
   if [[ "$1" == projects:list ]]; then echo '{}'; else touch "$MOCK_STATE/firebase"; fi
   exit
@@ -216,7 +216,10 @@ describe("administrator bootstrap contracts", () => {
         "gcloud iam service-accounts create",
         "firebase projects:addfirebase",
       ]) {
-        expect(commands.split(creation)).toHaveLength(2);
+        const matchingCommands = commands
+          .split("\n")
+          .filter((command) => command.startsWith(creation));
+        expect(matchingCommands, `${creation}\n${commands}`).toHaveLength(1);
       }
       expect(commands).toContain(
         "gcloud projects create valid-project --name=valid-project --folder=987654321",
