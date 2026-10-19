@@ -425,7 +425,7 @@ explicit async/await flow, and CI runs both syntax and type-aware Functions lint
 
 Before the first hosted Functions deployment, bootstrap the project, confirm Blaze
 billing, and review the initial Terraform import plan. Configure
-`FIREBASE_OPERATOR_UIDS_JSON` in the `production-infrastructure` environment. Leave the
+`FIREBASE_OPERATOR_UIDS_JSON` in the `production` environment. Leave the
 optional `FIREBASE_ENFORCE_FUNCTIONS_APP_CHECK` variable unset or `false` there for the observe-first
 rollout described above. Terraform outputs supply all twelve distinct runtime identities;
 no GitHub variable duplicates those account addresses.
@@ -500,7 +500,7 @@ sign-in does not require Auth administration on the deployment identity.
 
 Terraform planning runs in a separate job, publishes the readable plan in the job
 summary, and saves that exact plan as an artifact. Configure the
-`production-infrastructure` GitHub environment with a required reviewer; only its
+`production` GitHub environment with a required reviewer; only its
 approved job can apply the saved plan and continue to the shared backend and staging
 Hosting deployment. Validate billing, Operator UIDs, and App Check registration before
 approving the plan.

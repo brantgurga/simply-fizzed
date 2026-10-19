@@ -126,7 +126,6 @@ jobs:
     name: Plan production infrastructure
     needs: build-staging
     runs-on: ubuntu-latest
-    environment: production
     permissions:
       actions: read
       contents: read
@@ -188,7 +187,7 @@ jobs:
     runs-on: ubuntu-latest
     # Configure this environment with a required reviewer. The plan job finishes
     # and publishes its summary before this protected apply job can start.
-    environment: production-infrastructure
+    environment: production
     permissions:
       actions: read
       id-token: write
