@@ -11,11 +11,13 @@ import { describe, expect, it } from "vitest";
 /** @param {string} path */
 const read = (path) => readFileSync(path, "utf8");
 const workflow = read(".github/workflows/firebase-hosting.yml");
-const terraformPlanScript = workflow
-  .match(
-    /      - name: Terraform plan\n[\s\S]*?        run: \|\n(?<script>(?:          .*\n)+)\n      - name: Publish Terraform plan/u,
-  )
-  ?.groups?.script.replace(/^ {10}/gmu, "");
+const terraformPlanMatch = workflow.match(
+  /      - name: Terraform plan\n[\s\S]*?        run: \|\n(?<script>(?:          .*\n)+)\n      - name: Publish Terraform plan/u,
+);
+if (!terraformPlanMatch?.groups?.["script"]) {
+  throw new Error("The Terraform plan script is missing from the delivery workflow.");
+}
+const terraformPlanScript = terraformPlanMatch.groups["script"].replace(/^ {10}/gmu, "");
 const moduleMain = read("infra/modules/firebase/main.tf");
 const productionImports = read("infra/environments/production/imports.tf");
 const bootstrapScript = resolve("scripts/bootstrap-firebase-project.sh");
@@ -158,7 +160,6 @@ describe("Terraform Firebase delivery contracts", () => {
     [2, 0, "has_changes=true\n"],
     [42, 42, ""],
   ])("maps Terraform plan exit code %i to the expected result", (planStatus, status, output) => {
-    expect(terraformPlanScript).toBeDefined();
     const root = mkdtempSync(join(tmpdir(), "terraform-plan-"));
     const terraform = join(root, "terraform");
     const githubOutput = join(root, "github-output");
@@ -174,7 +175,7 @@ describe("Terraform Firebase delivery contracts", () => {
           ...process.env,
           GITHUB_OUTPUT: githubOutput,
           MOCK_STATUS: String(planStatus),
-          PATH: `${root}:${process.env.PATH}`,
+          PATH: `${root}:${process.env["PATH"]}`,
         },
       });
       expect(result.status).toBe(status);
