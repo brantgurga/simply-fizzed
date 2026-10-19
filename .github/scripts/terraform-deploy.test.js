@@ -216,15 +216,20 @@ describe("administrator bootstrap contracts", () => {
     }
   });
 
-  it("stops immediately when a cloud command fails", () => {
+  it.each([
+    ["gcloud services enable", "firebase projects:list"],
+    ["gcloud projects add-iam-policy-binding", "gcloud storage buckets add-iam-policy-binding"],
+  ])("reports %s failures and stops immediately", (failedCommand, skippedCommand) => {
     const mock = createMockCloudTools();
     try {
       const result = spawnSync("bash", bootstrapArguments, {
         encoding: "utf8",
-        env: { ...mock.env, MOCK_FAIL: "gcloud services enable" },
+        env: { ...mock.env, MOCK_FAIL: failedCommand },
       });
       expect(result.status).toBe(42);
-      expect(readFileSync(mock.log, "utf8")).not.toContain("firebase projects:list");
+      expect(result.stderr).toContain("Bootstrap failed at line");
+      expect(result.stderr).toContain("(exit 42)");
+      expect(readFileSync(mock.log, "utf8")).not.toContain(skippedCommand);
     } finally {
       rmSync(mock.root, { recursive: true, force: true });
     }
@@ -234,6 +239,8 @@ describe("administrator bootstrap contracts", () => {
     expect(bootstrap).toContain("--versioning");
     expect(bootstrap).toContain("--public-access-prevention");
     expect(bootstrap).toContain("--uniform-bucket-level-access");
+    expect(bootstrap).toContain("roles/storage.objectUser");
+    expect(bootstrap).not.toContain("roles/storage.objectAdmin");
     expect(bootstrap).toContain("modifiedGrantsByRole");
     expect(bootstrap).toContain("terraform-managed-roles");
     expect(bootstrap).toContain("--workload-identity-provider");

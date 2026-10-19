@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See LICENSE for copying terms.
 
-set -euo pipefail
+set -Eeuo pipefail
+trap 'status=$?; echo "Bootstrap failed at line $LINENO: $BASH_COMMAND (exit $status)" >&2; exit "$status"' ERR
 
 usage() {
   cat >&2 <<'USAGE'
@@ -264,11 +265,20 @@ printf -v managed_roles "'%s'," "${terraform_managed_project_roles[@]}"
 managed_roles="${managed_roles%,}"
 readonly managed_roles
 readonly iam_condition="api.getAttribute('iam.googleapis.com/modifiedGrantsByRole', []).hasOnly([$managed_roles])"
-gcloud projects remove-iam-policy-binding "$project_id" \
-  --member="serviceAccount:$deployer_email" \
-  --role="roles/resourcemanager.projectIamAdmin" \
-  --condition=None \
-  --quiet >/dev/null 2>&1 || true
+unconditional_project_iam_admin=$(
+  gcloud projects get-iam-policy "$project_id" \
+    --flatten="bindings[].members" \
+    --filter="bindings.role=roles/resourcemanager.projectIamAdmin AND bindings.members=serviceAccount:$deployer_email AND -bindings.condition:*" \
+    --format="value(bindings.role)"
+)
+readonly unconditional_project_iam_admin
+if [[ -n "$unconditional_project_iam_admin" ]]; then
+  gcloud projects remove-iam-policy-binding "$project_id" \
+    --member="serviceAccount:$deployer_email" \
+    --role="roles/resourcemanager.projectIamAdmin" \
+    --condition=None \
+    --quiet >/dev/null
+fi
 gcloud projects add-iam-policy-binding "$project_id" \
   --member="serviceAccount:$deployer_email" \
   --role="roles/resourcemanager.projectIamAdmin" \
@@ -277,7 +287,7 @@ gcloud projects add-iam-policy-binding "$project_id" \
 
 gcloud storage buckets add-iam-policy-binding "gs://$state_bucket" \
   --member="serviceAccount:$deployer_email" \
-  --role="roles/storage.objectAdmin" \
+  --role="roles/storage.objectUser" \
   --condition=None \
   --quiet >/dev/null
 
