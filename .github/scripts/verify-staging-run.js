@@ -8,6 +8,7 @@
  * @typedef {ReturnType<typeof import("@actions/github").getOctokit>} GitHub
  * @typedef {typeof import("@actions/github").context} Context
  * @typedef {{ setFailed: (message: string | Error) => void }} Core
+ * @typedef {Awaited<ReturnType<GitHub["rest"]["actions"]["listJobsForWorkflowRun"]>>["data"]["jobs"]} WorkflowJobs
  */
 
 /**
@@ -28,27 +29,72 @@ export default async function verifyStagingRun({ github, context, core }) {
     repo: context.repo.repo,
     run_id: runId,
   });
+  const expectedRepository = `${context.repo.owner}/${context.repo.repo}`;
+  const isStagingWorkflow =
+    (run.name === "Firebase Hosting CD" && run.event === "workflow_run") ||
+    (run.name === "Terraform Apply" && run.event === "workflow_dispatch");
   const approved =
-    run.name === "Firebase Hosting CD" &&
-    run.event === "workflow_run" &&
+    isStagingWorkflow &&
     run.head_branch === "main" &&
+    run.head_repository?.full_name === expectedRepository &&
     run.conclusion === "success";
   if (!approved) {
-    core.setFailed("Choose a successful main-branch Firebase Hosting CD staging run.");
+    core.setFailed("Choose a successful main-branch staging deployment run.");
     return undefined;
   }
 
-  const { data: latest } = await github.rest.actions.listWorkflowRuns({
+  /** @type {Map<number, WorkflowJobs>} */
+  const jobsByRun = new Map();
+  /** @param {number} candidateRunId */
+  const hasSuccessfulStagingDeployment = async (candidateRunId) => {
+    let jobs = jobsByRun.get(candidateRunId);
+    if (!jobs) {
+      const response = await github.rest.actions.listJobsForWorkflowRun({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        run_id: candidateRunId,
+        per_page: 100,
+      });
+      jobs = response.data.jobs;
+      jobsByRun.set(candidateRunId, jobs);
+    }
+    return jobs.some(
+      (job) =>
+        (job.name === "Deploy staging channel" || job.name.endsWith(" / Deploy staging channel")) &&
+        job.conclusion === "success",
+    );
+  };
+  if (!(await hasSuccessfulStagingDeployment(runId))) {
+    core.setFailed("The selected run did not successfully deploy the staging channel.");
+    return undefined;
+  }
+
+  const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
     owner: context.repo.owner,
     repo: context.repo.repo,
-    workflow_id: run.workflow_id,
     branch: "main",
-    event: "workflow_run",
     status: "success",
-    per_page: 1,
+    per_page: 100,
   });
-  if (latest.workflow_runs[0]?.id !== runId) {
-    core.setFailed("Only the latest successful staging run can be promoted.");
+  /**
+   * @param {typeof runs} candidates
+   * @param {number} index
+   * @returns {Promise<number | undefined>}
+   */
+  const findLatestStagingRun = async (candidates, index = 0) => {
+    const candidate = candidates[index];
+    if (!candidate) return undefined;
+    const candidateIsStagingWorkflow =
+      (candidate.name === "Firebase Hosting CD" && candidate.event === "workflow_run") ||
+      (candidate.name === "Terraform Apply" && candidate.event === "workflow_dispatch");
+    if (candidateIsStagingWorkflow && (await hasSuccessfulStagingDeployment(candidate.id))) {
+      return candidate.id;
+    }
+    return findLatestStagingRun(candidates, index + 1);
+  };
+  const latestStagingRunId = await findLatestStagingRun(runs);
+  if (latestStagingRunId !== runId) {
+    core.setFailed("Only the latest successful staging deployment can be promoted.");
     return undefined;
   }
 

@@ -1,0 +1,26 @@
+# Copyright (C) 2026 Brant Langer Gurganus
+# SPDX-License-Identifier: AGPL-3.0-only
+# See LICENSE for copying terms.
+
+name: Terraform Apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      terraform_plan_run_id:
+        description: Firebase Hosting CD run ID containing the approved Terraform plan
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+jobs:
+  apply-and-deploy-staging:
+    name: Apply plan and deploy staging
+    uses: ./.github/workflows/firebase-hosting.yml
+    with:
+      artifact_run_id: ${{ inputs.terraform_plan_run_id }}
+      apply_terraform: true

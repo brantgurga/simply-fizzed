@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 /** @param {string} path */
 const read = (path) => readFileSync(path, "utf8");
 const workflow = read(".github/workflows/firebase-hosting.yml");
+const terraformApplyWorkflow = read(".github/workflows/terraform-apply.yml");
 const terraformPlanMatch = workflow.match(
   /      - name: Terraform plan\n[\s\S]*?        run: \|\n(?<script>(?:          .*\n)+)\n      - name: Publish Terraform plan/u,
 );
@@ -127,33 +128,46 @@ describe("Terraform infrastructure contracts", () => {
 });
 
 describe("Terraform Firebase delivery contracts", () => {
-  it("requires approval to apply a changed plan and skips approval for a no-op", () => {
+  it("publishes changed plans for an explicit run-ID approval", () => {
     const planStart = workflow.indexOf("  terraform-plan:");
-    const applyStart = workflow.indexOf("  terraform-apply:");
+    const verifyStart = workflow.indexOf("  verify-terraform-plan:");
     const deployStart = workflow.indexOf("  deploy-staging:");
-    const planJob = workflow.slice(planStart, applyStart);
-    const applyJob = workflow.slice(applyStart, deployStart);
+    const planJob = workflow.slice(planStart, verifyStart);
     const deployJob = workflow.slice(deployStart, workflow.indexOf("  promote-production:"));
 
     expect(planStart).toBeGreaterThan(0);
-    expect(applyStart).toBeGreaterThan(planStart);
-    expect(deployStart).toBeGreaterThan(applyStart);
-    expect(planJob).toContain("outputs:");
+    expect(verifyStart).toBeGreaterThan(planStart);
+    expect(deployStart).toBeGreaterThan(verifyStart);
     expect(planJob).toContain("terraform plan -input=false -detailed-exitcode");
-    expect(planJob).toContain("has_changes");
     expect(planJob).toContain("Publish Terraform plan for approval");
     expect(planJob).toContain("terraform show -no-color production.tfplan");
+    expect(planJob).toContain("Run ID to approve for Terraform apply: $GITHUB_RUN_ID");
     expect(planJob).toContain("name: terraform-production-plan");
+    expect(planJob).toContain("if: ${{ steps.plan.outputs.has_changes == 'true' }}");
     expect(planJob).not.toMatch(/\n\s+environment:/u);
-    expect(applyJob).toContain("needs: terraform-plan");
-    expect(applyJob).toContain("needs.terraform-plan.outputs.has_changes == 'true'");
-    expect(applyJob).toContain("environment: production");
+    expect(deployJob).toContain("needs.terraform-plan.outputs.has_changes == 'false'");
+  });
+
+  it("applies an approved saved plan before deploying its staging artifact", () => {
+    expect(terraformApplyWorkflow).toContain("workflow_dispatch:");
+    expect(terraformApplyWorkflow).toContain("terraform_plan_run_id:");
+    expect(terraformApplyWorkflow).toContain("required: true");
+    expect(terraformApplyWorkflow).toContain("uses: ./.github/workflows/firebase-hosting.yml");
+    expect(terraformApplyWorkflow).toContain("apply_terraform: true");
+    expect(terraformApplyWorkflow).toContain(
+      "artifact_run_id: ${{ inputs.terraform_plan_run_id }}",
+    );
+
+    expect(workflow).toContain("workflow_call:");
+    expect(workflow).toContain("verify-terraform-plan-run.js");
+    expect(workflow).toContain("environment: production");
+    expect(workflow).toContain("Download approved Terraform plan");
+    expect(workflow).toContain("terraform apply production.tfplan");
+    expect(workflow.indexOf("terraform apply production.tfplan")).toBeLessThan(
+      workflow.indexOf("Read Terraform deployment outputs"),
+    );
     expect(workflow).not.toContain("production-infrastructure");
-    expect(applyJob).toContain("Download approved Terraform plan");
-    expect(applyJob).toContain("terraform apply production.tfplan");
-    expect(deployJob).toContain("terraform-apply");
-    expect(deployJob).toContain("needs.terraform-apply.result == 'skipped'");
-    expect(deployJob).not.toContain("terraform apply production.tfplan");
+    expect(workflow).toContain("inputs.staging_run_id != ''");
   });
 
   it.each([
