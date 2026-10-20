@@ -15,6 +15,16 @@ on:
         description: Successful staging workflow run ID to promote
         required: true
         type: string
+  workflow_call:
+    inputs:
+      artifact_run_id:
+        description: Approved Terraform plan workflow run ID
+        required: true
+        type: string
+      apply_terraform:
+        description: Apply the saved Terraform plan before staging deployment
+        required: true
+        type: boolean
 
 permissions:
   actions: read
@@ -177,15 +187,23 @@ jobs:
 
       - name: Publish Terraform plan for approval
         working-directory: infra/environments/production
+        env:
+          HAS_CHANGES: ${{ steps.plan.outputs.has_changes }}
         run: |
           {
             echo "## Terraform production plan"
             echo '```'
             terraform show -no-color production.tfplan
             echo '```'
+            if [[ "$HAS_CHANGES" == "true" ]]; then
+              echo "- Run ID to approve for Terraform apply: $GITHUB_RUN_ID"
+            else
+              echo "- No infrastructure changes require approval."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Save Terraform plan
+        if: ${{ steps.plan.outputs.has_changes == 'true' }}
         uses: actions/upload-artifact@v7
         with:
           name: terraform-production-plan
@@ -193,10 +211,33 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  verify-terraform-plan:
+    name: Verify approved Terraform plan
+    if: ${{ inputs.apply_terraform }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout approval verifier
+        uses: actions/checkout@v7
+
+      - name: Verify Terraform plan run
+        uses: actions/github-script@v9
+        env:
+          TERRAFORM_PLAN_RUN_ID: ${{ inputs.artifact_run_id }}
+        with:
+          result-encoding: string
+          script: |
+            const { default: verifyTerraformPlanRun } = await import(
+              `${process.env.GITHUB_WORKSPACE}/.github/scripts/verify-terraform-plan-run.js`
+            );
+            return verifyTerraformPlanRun({ github, context, core });
+
   terraform-apply:
     name: Apply approved infrastructure plan
-    needs: terraform-plan
-    if: ${{ needs.terraform-plan.outputs.has_changes == 'true' }}
+    needs: verify-terraform-plan
+    if: ${{ inputs.apply_terraform }}
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -207,6 +248,17 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: firebase-hosting
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.artifact_run_id }}
+
+      - name: Save approved production artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: firebase-hosting
+          path: .
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
@@ -233,6 +285,8 @@ jobs:
         with:
           name: terraform-production-plan
           path: infra/environments/production
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.artifact_run_id }}
 
       - name: Terraform apply approved plan
         working-directory: infra/environments/production
@@ -240,14 +294,17 @@ jobs:
 
   deploy-staging:
     name: Deploy staging channel
-    needs: [build-staging, terraform-plan, terraform-apply]
+    needs: [build-staging, terraform-plan, verify-terraform-plan, terraform-apply]
     if: >-
       ${{
         always() &&
-        needs.build-staging.result == 'success' &&
-        needs.terraform-plan.result == 'success' &&
-        (needs.terraform-apply.result == 'success' ||
-          needs.terraform-apply.result == 'skipped')
+        ((github.event_name == 'workflow_run' &&
+          needs.build-staging.result == 'success' &&
+          needs.terraform-plan.result == 'success' &&
+          needs.terraform-plan.outputs.has_changes == 'false') ||
+        (inputs.apply_terraform &&
+          needs.verify-terraform-plan.result == 'success' &&
+          needs.terraform-apply.result == 'success'))
       }}
     runs-on: ubuntu-latest
     environment: production
@@ -264,6 +321,8 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: firebase-hosting
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.artifact_run_id || github.run_id }}
 
       - name: Install deployment dependencies
         run: |
@@ -415,7 +474,11 @@ jobs:
 
   promote-production:
     name: Promote approved staging artifact
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' &&
+        inputs.staging_run_id != ''
+      }}
     runs-on: ubuntu-latest
     environment: production
     permissions:
