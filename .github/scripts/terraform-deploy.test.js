@@ -147,7 +147,8 @@ describe("Terraform Firebase delivery contracts", () => {
     expect(planJob).not.toMatch(/\n\s+environment:/u);
     expect(applyJob).toContain("needs: terraform-plan");
     expect(applyJob).toContain("needs.terraform-plan.outputs.has_changes == 'true'");
-    expect(applyJob).toContain("environment: production-infrastructure");
+    expect(applyJob).toContain("environment: production");
+    expect(workflow).not.toContain("production-infrastructure");
     expect(applyJob).toContain("Download approved Terraform plan");
     expect(applyJob).toContain("terraform apply production.tfplan");
     expect(deployJob).toContain("terraform-apply");

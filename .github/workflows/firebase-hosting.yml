@@ -198,7 +198,7 @@ jobs:
     needs: terraform-plan
     if: ${{ needs.terraform-plan.outputs.has_changes == 'true' }}
     runs-on: ubuntu-latest
-    environment: production-infrastructure
+    environment: production
     permissions:
       actions: read
       id-token: write
