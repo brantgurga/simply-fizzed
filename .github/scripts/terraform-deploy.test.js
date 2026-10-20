@@ -162,6 +162,7 @@ describe("Terraform Firebase delivery contracts", () => {
     expect(workflow).toContain("verify-terraform-plan-run.js");
     expect(workflow).toContain("environment: production");
     expect(workflow).toContain("Download approved Terraform plan");
+    expect(workflow).toContain("Save approved production artifact");
     expect(workflow).toContain("terraform apply production.tfplan");
     expect(workflow.indexOf("terraform apply production.tfplan")).toBeLessThan(
       workflow.indexOf("Read Terraform deployment outputs"),
