@@ -18,27 +18,31 @@ const installAssets = [
 // https://vite.dev/config/
 export default defineConfig({
   build: {
-    // Firestore is the largest intentionally isolated dependency. The service
-    // worker precaches every chunk, so retain a warning for unexpected growth
-    // without flagging the SDK's current 552 kB minified bundle.
+    // The service worker precaches every chunk. Keep startup-only dependencies
+    // separate from Firebase services that load through the App import.
     chunkSizeWarningLimit: 600,
     rolldownOptions: {
       output: {
         codeSplitting: {
           groups: [
             {
+              name: "firebase-startup",
+              test: /node_modules[\\/](@firebase[\\/](app|app-check|component|installations|logger|remote-config|util)|firebase[\\/](app|app-check|remote-config))[\\/]/u,
+              priority: 60,
+            },
+            {
               name: "firestore",
-              test: /node_modules[\\/]@firebase[\\/]firestore[\\/]/u,
+              test: /node_modules[\\/](@firebase[\\/]firestore|firebase[\\/]firestore)[\\/]/u,
               priority: 50,
             },
             {
               name: "firebase-auth",
-              test: /node_modules[\\/]@firebase[\\/]auth[\\/]/u,
+              test: /node_modules[\\/](@firebase[\\/]auth|firebase[\\/]auth)[\\/]/u,
               priority: 40,
             },
             {
-              name: "firebase",
-              test: /node_modules[\\/](@firebase|firebase)[\\/]/u,
+              name: "firebase-functions",
+              test: /node_modules[\\/](@firebase[\\/]functions|firebase[\\/]functions)[\\/]/u,
               priority: 30,
             },
             {

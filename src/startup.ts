@@ -4,7 +4,7 @@
 
 import type { ComponentType } from "react";
 import ComingSoon from "./ComingSoon";
-import { isFullAppEnabled } from "./firebase";
+import { isFullAppEnabled } from "./firebase-startup";
 
 export async function getStartupContent(hostname: string): Promise<ComponentType> {
   if (!(await isFullAppEnabled(hostname))) return ComingSoon;
