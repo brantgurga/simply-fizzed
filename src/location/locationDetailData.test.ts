@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { Availability } from "../model/firestore";
-import { latestAvailabilityUpdate } from "./locationDetail";
+import { latestAvailabilityUpdate } from "./locationDetailData";
 
 const availability: Availability = {
   locationId: "location-one",
