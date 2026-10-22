@@ -101,6 +101,12 @@ export default defineConfig({
         clientsClaim: true,
         skipWaiting: false,
         globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest,woff,woff2}"],
+        globIgnores: [
+          "**/App-*.js",
+          "**/firebase-auth-*.js",
+          "**/firebase-functions-*.js",
+          "**/firestore-*.js",
+        ],
       },
     }),
   ],
