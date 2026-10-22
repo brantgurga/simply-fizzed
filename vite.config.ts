@@ -107,6 +107,19 @@ export default defineConfig({
           "**/firebase-functions-*.js",
           "**/firestore-*.js",
         ],
+        // Cache deferred chunks only after an enabled visitor requests them, so
+        // the full app remains available on later offline launches.
+        runtimeCaching: [
+          {
+            urlPattern: /\/assets\/(?:App|firebase-auth|firebase-functions|firestore)-[^/]+\.js$/u,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "deferred-app-chunks",
+              cacheableResponse: { statuses: [0, 200] },
+              expiration: { maxEntries: 8 },
+            },
+          },
+        ],
       },
     }),
   ],
