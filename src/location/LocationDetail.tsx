@@ -36,7 +36,7 @@ import {
   loadLocation,
   loadLocationAvailability,
   type AvailabilityLoad,
-} from "./locationDetail";
+} from "./locationDetailData";
 import {
   compareVerifications,
   confirmLocationAvailability,

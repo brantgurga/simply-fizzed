@@ -29,7 +29,8 @@
     "test:functions:integration": "npm run build:functions && firebase emulators:exec --only auth,firestore,functions --project demo-simply-fizzed \"npm --prefix functions run test:integration\"",
     "check:licenses": "node .github/scripts/license-policy.js",
     "check:tsdoc": "node .github/scripts/tsdoc-check.js",
-    "test:license": "vitest run .github/scripts/license-policy.test.js"
+    "test:license": "vitest run .github/scripts/license-policy.test.js",
+    "check:module-paths": "node .github/scripts/module-path-collisions.js"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
