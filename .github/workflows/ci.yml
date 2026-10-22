@@ -28,6 +28,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Check case-insensitive module paths
+        run: node .github/scripts/module-path-collisions.js
+
       - name: Check license notices
         run: node .github/scripts/license-policy.js
 
