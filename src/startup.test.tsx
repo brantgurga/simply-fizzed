@@ -9,7 +9,7 @@ import { getStartupContent } from "./startup";
 
 const isFullAppEnabled = vi.hoisted(() => vi.fn());
 
-vi.mock("./firebase", () => ({ isFullAppEnabled }));
+vi.mock("./firebase-startup", () => ({ isFullAppEnabled }));
 vi.mock("./App", () => ({ default: () => <p>Full application</p> }));
 
 describe("getStartupContent", () => {
