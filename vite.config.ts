@@ -100,7 +100,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: false,
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest,woff,woff2}"],
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest,woff2}"],
         globIgnores: [
           "**/App-*.js",
           "**/firebase-auth-*.js",
