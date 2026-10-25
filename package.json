@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run build:functions && tsc -b && vite build",
+    "build": "npm run build:functions && tsc -b && vite build && npm run check:precache",
     "typecheck": "tsc -b && npm run typecheck:functions",
     "lint": "oxlint . .github/scripts",
     "lint:fix": "oxlint --fix . .github/scripts",
@@ -30,7 +30,8 @@
     "check:licenses": "node .github/scripts/license-policy.js",
     "check:tsdoc": "node .github/scripts/tsdoc-check.js",
     "test:license": "vitest run .github/scripts/license-policy.test.js",
-    "check:module-paths": "node .github/scripts/module-path-collisions.js"
+    "check:module-paths": "node .github/scripts/module-path-collisions.js",
+    "check:precache": "node .github/scripts/precache-manifest-check.js"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
