@@ -18,9 +18,14 @@ describe("Roboto font configuration", () => {
   });
 
   it("preloads the primary face with the required font metadata", () => {
-    expect(indexSource).toContain("roboto-latin-400-normal.woff2");
-    expect(indexSource).toMatch(
-      /rel="preload"[\s\S]+as="font"[\s\S]+type="font\/woff2"[\s\S]+crossorigin/u,
+    const html = new DOMParser().parseFromString(indexSource, "text/html");
+    const preloads = html.querySelectorAll('link[rel="preload"][as="font"]');
+
+    expect(preloads).toHaveLength(1);
+    expect(preloads[0]?.getAttribute("href")).toBe(
+      "/node_modules/@fontsource/roboto/files/roboto-latin-400-normal.woff2",
     );
+    expect(preloads[0]?.getAttribute("type")).toBe("font/woff2");
+    expect(preloads[0]?.hasAttribute("crossorigin")).toBe(true);
   });
 });
