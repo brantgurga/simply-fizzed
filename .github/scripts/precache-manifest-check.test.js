@@ -5,12 +5,12 @@
 import { describe, expect, it } from "vitest";
 import { validateFontPrecache } from "./precache-manifest-check.js";
 
-const expectedFonts = [300, 400, 500, 700]
+const expectedFonts = [400, 500, 700]
   .map((weight) => `{url:"assets/roboto-latin-${weight}-normal-hash.woff2",revision:null}`)
   .join(",");
 
 describe("font precache manifest check", () => {
-  it("accepts exactly the four supported Latin WOFF2 faces", () => {
+  it("accepts exactly the three used Latin WOFF2 faces", () => {
     expect(validateFontPrecache(`precacheAndRoute([${expectedFonts}])`)).toEqual([]);
   });
 
@@ -30,7 +30,7 @@ describe("font precache manifest check", () => {
     expect(errors).toContain(
       "Unexpected WOFF2 file is precached: assets/roboto-cyrillic-400-normal-hash.woff2",
     );
-    expect(errors).toContain("Missing Latin WOFF2 weights: 300, 400, 500, 700");
-    expect(errors).toContain("Expected 4 WOFF2 files, found 1");
+    expect(errors).toContain("Missing Latin WOFF2 weights: 400, 500, 700");
+    expect(errors).toContain("Expected 3 WOFF2 files, found 1");
   });
 });
