@@ -53,11 +53,23 @@ jobs:
         with:
           terraform_version: 1.16.6
 
+      - name: Set up TFLint
+        uses: terraform-linters/setup-tflint@v6.3.2
+        with:
+          cache: true
+          tflint_version: v0.65.0
+
+      - name: Initialize TFLint
+        run: tflint --init --config "$(pwd)/.tflint.hcl"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
       - name: Validate Terraform
         run: |
           terraform fmt -check -recursive infra
           terraform -chdir=infra/environments/production init -backend=false -input=false
           terraform -chdir=infra/environments/production validate
+          tflint --chdir=infra --recursive --config "$(pwd)/.tflint.hcl" --format compact
 
       - name: Type-check
         run: npm run typecheck
