@@ -56,6 +56,18 @@ upstream guidance addresses them:
 - Retry `captureElementImage()` only for a verified missing-paint-record error;
   surface permanent API, ancestry, and drawable-state failures.
 
+## GitHub Actions dependencies
+
+- After adding, removing, or updating a workflow `uses` dependency, or changing
+  a workflow or local action file, run `gh actions-lock` from the repository
+  root and commit the resulting workflow and `.github/workflows/actions.lock`
+  changes together.
+- Never edit `.github/workflows/actions.lock` manually. Review changed commit,
+  owner, and repository IDs as security-sensitive dependency changes.
+- If an upstream ref legitimately moved, inspect its history before running
+  `gh actions-lock --relock`; use `--accept-moved` only after explicitly
+  confirming that the replacement commit is trusted.
+
 ## Validation and review
 
 - Add or update tests for changed behavior and run the relevant focused tests
