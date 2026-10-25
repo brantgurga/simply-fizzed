@@ -2,4 +2,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See LICENSE for copying terms.
 
+gh actions-lock --verify-local --no-fix
 npx lint-staged

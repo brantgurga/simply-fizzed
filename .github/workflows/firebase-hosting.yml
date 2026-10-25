@@ -69,12 +69,12 @@ jobs:
       VITE_GOOGLE_MAPS_MAP_ID: ${{ vars.VITE_GOOGLE_MAPS_MAP_ID }}
     steps:
       - name: Checkout tested commit
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: "24"
           cache: npm
@@ -110,7 +110,7 @@ jobs:
         run: npm run build
 
       - name: Save production artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: firebase-hosting
           path: |
@@ -144,19 +144,19 @@ jobs:
       id-token: write
     steps:
       - name: Download production artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: firebase-hosting
 
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v3
+        uses: google-github-actions/auth@v3.0.0
         with:
           project_id: ${{ env.PROJECT_ID }}
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: github-deployer@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v4
+        uses: hashicorp/setup-terraform@v4.0.1
         with:
           terraform_version: 1.16.6
           terraform_wrapper: false
@@ -204,7 +204,7 @@ jobs:
 
       - name: Save Terraform plan
         if: ${{ steps.plan.outputs.has_changes == 'true' }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: terraform-production-plan
           path: infra/environments/production/production.tfplan
@@ -220,10 +220,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout approval verifier
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Verify Terraform plan run
-        uses: actions/github-script@v9
+        uses: actions/github-script@v9.0.0
         env:
           TERRAFORM_PLAN_RUN_ID: ${{ inputs.artifact_run_id }}
         with:
@@ -245,14 +245,14 @@ jobs:
       id-token: write
     steps:
       - name: Download production artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: firebase-hosting
           github-token: ${{ github.token }}
           run-id: ${{ inputs.artifact_run_id }}
 
       - name: Save approved production artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: firebase-hosting
           path: .
@@ -261,14 +261,14 @@ jobs:
           retention-days: 30
 
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v3
+        uses: google-github-actions/auth@v3.0.0
         with:
           project_id: ${{ env.PROJECT_ID }}
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: github-deployer@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v4
+        uses: hashicorp/setup-terraform@v4.0.1
         with:
           terraform_version: 1.16.6
           terraform_wrapper: false
@@ -281,7 +281,7 @@ jobs:
           -backend-config="prefix=production"
 
       - name: Download approved Terraform plan
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: terraform-production-plan
           path: infra/environments/production
@@ -313,12 +313,12 @@ jobs:
       id-token: write
     steps:
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: "24"
 
       - name: Download production artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: firebase-hosting
           github-token: ${{ github.token }}
@@ -330,14 +330,14 @@ jobs:
           npm --prefix functions ci
 
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v3
+        uses: google-github-actions/auth@v3.0.0
         with:
           project_id: ${{ env.PROJECT_ID }}
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: github-deployer@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v4
+        uses: hashicorp/setup-terraform@v4.0.1
         with:
           terraform_version: 1.16.6
           terraform_wrapper: false
@@ -487,11 +487,11 @@ jobs:
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Verify staging run
         id: verify
-        uses: actions/github-script@v9
+        uses: actions/github-script@v9.0.0
         env:
           STAGING_RUN_ID: ${{ inputs.staging_run_id }}
         with:
@@ -503,12 +503,12 @@ jobs:
             return verifyStagingRun({ github, context, core });
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: "24"
 
       - name: Download approved artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           name: firebase-hosting
           github-token: ${{ github.token }}
@@ -518,7 +518,7 @@ jobs:
         run: npm ci
 
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v3
+        uses: google-github-actions/auth@v3.0.0
         with:
           project_id: ${{ env.PROJECT_ID }}
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}

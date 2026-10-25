@@ -20,12 +20,12 @@ jobs:
       # pull_request_target checks out the trusted default branch by default.
       # Never select the pull request head or execute contributor-controlled code here.
       - name: Check out trusted default-branch policy code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Validate changed files and contributor assignment
-        uses: actions/github-script@v9
+        uses: actions/github-script@v9.0.0
         with:
           script: |
             const policy = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/license-policy.js`);
