@@ -53,6 +53,9 @@ const theme = createTheme({
           "--fui-input": "var(--mui-palette-divider)",
           "--fui-error": "var(--mui-palette-error-main)",
         },
+        body: {
+          fontSizeAdjust: "from-font",
+        },
         ".catalog-map-popup__container": {
           cursor: "auto",
           height: 0,
