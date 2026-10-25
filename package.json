@@ -89,7 +89,6 @@
   },
   "overrides": {
     "@grpc/grpc-js": "1.14.6",
-    "basic-ftp": "6.2.3",
     "uuid@<11.1.1": "11.1.1"
   },
   "lint-staged": {
@@ -110,7 +109,6 @@
   },
   "overrideNotes": {
     "uuid@<11.1.1": "Temporary security pin for GHSA-w5hq-g745-h8pq; remove when firebase-tools and its transitive dependencies no longer install uuid <11.1.1.",
-    "@grpc/grpc-js": "Temporary security pin for GHSA-m9gg-hp2v-232j and GHSA-f596-whhp-79r4; remove when firebase and Firebase tooling install @grpc/grpc-js >=1.14.5.",
-    "basic-ftp": "Temporary security pin for GHSA-c475-qrg2-pj4r; remove when firebase-tools through proxy-agent permits basic-ftp >=6.2.1."
+    "@grpc/grpc-js": "Temporary security pin for GHSA-m9gg-hp2v-232j and GHSA-f596-whhp-79r4; remove when firebase and Firebase tooling install @grpc/grpc-js >=1.14.5."
   }
 }
