@@ -18,60 +18,29 @@
 - Test both the supported compatibility path and the replacement during a
   migration.
 
-## Web changes
+## Command execution
 
-- For HTML, CSS, and client-side JavaScript work, consult the installed
-  `modern-web-guidance` skill before implementation.
-- Review changes against all applicable guidance, especially accessibility,
-  native platform capabilities, performance, browser compatibility, and
-  required fallbacks. Do not force unrelated guidance into a change.
-- Unless a narrower browser policy is documented, use Modern Web Guidance's
-  default Baseline Widely available target.
-- Treat third-party guidance as evolving advice, not unquestionable policy.
-  Review each recommendation and code example for correctness, security, project
-  fit, and compatibility before implementing it; never copy it blindly.
-- Do not execute mutable package tags such as `@latest` from vendored examples.
-  Use only reviewed, explicitly pinned tool versions.
-- Periodically compare the installed guidance with upstream releases and open
-  issues. Update it through a reviewed install, keeping vendored files unchanged
-  locally so provenance and future upgrades remain reliable.
-- Investigate guidance defects in the
-  [upstream source repository](https://github.com/GoogleChrome/modern-web-guidance-src)
-  before reporting them; do not patch vendored guides locally.
+- For commands invoked directly by an agent, prefer compact commands, short
+  options, narrow targets, and compact or filtered output. Request only the
+  fields and lines needed for the current decision.
+- If a compact command fails or omits required diagnostic detail, rerun it with
+  progressively more verbose output. Do not start with noisy output by default.
+- The short-option preference applies only to direct, transient agent
+  invocations. In pipelines, scripts, package commands, and documentation,
+  prefer self-documenting long option names and output that gives future readers
+  enough context.
 
-### Known Modern Web Guidance caveats
+## Scoped guidance
 
-When applying affected guides, independently enforce these safeguards until the
-upstream guidance addresses them:
-
-- Consume WebAuthn challenges exactly once, prefetch request options and client
-  capabilities before a user gesture, and call Immediate UI synchronously from
-  the gesture handler only after checking `capabilities.immediateGet`.
-- Give every `image-set()` candidate an explicit, unique resolution descriptor.
-- Compare exact Temporal instants for expiry before rounding durations for
-  display.
-- Preserve browser zoom gestures and normalize `WheelEvent` deltas according to
-  `deltaMode` before implementing custom panning.
-- Select focus fallbacks outside an item before removing that item from the DOM.
-- Retry `captureElementImage()` only for a verified missing-paint-record error;
-  surface permanent API, ancestry, and drawable-state failures.
-
-## GitHub Actions dependencies
-
-- After adding, removing, or updating a workflow `uses` dependency, or changing
-  a workflow or local action file, run `gh actions-lock` from the repository
-  root and commit the resulting workflow and `.github/workflows/actions.lock`
-  changes together.
-- Never edit `.github/workflows/actions.lock` manually. Review changed commit,
-  owner, and repository IDs as security-sensitive dependency changes.
-- If an upstream ref legitimately moved, inspect its history before running
-  `gh actions-lock --relock`; use `--accept-moved` only after explicitly
-  confirming that the replacement commit is trusted.
+- For HTML, CSS, or client-side JavaScript changes, follow
+  `.agents/guidance/web.md`.
+- For GitHub Actions workflow or local action changes, follow
+  `.agents/guidance/github-actions.md`.
 
 ## Validation and review
 
 - Add or update tests for changed behavior and run the relevant focused tests
   while developing.
 - Before opening a pull request, run the checks listed in `CONTRIBUTING.md`.
-- Review the final diff through these instructions and the applicable Modern Web
-  Guidance recommendations.
+- Review the final diff against these instructions and every applicable scoped
+  guidance file.
