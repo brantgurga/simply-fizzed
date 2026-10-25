@@ -3,6 +3,7 @@
 // See LICENSE for copying terms.
 
 import react from "@vitejs/plugin-react";
+import { loadEnv, type HtmlTagDescriptor } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 import { configDefaults, defineConfig } from "vitest/config";
 import { brand } from "./src/branding.ts";
@@ -15,8 +16,32 @@ const installAssets = [
   ...brand.screenshots.map(({ src }) => src),
 ].map((path) => path.replace(/^\//u, ""));
 
+export function firebaseStartupPreconnectTags(projectId: string | undefined): HtmlTagDescriptor[] {
+  if (!projectId || projectId.startsWith("demo-")) return [];
+
+  return [
+    { tag: "link", attrs: { rel: "preconnect", href: "https://www.google.com" } },
+    {
+      tag: "link",
+      attrs: {
+        rel: "preconnect",
+        href: "https://firebaseinstallations.googleapis.com",
+        crossorigin: true,
+      },
+    },
+    {
+      tag: "link",
+      attrs: {
+        rel: "preconnect",
+        href: "https://firebaseremoteconfig.googleapis.com",
+        crossorigin: true,
+      },
+    },
+  ];
+}
+
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   build: {
     // The service worker precaches every chunk. Keep startup-only dependencies
     // separate from Firebase services that load through the App import.
@@ -61,6 +86,13 @@ export default defineConfig({
     },
   },
   plugins: [
+    {
+      name: "firebase-startup-preconnect",
+      transformIndexHtml() {
+        const { VITE_FIREBASE_PROJECT_ID: projectId } = loadEnv(mode, process.cwd());
+        return firebaseStartupPreconnectTags(projectId);
+      },
+    },
     {
       name: "brand-html",
       transformIndexHtml(html) {
@@ -131,4 +163,4 @@ export default defineConfig({
     // Dedicated runners own browser E2E and Firebase emulator-backed tests.
     exclude: [...configDefaults.exclude, "e2e/**", "firestore-rules/**", "functions/**"],
   },
-});
+}));
