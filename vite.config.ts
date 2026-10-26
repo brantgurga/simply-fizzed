@@ -7,7 +7,7 @@ import { loadEnv, type HtmlTagDescriptor } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 import { configDefaults, defineConfig } from "vitest/config";
 import { brand } from "./src/branding.ts";
-import { browserThemeColors } from "./src/theme-tokens.ts";
+import { browserThemeColors, pageBackgroundColors } from "./src/theme-tokens.ts";
 
 const installAssets = [
   brand.favicon,
@@ -15,6 +15,17 @@ const installAssets = [
   ...brand.icons.map(({ src }) => src),
   ...brand.screenshots.map(({ src }) => src),
 ].map((path) => path.replace(/^\//u, ""));
+
+export function brandHtml(html: string): string {
+  return html
+    .replaceAll("%BRAND_NAME%", brand.name)
+    .replaceAll("%BRAND_FAVICON%", brand.favicon)
+    .replaceAll("%BRAND_APPLE_TOUCH_ICON%", brand.appleTouchIcon)
+    .replaceAll("%THEME_LIGHT%", browserThemeColors.light)
+    .replaceAll("%THEME_DARK%", browserThemeColors.dark)
+    .replaceAll("%BACKGROUND_LIGHT%", pageBackgroundColors.light)
+    .replaceAll("%BACKGROUND_DARK%", pageBackgroundColors.dark);
+}
 
 export function firebaseStartupPreconnectTags(projectId: string | undefined): HtmlTagDescriptor[] {
   if (!projectId || projectId.startsWith("demo-")) return [];
@@ -95,14 +106,7 @@ export default defineConfig(({ mode }) => ({
     },
     {
       name: "brand-html",
-      transformIndexHtml(html) {
-        return html
-          .replaceAll("%BRAND_NAME%", brand.name)
-          .replaceAll("%BRAND_FAVICON%", brand.favicon)
-          .replaceAll("%BRAND_APPLE_TOUCH_ICON%", brand.appleTouchIcon)
-          .replaceAll("%THEME_LIGHT%", browserThemeColors.light)
-          .replaceAll("%THEME_DARK%", browserThemeColors.dark);
-      },
+      transformIndexHtml: brandHtml,
     },
     react(),
     VitePWA({

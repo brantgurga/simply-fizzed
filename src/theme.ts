@@ -3,14 +3,14 @@
 // See LICENSE for copying terms.
 
 import { createTheme } from "@mui/material/styles";
-import { brandColors } from "./theme-tokens";
+import { brandColors, pageBackgroundColors } from "./theme-tokens";
 
 export const rootBeerPalettes = {
   light: {
     palette: {
       primary: { main: brandColors.rootBeer, contrastText: brandColors.cream },
       secondary: { main: brandColors.caramel, contrastText: brandColors.cream },
-      background: { default: brandColors.cream, paper: brandColors.froth },
+      background: { default: pageBackgroundColors.light, paper: brandColors.froth },
       text: { primary: brandColors.darkChocolate, secondary: brandColors.toastedCocoa },
       divider: brandColors.oak,
       success: { main: brandColors.bottleGreen, contrastText: brandColors.cream },
@@ -23,7 +23,7 @@ export const rootBeerPalettes = {
     palette: {
       primary: { main: brandColors.amber, contrastText: brandColors.molasses },
       secondary: { main: brandColors.butterscotch, contrastText: brandColors.darkChocolate },
-      background: { default: brandColors.espresso, paper: brandColors.darkChocolate },
+      background: { default: pageBackgroundColors.dark, paper: brandColors.darkChocolate },
       text: { primary: brandColors.creamFoam, secondary: brandColors.mutedFoam },
       divider: brandColors.smokedOak,
       success: { main: brandColors.mintGreen, contrastText: brandColors.molasses },

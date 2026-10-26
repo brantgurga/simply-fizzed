@@ -4,6 +4,19 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="color-scheme" content="light dark" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        background-color: %BACKGROUND_LIGHT%;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          background-color: %BACKGROUND_DARK%;
+        }
+      }
+    </style>
     <link rel="icon" type="image/svg+xml" href="%BRAND_FAVICON%" />
     <link rel="apple-touch-icon" href="%BRAND_APPLE_TOUCH_ICON%" />
     <link
