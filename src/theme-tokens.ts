@@ -27,8 +27,13 @@ export const brandColors = {
   paleBlue: "#90CAF9",
 } as const;
 
+export const pageBackgroundColors = {
+  light: brandColors.cream,
+  dark: brandColors.espresso,
+} as const;
+
 export const browserThemeColors = {
   light: brandColors.rootBeer,
   dark: brandColors.espresso,
-  background: brandColors.cream,
+  background: pageBackgroundColors.light,
 } as const;
