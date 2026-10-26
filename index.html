@@ -9,11 +9,39 @@
       :root {
         color-scheme: light dark;
         background-color: %BACKGROUND_LIGHT%;
+        color: %TEXT_LIGHT%;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      #root {
+        min-height: 100vh;
+      }
+
+      .startup-shell {
+        box-sizing: border-box;
+        display: grid;
+        min-height: inherit;
+        padding: 24px;
+        place-items: center;
+        text-align: center;
+      }
+
+      .startup-shell__name {
+        font-family: Roboto, Arial, sans-serif;
+        font-size: 3rem;
+        font-weight: 400;
+        letter-spacing: 0;
+        line-height: 1.167;
+        margin: 0;
       }
 
       @media (prefers-color-scheme: dark) {
         :root {
           background-color: %BACKGROUND_DARK%;
+          color: %TEXT_DARK%;
         }
       }
     </style>
@@ -32,7 +60,11 @@
     <title>%BRAND_NAME%</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main class="startup-shell">
+        <h1 class="startup-shell__name">%BRAND_NAME%</h1>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

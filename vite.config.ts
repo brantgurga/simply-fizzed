@@ -7,7 +7,7 @@ import { loadEnv, type HtmlTagDescriptor } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 import { configDefaults, defineConfig } from "vitest/config";
 import { brand } from "./src/branding.ts";
-import { browserThemeColors, pageBackgroundColors } from "./src/theme-tokens.ts";
+import { browserThemeColors, pageBackgroundColors, pageTextColors } from "./src/theme-tokens.ts";
 
 const installAssets = [
   brand.favicon,
@@ -24,7 +24,9 @@ export function brandHtml(html: string): string {
     .replaceAll("%THEME_LIGHT%", browserThemeColors.light)
     .replaceAll("%THEME_DARK%", browserThemeColors.dark)
     .replaceAll("%BACKGROUND_LIGHT%", pageBackgroundColors.light)
-    .replaceAll("%BACKGROUND_DARK%", pageBackgroundColors.dark);
+    .replaceAll("%BACKGROUND_DARK%", pageBackgroundColors.dark)
+    .replaceAll("%TEXT_LIGHT%", pageTextColors.light)
+    .replaceAll("%TEXT_DARK%", pageTextColors.dark);
 }
 
 export function firebaseStartupPreconnectTags(projectId: string | undefined): HtmlTagDescriptor[] {
