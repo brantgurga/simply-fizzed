@@ -137,6 +137,13 @@ describe("Firebase startup initialization", () => {
     );
   });
 
+  it("fails closed without a cached allowlist when refresh fails offline", async () => {
+    firebase.fetchAndActivate.mockRejectedValue(new Error("offline"));
+    const { isFullAppEnabled } = await import("./firebase-startup");
+
+    await expect(isFullAppEnabled("staging.example.com")).resolves.toBe(false);
+  });
+
   it("fails closed when browser storage is unavailable", async () => {
     firebase.isSupported.mockResolvedValue(false);
     const { isFullAppEnabled } = await import("./firebase-startup");

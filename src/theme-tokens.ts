@@ -32,6 +32,11 @@ export const pageBackgroundColors = {
   dark: brandColors.espresso,
 } as const;
 
+export const pageTextColors = {
+  light: brandColors.darkChocolate,
+  dark: brandColors.creamFoam,
+} as const;
+
 export const browserThemeColors = {
   light: brandColors.rootBeer,
   dark: brandColors.espresso,

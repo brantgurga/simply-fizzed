@@ -4,7 +4,7 @@
 
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { pageBackgroundColors } from "./src/theme-tokens";
+import { pageBackgroundColors, pageTextColors } from "./src/theme-tokens";
 import { rootBeerPalettes } from "./src/theme";
 import { brandHtml, firebaseStartupPreconnectTags } from "./vite.config";
 
@@ -33,8 +33,16 @@ describe("Roboto font configuration", () => {
   });
 });
 
-describe("initial page theme", () => {
-  it("inlines the MUI page backgrounds before JavaScript runs", () => {
+describe("initial page shell", () => {
+  it("paints an accessible brand before JavaScript runs", () => {
+    const html = new DOMParser().parseFromString(brandHtml(indexSource), "text/html");
+    const shell = html.querySelector("#root > main.startup-shell");
+
+    expect(shell?.querySelector("h1")?.textContent).toBe("Simply Fizzed");
+    expect(shell?.querySelector('[role="progressbar"]')).toBeNull();
+  });
+
+  it("inlines the final theme colors and reserves the viewport", () => {
     const html = new DOMParser().parseFromString(brandHtml(indexSource), "text/html");
     const criticalStyle = html.querySelector("head style")?.textContent;
 
@@ -43,8 +51,14 @@ describe("initial page theme", () => {
     );
     expect(criticalStyle).toContain(`background-color: ${pageBackgroundColors.light}`);
     expect(criticalStyle).toContain(`background-color: ${pageBackgroundColors.dark}`);
+    expect(criticalStyle).toContain(`color: ${pageTextColors.light}`);
+    expect(criticalStyle).toContain(`color: ${pageTextColors.dark}`);
+    expect(criticalStyle).toMatch(/#root\s*\{[^}]*min-height: 100vh/su);
+    expect(criticalStyle).toMatch(/\.startup-shell\s*\{[^}]*min-height: inherit/su);
     expect(pageBackgroundColors.light).toBe(rootBeerPalettes.light.palette.background.default);
     expect(pageBackgroundColors.dark).toBe(rootBeerPalettes.dark.palette.background.default);
+    expect(pageTextColors.light).toBe(rootBeerPalettes.light.palette.text.primary);
+    expect(pageTextColors.dark).toBe(rootBeerPalettes.dark.palette.text.primary);
   });
 });
 
