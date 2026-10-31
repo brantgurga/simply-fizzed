@@ -89,9 +89,7 @@
   },
   "overrides": {
     "@grpc/grpc-js": "1.14.6",
-    "body-parser@<1.20.9": "1.20.9",
-    "body-parser@>=2.0.0 <2.4.0": "2.4.0",
-    "ip-address@<=10.7.3": "10.7.5",
+    "glob@>=9.0.0 <=14.0.1": "14.0.3",
     "uuid@<11.1.1": "11.1.1",
     "zod@<4.6.6": "4.6.7"
   },
@@ -112,14 +110,14 @@
     "re2": "Denied: Superstatic treats the native binding as optional and falls back to JavaScript RegExp when it is unavailable."
   },
   "auditNotes": {
-    "GHSA-8988-4f7v-96qf": "No compatible override: @google-cloud/pubsub 5 requires @opentelemetry/core 1.x, while the fix is 2.8.0. Exposure is limited to the firebase-tools development CLI; retain Node.js default HTTP header limits and validate untrusted non-HTTP baggage until firebase-tools upgrades pubsub."
+    "GHSA-8988-4f7v-96qf": "No compatible override: @google-cloud/pubsub 5 requires @opentelemetry/core 1.x, while the fix is 2.8.0. Exposure is limited to the firebase-tools development CLI; retain Node.js default HTTP header limits and validate untrusted non-HTTP baggage until firebase-tools upgrades pubsub.",
+    "GHSA-g3hv-75wg-m249": "No compatible global override: firebase-tools and Superstatic call legacy minimatch releases as a CommonJS function, while patched minimatch 11 exports an object. The vulnerable packages are development tooling; remove this exception when upstream consumers support minimatch 11.",
+    "GHSA-gcqx-w48m-w2h4": "No fixed deepmerge release exists, and downgrading to 4.1.1 retains the reported prototype-poisoning behavior. Exposure is limited to Workbox build tooling; remove this exception when @rollup/plugin-node-resolve adopts a fixed dependency."
   },
   "overrideNotes": {
-    "uuid@<11.1.1": "Temporary security pin for GHSA-w5hq-g745-h8pq; remove when firebase-tools and its transitive dependencies no longer install uuid <11.1.1.",
     "@grpc/grpc-js": "Temporary security pin for GHSA-m9gg-hp2v-232j and GHSA-f596-whhp-79r4; remove when firebase and Firebase tooling install @grpc/grpc-js >=1.14.5.",
-    "zod@<4.6.6": "Temporary security pin for GHSA-mrhx-c7xc-m3w5; remove when @firebase-oss/ui-core and @firebase-oss/ui-react no longer pin vulnerable Zod.",
-    "body-parser@<1.20.9": "Temporary security pin for GHSA-27r3-jxmh-p828; remove when firebase-tools installs body-parser >=1.20.9.",
-    "body-parser@>=2.0.0 <2.4.0": "Temporary security pin for GHSA-27r3-jxmh-p828; remove when @modelcontextprotocol/sdk installs body-parser >=2.4.0.",
-    "ip-address@<=10.7.3": "Temporary security pin for GHSA-rxp7-6hxx-x8q5; remove when express-rate-limit installs ip-address >=10.7.4."
+    "glob@>=9.0.0 <=14.0.1": "Temporary security override for GHSA-3g3m-2fjr-6pw4; remove when transitive dependencies require glob >=14.0.2.",
+    "uuid@<11.1.1": "Temporary security pin for GHSA-w5hq-g745-h8pq; remove when firebase-tools and its transitive dependencies no longer install uuid <11.1.1.",
+    "zod@<4.6.6": "Temporary security pin for GHSA-mrhx-c7xc-m3w5; remove when @firebase-oss/ui-core and @firebase-oss/ui-react no longer pin vulnerable Zod."
   }
 }
