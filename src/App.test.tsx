@@ -273,13 +273,30 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Sign in" })).toBeVisible();
   });
 
-  it("offers Locations and Sodas as primary app bar navigation", () => {
-    render(<App />);
+  it("offers Locations and Sodas as primary app bar navigation", async () => {
+    const mobileTheme = createTheme({
+      breakpoints: { values: { xs: 0, sm: 600, md: 1200, lg: 1440, xl: 1536 } },
+    });
+    const user = userEvent.setup();
+    render(
+      <ThemeProvider theme={mobileTheme}>
+        <App />
+      </ThemeProvider>,
+    );
 
-    expect(screen.getByRole("link", { name: "Locations" })).toHaveAttribute("href", "#/");
-    expect(screen.getByRole("link", { name: "Locations" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Sodas" })).toHaveAttribute("href", "#/sodas");
-    expect(screen.getByRole("link", { name: "Sodas" })).not.toHaveAttribute("aria-current");
+    await user.click(screen.getByRole("button", { name: "Open navigation menu" }));
+
+    expect(screen.getByRole("menuitem", { name: "Locations" })).toHaveAttribute("href", "#/");
+    expect(screen.getByRole("menuitem", { name: "Locations" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByRole("menuitem", { name: "Sodas" })).toHaveAttribute("href", "#/sodas");
+    expect(screen.getByRole("menuitem", { name: "Sodas" })).not.toHaveAttribute("aria-current");
+
+    await user.click(screen.getByRole("menuitem", { name: "Locations" }));
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
   it("surfaces an unavailable Firestore backend before a search starts", async () => {
