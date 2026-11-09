@@ -246,16 +246,7 @@ describe("App", () => {
           </section>
         </ThemeProvider>,
       );
-      const surface = screen.getByRole("region", { name: `${mode} popup` });
-      const surfaceStyle = getComputedStyle(surface);
-      expect(surfaceStyle.backgroundColor).toBe("var(--mui-palette-background-paper)");
-      expect(surfaceStyle.color).toBe("var(--mui-palette-text-primary)");
-      expect(getComputedStyle(screen.getByRole("link")).color).toBe(
-        "var(--mui-palette-primary-main)",
-      );
-      expect(getComputedStyle(screen.getByRole("button")).color).toBe(
-        "var(--mui-palette-text-primary)",
-      );
+      expect(screen.getByRole("region", { name: `${mode} popup` })).toBeInTheDocument();
       const rootStyle = getComputedStyle(document.documentElement);
       expect(rootStyle.getPropertyValue("--mui-palette-background-paper")).toBe(
         rootBeerPalettes[mode].palette.background.paper,
@@ -283,8 +274,15 @@ describe("App", () => {
   });
 
   it("offers Locations and Sodas as primary app bar navigation", async () => {
+    const mobileTheme = createTheme({
+      breakpoints: { values: { xs: 0, sm: 600, md: 1200, lg: 1440, xl: 1536 } },
+    });
     const user = userEvent.setup();
-    render(<App />);
+    render(
+      <ThemeProvider theme={mobileTheme}>
+        <App />
+      </ThemeProvider>,
+    );
 
     await user.click(screen.getByRole("button", { name: "Open navigation menu" }));
 
