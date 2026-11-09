@@ -113,7 +113,7 @@ jobs:
             functions/package-lock.json
 
       - name: Set up Java
-        uses: actions/setup-java@v6.1.0
+        uses: actions/setup-java@v6.2.0
         with:
           distribution: temurin
           java-version: "25"
@@ -148,7 +148,7 @@ jobs:
           cache: npm
 
       - name: Set up Java
-        uses: actions/setup-java@v6.1.0
+        uses: actions/setup-java@v6.2.0
         with:
           distribution: temurin
           java-version: "25"
@@ -230,13 +230,13 @@ jobs:
 
       # The Firestore emulator (seeded before the tests) runs on the JVM.
       - name: Set up Java
-        uses: actions/setup-java@v6.1.0
+        uses: actions/setup-java@v6.2.0
         with:
           distribution: temurin
           java-version: "25"
 
-      # Use Playwright's global Linux cache in CI so `npm ci` cannot delete
-      # restored browsers. Local installs remain hermetic via the config file.
+      # Keep CI browser installs outside node_modules so `npm ci` cannot delete
+      # them. Local installs remain hermetic via the config file.
       - name: Configure Playwright browser path
         run: echo "PLAYWRIGHT_BROWSERS_PATH=$HOME/.cache/ms-playwright" >> "$GITHUB_ENV"
 
@@ -253,22 +253,8 @@ jobs:
           restore-keys: |
             firebase-emulators-${{ runner.os }}-
 
-      - name: Read Playwright version
-        id: playwright-version
-        run: >-
-          node -e "console.log('version=' +
-          require('@playwright/test/package.json').version)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@v6.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: >-
-            playwright-browsers-${{ runner.os }}-${{
-            steps.playwright-version.outputs.version }}
-          restore-keys: |
-            playwright-browsers-${{ runner.os }}-
-
+      # Playwright browser archives are OS-specific. Always download the
+      # matching archive so runner image migrations cannot restore stale files.
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
