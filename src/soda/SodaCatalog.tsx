@@ -270,9 +270,11 @@ function CatalogMap({ locations, items, filters, center, onCenterChange }: Catal
   useEffect(() => {
     if (container.current === null || locations.length === 0) return () => undefined;
     if (import.meta.env.VITE_GOOGLE_MAPS_API_KEY.startsWith("demo-")) return () => undefined;
-    let active = true;
-    let clusterer: MarkerClusterer | undefined;
-    let closePopup: () => void = () => undefined;
+    const controller = new AbortController();
+    const resources: {
+      clusterer?: MarkerClusterer | undefined;
+      popup?: google.maps.OverlayView | undefined;
+    } = {};
     const element = container.current;
     void (async () => {
       try {
@@ -282,7 +284,7 @@ function CatalogMap({ locations, items, filters, center, onCenterChange }: Catal
           api.maps.importLibrary("maps"),
           api.maps.importLibrary("marker"),
         ]);
-        if (!active) return;
+        if (controller.signal.aborted) return;
         if (
           !isCoreLibrary(coreLibrary) ||
           !isMapsLibrary(mapsLibrary) ||
@@ -300,26 +302,24 @@ function CatalogMap({ locations, items, filters, center, onCenterChange }: Catal
           zoom: 8,
         });
         mapReference.current = map;
-        let popup: google.maps.OverlayView | undefined;
-        closePopup = () => popup?.setMap(null);
         const markers = locations.map((location) => {
           const marker = new markerLibrary.AdvancedMarkerElement({
             position: location.geo,
             title: location.name,
           });
           marker.addListener("click", () => {
-            popup?.setMap(null);
-            popup = createCatalogPopup(
+            resources.popup?.setMap(null);
+            resources.popup = createCatalogPopup(
               mapsLibrary.OverlayView,
               location.geo,
               markerDetails(location, items, filters),
               `${location.name} details`,
             );
-            popup.setMap(map);
+            resources.popup.setMap(map);
           });
           return marker;
         });
-        clusterer = new MarkerClusterer({ map, markers });
+        resources.clusterer = new MarkerClusterer({ map, markers });
         if (initialCenter === undefined) {
           const bounds = new coreLibrary.LatLngBounds();
           for (const location of locations) bounds.extend(location.geo);
@@ -334,14 +334,14 @@ function CatalogMap({ locations, items, filters, center, onCenterChange }: Catal
           }
         });
       } catch {
-        if (active) setError(true);
+        if (!controller.signal.aborted) setError(true);
       }
     })();
     return () => {
-      active = false;
-      closePopup();
-      clusterer?.clearMarkers();
-      clusterer?.setMap(null);
+      controller.abort();
+      resources.popup?.setMap(null);
+      resources.clusterer?.clearMarkers();
+      resources.clusterer?.setMap(null);
       mapReference.current = undefined;
       element.replaceChildren();
     };

@@ -162,6 +162,7 @@ function App() {
   const [showLogin, setShowLogin] = useState(false);
   const [loginMode, setLoginMode] = useState<"signIn" | "signUp">("signIn");
   const pendingLocation = useRef(false);
+  const profileRequest = useRef(0);
   const [addingLocation, setAddingLocation] = useState(false);
   const [contributionMessage, setContributionMessage] = useState<{
     severity: "error" | "success";
@@ -259,22 +260,21 @@ function App() {
   }, []);
 
   useEffect(() => {
-    let profileRequest = 0;
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
-      const currentRequest = ++profileRequest;
+      const currentRequest = ++profileRequest.current;
       setUser(nextUser);
       setProfileReady(false);
       if (nextUser !== null) {
         void savePublicProfile(db, nextUser.uid, publicContributorName(nextUser) ?? "")
           .then(() => {
-            if (profileRequest === currentRequest) setProfileReady(true);
+            if (profileRequest.current === currentRequest) setProfileReady(true);
           })
           .catch(() => undefined);
       }
       if (nextUser !== null && pendingLocation.current) setShowLogin(false);
     });
     return () => {
-      profileRequest += 1;
+      profileRequest.current += 1;
       unsubscribe();
     };
   }, []);

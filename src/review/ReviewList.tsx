@@ -295,11 +295,10 @@ export function PublicReviewList({
     activeLoader.current = loader;
   }, [loader]);
   useEffect(() => {
-    let active = true;
     const request = ++latestRequest.current;
     void loader().then(
       (result) => {
-        if (active && request === latestRequest.current && activeLoader.current === loader) {
+        if (request === latestRequest.current && activeLoader.current === loader) {
           setPages([result]);
           setPage(0);
           setState("ready");
@@ -307,14 +306,14 @@ export function PublicReviewList({
         }
       },
       () => {
-        if (active && request === latestRequest.current && activeLoader.current === loader) {
+        if (request === latestRequest.current && activeLoader.current === loader) {
           setState("error");
           setLoadIdentity({ loader });
         }
       },
     );
     return () => {
-      active = false;
+      if (latestRequest.current === request) latestRequest.current += 1;
     };
   }, [loader]);
 
