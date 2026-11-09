@@ -253,8 +253,22 @@ jobs:
           restore-keys: |
             firebase-emulators-${{ runner.os }}-
 
-      # Playwright browser archives are OS-specific. Always download the
-      # matching archive so runner image migrations cannot restore stale files.
+      # ImageOS changes when ubuntu-latest moves to a new OS release, preventing
+      # incompatible browser archives from being restored across migrations.
+      - name: Read Playwright cache key
+        id: playwright-cache
+        run: |
+          echo "image_os=$ImageOS" >> "$GITHUB_OUTPUT"
+          node -e "console.log('version=' + require('@playwright/test/package.json').version)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: >-
+            playwright-browsers-${{ steps.playwright-cache.outputs.image_os }}-${{
+            runner.arch }}-${{ steps.playwright-cache.outputs.version }}
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
