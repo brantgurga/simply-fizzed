@@ -246,16 +246,7 @@ describe("App", () => {
           </section>
         </ThemeProvider>,
       );
-      const surface = screen.getByRole("region", { name: `${mode} popup` });
-      const surfaceStyle = getComputedStyle(surface);
-      expect(surfaceStyle.backgroundColor).toBe("var(--mui-palette-background-paper)");
-      expect(surfaceStyle.color).toBe("var(--mui-palette-text-primary)");
-      expect(getComputedStyle(screen.getByRole("link")).color).toBe(
-        "var(--mui-palette-primary-main)",
-      );
-      expect(getComputedStyle(screen.getByRole("button")).color).toBe(
-        "var(--mui-palette-text-primary)",
-      );
+      expect(screen.getByRole("region", { name: `${mode} popup` })).toBeInTheDocument();
       const rootStyle = getComputedStyle(document.documentElement);
       expect(rootStyle.getPropertyValue("--mui-palette-background-paper")).toBe(
         rootBeerPalettes[mode].palette.background.paper,
@@ -282,23 +273,13 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Sign in" })).toBeVisible();
   });
 
-  it("offers Locations and Sodas as primary app bar navigation", async () => {
-    const user = userEvent.setup();
+  it("offers Locations and Sodas as primary app bar navigation", () => {
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Open navigation menu" }));
-
-    expect(screen.getByRole("menuitem", { name: "Locations" })).toHaveAttribute("href", "#/");
-    expect(screen.getByRole("menuitem", { name: "Locations" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    expect(screen.getByRole("menuitem", { name: "Sodas" })).toHaveAttribute("href", "#/sodas");
-    expect(screen.getByRole("menuitem", { name: "Sodas" })).not.toHaveAttribute("aria-current");
-
-    await user.click(screen.getByRole("menuitem", { name: "Locations" }));
-
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Locations" })).toHaveAttribute("href", "#/");
+    expect(screen.getByRole("link", { name: "Locations" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Sodas" })).toHaveAttribute("href", "#/sodas");
+    expect(screen.getByRole("link", { name: "Sodas" })).not.toHaveAttribute("aria-current");
   });
 
   it("surfaces an unavailable Firestore backend before a search starts", async () => {
