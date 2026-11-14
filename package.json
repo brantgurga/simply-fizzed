@@ -78,7 +78,7 @@
     "husky": "^9.1.7",
     "jsdom": "^31.0.0",
     "lint-staged": "^17.6.0",
-    "oxfmt": "^0.76.0",
+    "oxfmt": "^0.78.0",
     "oxlint": "^1.91.0",
     "oxlint-tsgolint": "^7.0.2006",
     "typescript": "~7.0.2",
@@ -88,7 +88,7 @@
     "wait-on": "^9.5.1"
   },
   "overrides": {
-    "@grpc/grpc-js": "1.14.6",
+    "@grpc/grpc-js": "1.14.7",
     "glob@>=9.0.0 <=14.0.1": "14.0.3",
     "uuid@<11.1.1": "11.1.1",
     "zod@<4.6.6": "4.6.7"
@@ -112,10 +112,10 @@
   "auditNotes": {
     "GHSA-8988-4f7v-96qf": "No compatible override: @google-cloud/pubsub 5 requires @opentelemetry/core 1.x, while the fix is 2.8.0. Exposure is limited to the firebase-tools development CLI; retain Node.js default HTTP header limits and validate untrusted non-HTTP baggage until firebase-tools upgrades pubsub.",
     "GHSA-g3hv-75wg-m249": "No compatible global override: firebase-tools and Superstatic call legacy minimatch releases as a CommonJS function, while patched minimatch 11 exports an object. The vulnerable packages are development tooling; remove this exception when upstream consumers support minimatch 11.",
-    "GHSA-gcqx-w48m-w2h4": "No fixed deepmerge release exists, and downgrading to 4.1.1 retains the reported prototype-poisoning behavior. Exposure is limited to Workbox build tooling; remove this exception when @rollup/plugin-node-resolve adopts a fixed dependency."
+    "GHSA-gcqx-w48m-w2h4": "No patched deepmerge release exists. CVE-2026-93753 was rejected by its CNA because the behavior does not cross a privilege boundary, but GitHub has not withdrawn its low-severity advisory. Exposure is limited to Workbox build tooling; remove this exception if GitHub withdraws the advisory or upstream ships a fix."
   },
   "overrideNotes": {
-    "@grpc/grpc-js": "Temporary security pin for GHSA-m9gg-hp2v-232j and GHSA-f596-whhp-79r4; remove when firebase and Firebase tooling install @grpc/grpc-js >=1.14.5.",
+    "@grpc/grpc-js": "Temporary security pin for GHSA-m9gg-hp2v-232j and GHSA-f596-whhp-79r4; remove when firebase and Firebase tooling install @grpc/grpc-js >=1.14.7.",
     "glob@>=9.0.0 <=14.0.1": "Temporary security override for GHSA-3g3m-2fjr-6pw4; remove when transitive dependencies require glob >=14.0.2.",
     "uuid@<11.1.1": "Temporary security pin for GHSA-w5hq-g745-h8pq; remove when firebase-tools and its transitive dependencies no longer install uuid <11.1.1.",
     "zod@<4.6.6": "Temporary security pin for GHSA-mrhx-c7xc-m3w5; remove when @firebase-oss/ui-core and @firebase-oss/ui-react no longer pin vulnerable Zod."
