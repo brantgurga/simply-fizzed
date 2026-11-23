@@ -111,7 +111,6 @@
     "re2": "Denied: Superstatic treats the native binding as optional and falls back to JavaScript RegExp when it is unavailable."
   },
   "auditNotes": {
-    "GHSA-8988-4f7v-96qf": "No compatible override: @google-cloud/pubsub 5 requires @opentelemetry/core 1.x, while the fix is 2.8.0. Exposure is limited to the firebase-tools development CLI; retain Node.js default HTTP header limits and validate untrusted non-HTTP baggage until firebase-tools upgrades pubsub.",
     "GHSA-g3hv-75wg-m249": "No compatible global override: firebase-tools and Superstatic call legacy minimatch releases as a CommonJS function, while patched minimatch 11 exports an object. The vulnerable packages are development tooling; remove this exception when upstream consumers support minimatch 11.",
     "GHSA-gcqx-w48m-w2h4": "No patched deepmerge release exists. CVE-2026-93753 was rejected by its CNA because the behavior does not cross a privilege boundary, but GitHub has not withdrawn its low-severity advisory. Exposure is limited to Workbox build tooling; remove this exception if GitHub withdraws the advisory or upstream ships a fix."
   },
